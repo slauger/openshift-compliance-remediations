@@ -23,7 +23,7 @@ jobs:
       contents: write        # push the update branch
       pull-requests: write   # open/update the PR
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v5
