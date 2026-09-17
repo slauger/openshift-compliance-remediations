@@ -1,6 +1,6 @@
 # compliance-hardening
 
-![Version: 0.0.0](https://img.shields.io/badge/Version-0.0.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.1.82](https://img.shields.io/badge/AppVersion-0.1.82-informational?style=flat-square)
+![Version: 0.1.0](https://img.shields.io/badge/Version-0.1.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.1.82](https://img.shields.io/badge/AppVersion-0.1.82-informational?style=flat-square)
 
 Umbrella chart bundling OpenShift compliance remediations: platform config (no reboot) and node MachineConfig/KubeletConfig (reboots, opt-in).
 
@@ -8,8 +8,8 @@ Umbrella chart bundling OpenShift compliance remediations: platform config (no r
 
 | Repository | Name | Version |
 |------------|------|---------|
-| file://../compliance-node | compliance-node | 0.0.0 |
-| file://../compliance-platform | compliance-platform | 0.0.0 |
+| file://../compliance-node | compliance-node | 0.1.0 |
+| file://../compliance-platform | compliance-platform | 0.1.0 |
 
 ## Values
 
