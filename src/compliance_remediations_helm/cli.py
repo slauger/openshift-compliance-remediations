@@ -72,7 +72,13 @@ def main(argv: list[str] | None = None) -> int:
               + ", ".join(d.rule_id for d in unparseable))
 
     print("==> Building charts")
-    stats = emit.generate_charts(contents, args.charts_dir, pin["version"])
+    # Chart version comes from the VERSION file (maintained by semantic-release
+    # on release); 0.0.0 marks an unreleased working-tree build.
+    version_file = args.charts_dir.parent / "VERSION"
+    chart_version = (version_file.read_text(encoding="utf-8").strip()
+                     if version_file.exists() else "0.0.0")
+    print(f"    chart version: {chart_version}")
+    stats = emit.generate_charts(contents, args.charts_dir, pin["version"], chart_version)
     print(f"    platform templates: {stats['platform']}")
     print(f"    node templates:     {stats['node']}")
     print(f"    conflict guards:    {len(stats['conflicts'])}")

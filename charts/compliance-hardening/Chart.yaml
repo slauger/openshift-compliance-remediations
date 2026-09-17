@@ -4,12 +4,12 @@ description: >-
   Umbrella chart bundling OpenShift compliance remediations: platform config
   (no reboot) and node MachineConfig/KubeletConfig (reboots, opt-in).
 type: application
-version: 0.1.0
+version: 0.0.0
 appVersion: "0.1.82"
 dependencies:
   - name: compliance-platform
-    version: "0.1.0"
+    version: "0.0.0"
     repository: "file://../compliance-platform"
   - name: compliance-node
-    version: "0.1.0"
+    version: "0.0.0"
     repository: "file://../compliance-node"

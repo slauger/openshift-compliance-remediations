@@ -104,13 +104,14 @@ def _ocp_semver_expr(constraint: str) -> str:
 # --------------------------------------------------------------------------- #
 # static chart files
 # --------------------------------------------------------------------------- #
-def chart_yaml(name: str, description: str, content_version: str) -> str:
+def chart_yaml(name: str, description: str, content_version: str,
+               chart_version: str = "0.0.0") -> str:
     return f"""\
 apiVersion: v2
 name: {name}
 description: {description}
 type: application
-version: 0.1.0
+version: {chart_version}
 appVersion: "{content_version}"
 keywords:
   - compliance
@@ -552,8 +553,14 @@ def tailored_profile_template(contents: list[Content], layer: str) -> str:
 # --------------------------------------------------------------------------- #
 # orchestration
 # --------------------------------------------------------------------------- #
-def generate_charts(contents: dict[str, Content], charts_dir: Path, version: str) -> dict:
-    """Generate both standalone charts + the umbrella. Returns a stats dict."""
+def generate_charts(contents: dict[str, Content], charts_dir: Path, version: str,
+                    chart_version: str = "0.0.0") -> dict:
+    """Generate both standalone charts + the umbrella. Returns a stats dict.
+
+    ``chart_version`` is the released Helm chart version (from the VERSION
+    file, maintained by semantic-release); ``version`` is the upstream content
+    version and becomes appVersion.
+    """
     content_list = list(contents.values())
     groups, unparseable = build_groups(*content_list)
 
@@ -562,11 +569,11 @@ def generate_charts(contents: dict[str, Content], charts_dir: Path, version: str
 
     _write_layer_chart(charts_dir / PLATFORM_CHART, PLATFORM_CHART,
                        "OpenShift platform compliance remediations (no reboot).",
-                       content_list, groups, "platform", version, stats)
+                       content_list, groups, "platform", version, stats, chart_version)
     _write_layer_chart(charts_dir / NODE_CHART, NODE_CHART,
                        "OpenShift node compliance remediations (MachineConfig/KubeletConfig; reboots).",
-                       content_list, groups, "node", version, stats)
-    _write_umbrella_chart(charts_dir / UMBRELLA_CHART, version)
+                       content_list, groups, "node", version, stats, chart_version)
+    _write_umbrella_chart(charts_dir / UMBRELLA_CHART, version, chart_version)
 
     for g in groups:
         for c in g.conflicts():
@@ -574,7 +581,8 @@ def generate_charts(contents: dict[str, Content], charts_dir: Path, version: str
     return stats
 
 
-def _write_umbrella_chart(chart_dir: Path, version: str) -> None:
+def _write_umbrella_chart(chart_dir: Path, version: str,
+                          chart_version: str = "0.0.0") -> None:
     """Umbrella wrapper depending on both subcharts. No `global`: values are
     prefixed per subchart. Subcharts remain standalone-installable."""
     chart_dir.mkdir(parents=True, exist_ok=True)
@@ -589,14 +597,14 @@ description: >-
   Umbrella chart bundling OpenShift compliance remediations: platform config
   (no reboot) and node MachineConfig/KubeletConfig (reboots, opt-in).
 type: application
-version: 0.1.0
+version: {chart_version}
 appVersion: "{version}"
 dependencies:
   - name: {PLATFORM_CHART}
-    version: "0.1.0"
+    version: "{chart_version}"
     repository: "file://../{PLATFORM_CHART}"
   - name: {NODE_CHART}
-    version: "0.1.0"
+    version: "{chart_version}"
     repository: "file://../{NODE_CHART}"
 """
     (chart_dir / "Chart.yaml").write_text(chart, encoding="utf-8")
@@ -631,7 +639,8 @@ dependencies:
 
 def _write_layer_chart(chart_dir: Path, name: str, description: str,
                        contents: list[Content], groups, layer: str,
-                       version: str, stats: dict) -> None:
+                       version: str, stats: dict,
+                       chart_version: str = "0.0.0") -> None:
     import shutil
     tpl = chart_dir / "templates"
     # Clean only templates/ so hand-written tests/ and Chart metadata survive.
@@ -639,7 +648,7 @@ def _write_layer_chart(chart_dir: Path, name: str, description: str,
         shutil.rmtree(tpl)
     tpl.mkdir(parents=True, exist_ok=True)
     (chart_dir / "Chart.yaml").write_text(
-        chart_yaml(name, description, version), encoding="utf-8")
+        chart_yaml(name, description, version, chart_version), encoding="utf-8")
     (chart_dir / "values.yaml").write_text(
         values_yaml(contents, layer, version), encoding="utf-8")
     (chart_dir / "values.schema.json").write_text(
