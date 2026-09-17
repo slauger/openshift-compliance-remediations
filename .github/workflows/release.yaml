@@ -50,7 +50,7 @@ jobs:
           sudo tar -xzf /tmp/helm-docs.tar.gz -C /usr/local/bin helm-docs
 
       - name: Cache upstream content tarball
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache
           key: sscg-${{ hashFiles('config/content.yaml') }}
