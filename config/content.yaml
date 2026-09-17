@@ -1,0 +1,22 @@
+# Pinned upstream content version.
+# Source: https://github.com/ComplianceAsCode/content/releases
+#
+# To update: bump `version`, refresh `sha512` (`make update-sha`), run
+# `make generate`, and review the git diff of charts/ and RULES.md.
+# Renovate keeps `version` in sync with upstream GitHub releases (see the marker).
+# renovate: datasource=github-releases depName=ComplianceAsCode/content extractVersion=^v(?<version>.*)$
+version: "0.1.82"
+
+# Asset downloaded from the release (scap-security-guide-<version>.tar.gz).
+# SHA512 of scap-security-guide-0.1.82.tar.gz, verified against the upstream
+# .sha512 asset on 2026-09-17.
+sha512: "fba053c2aeb8a6c4534b356bdc5c463268862b6b72771cc54748792dad84a6a60afab7c6d110c41d60328b360cbbe3097bba581f245eeba00ef19d0d76dad9d7"
+# Which datastream(s) to extract remediations from.
+#   ssg-ocp4-ds.xml   -> platform + node (KubeletConfig/MachineConfig) remediations
+#   ssg-rhcos4-ds.xml -> node (MachineConfig) OS-level remediations
+datastreams:
+  - ssg-ocp4-ds.xml
+  - ssg-rhcos4-ds.xml
+
+# Base URL for release assets.
+base_url: "https://github.com/ComplianceAsCode/content/releases/download"

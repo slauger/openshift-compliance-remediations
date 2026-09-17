@@ -1,0 +1,26 @@
+{{- define "cr.frag.kubeletconfig-compliance-kubelet-configure-tls-cipher-suites.ocp4-kubelet-configure-tls-cipher-suites.0" -}}
+spec:
+  kubeletConfig:
+    tlsCipherSuites: [{{ .Values.variables.var_kubelet_tls_cipher_suites }}]
+{{- end -}}
+
+{{- /* KubeletConfig/compliance-kubelet-configure-tls-cipher-suites - rule(s): ocp4-kubelet_configure_tls_cipher_suites */ -}}
+{{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "ocp4-kubelet_configure_tls_cipher_suites"))) "true") -}}
+{{- $merged := dict -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_configure_tls_cipher_suites")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-kubelet-configure-tls-cipher-suites.ocp4-kubelet-configure-tls-cipher-suites.0" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- range $role := (.Values.node.roles | uniq) }}
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: KubeletConfig
+metadata:
+  name: {{ printf "%s-%s" "compliance-kubelet-configure-tls-cipher-suites" $role }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}
+    compliance.openshift.io/managed: "true"
+    machineconfiguration.openshift.io/role: {{ $role | quote }}
+{{ $merged | toYaml }}
+{{- end }}
+{{- end -}}

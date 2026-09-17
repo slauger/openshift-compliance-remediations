@@ -1,0 +1,34 @@
+{{- define "cr.frag.machineconfig-75-ocp4-audit-rules-dac-modification-fchmod.rhcos4-audit-rules-dac-modification-fchmod.0" -}}
+spec:
+  config:
+    ignition:
+      version: 3.1.0
+    storage:
+      files:
+      - contents:
+          source: data:,-a%20always%2Cexit%20-F%20arch%3Db32%20-S%20fchmod%20-F%20auid%3E%3D1000%20-F%20auid%21%3Dunset%20-F%20key%3Dperm_mod%0A-a%20always%2Cexit%20-F%20arch%3Db64%20-S%20fchmod%20-F%20auid%3E%3D1000%20-F%20auid%21%3Dunset%20-F%20key%3Dperm_mod%0A
+        mode: 0644
+        path: /etc/audit/rules.d/75-fchmod_dac_modification.rules
+        overwrite: true
+{{- end -}}
+
+{{- /* MachineConfig/75-ocp4-audit-rules-dac-modification-fchmod - rule(s): rhcos4-audit_rules_dac_modification_fchmod */ -}}
+{{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "rhcos4-audit_rules_dac_modification_fchmod"))) "true") -}}
+{{- $merged := dict -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_dac_modification_fchmod")) "true" -}}
+{{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-dac-modification-fchmod.rhcos4-audit-rules-dac-modification-fchmod.0" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- range $role := (.Values.node.roles | uniq) }}
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: {{ printf "%s-%s" "75-ocp4-audit-rules-dac-modification-fchmod" $role }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}
+    compliance.openshift.io/managed: "true"
+    machineconfiguration.openshift.io/role: {{ $role | quote }}
+{{ $merged | toYaml }}
+{{- end }}
+{{- end -}}

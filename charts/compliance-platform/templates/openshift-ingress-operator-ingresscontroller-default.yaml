@@ -1,0 +1,64 @@
+{{- define "cr.frag.openshift-ingress-operator-ingresscontroller-default.ocp4-ingress-controller-tls-cipher-suites.0" -}}
+spec:
+  tlsSecurityProfile:
+    custom:
+      ciphers:
+      - ECDHE-ECDSA-AES128-GCM-SHA256
+      - ECDHE-RSA-AES128-GCM-SHA256
+      - ECDHE-ECDSA-CHACHA20-POLY1305
+      - ECDHE-RSA-AES256-GCM-SHA384
+      - ECDHE-RSA-CHACHA20-POLY1305
+      - ECDHE-ECDSA-AES256-GCM-SHA384
+      - TLS_AES_128_GCM_SHA256
+      - TLS_AES_256_GCM_SHA384
+      - TLS_CHACHA20_POLY1305_SHA256
+      minTLSVersion: VersionTLS12
+    type: Custom
+{{- end -}}
+
+{{- define "cr.frag.openshift-ingress-operator-ingresscontroller-default.ocp4-ingress-controller-tls-security-profile-custom-min-tls-version.1" -}}
+spec:
+    tlsSecurityProfile:
+        Custom:
+            minTLSVersion: VersionTLS12
+{{- end -}}
+
+{{- define "cr.frag.openshift-ingress-operator-ingresscontroller-default.ocp4-ingress-controller-tls-security-profile-not-old.2" -}}
+spec:
+    tlsSecurityProfile:
+        intermediate: {}
+        type: Intermediate
+{{- end -}}
+
+{{- /* IngressController/default - rule(s): ocp4-ingress_controller_tls_cipher_suites, ocp4-ingress_controller_tls_security_profile_custom_min_tls_version, ocp4-ingress_controller_tls_security_profile_not_old */ -}}
+{{- if eq (include "cr.anyActive" (dict "root" . "rules" (list "ocp4-ingress_controller_tls_cipher_suites" "ocp4-ingress_controller_tls_security_profile_custom_min_tls_version" "ocp4-ingress_controller_tls_security_profile_not_old"))) "true" -}}
+{{- if gt (int (include "cr.countActive" (dict "root" . "rules" (list "ocp4-ingress_controller_tls_cipher_suites" "ocp4-ingress_controller_tls_security_profile_custom_min_tls_version" "ocp4-ingress_controller_tls_security_profile_not_old")))) 1 -}}
+{{- fail "Conflicting compliance rules active for IngressController/default at spec.tlsSecurityProfile: ocp4-ingress_controller_tls_cipher_suites, ocp4-ingress_controller_tls_security_profile_custom_min_tls_version, ocp4-ingress_controller_tls_security_profile_not_old. These are mutually-exclusive alternatives - enable only one." -}}
+{{- end -}}
+{{- if gt (int (include "cr.countActive" (dict "root" . "rules" (list "ocp4-ingress_controller_tls_cipher_suites" "ocp4-ingress_controller_tls_security_profile_not_old")))) 1 -}}
+{{- fail "Conflicting compliance rules active for IngressController/default at spec.tlsSecurityProfile.type: ocp4-ingress_controller_tls_cipher_suites, ocp4-ingress_controller_tls_security_profile_not_old. These are mutually-exclusive alternatives - enable only one." -}}
+{{- end -}}
+{{- $merged := dict -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-ingress_controller_tls_cipher_suites")) "true" -}}
+{{- $frag := include "cr.frag.openshift-ingress-operator-ingresscontroller-default.ocp4-ingress-controller-tls-cipher-suites.0" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-ingress_controller_tls_security_profile_custom_min_tls_version")) "true" -}}
+{{- $frag := include "cr.frag.openshift-ingress-operator-ingresscontroller-default.ocp4-ingress-controller-tls-security-profile-custom-min-tls-version.1" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-ingress_controller_tls_security_profile_not_old")) "true" -}}
+{{- $frag := include "cr.frag.openshift-ingress-operator-ingresscontroller-default.ocp4-ingress-controller-tls-security-profile-not-old.2" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+---
+apiVersion: operator.openshift.io/v1
+kind: IngressController
+metadata:
+  name: default
+  namespace: openshift-ingress-operator
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    compliance.openshift.io/managed: "true"
+{{ $merged | toYaml }}
+{{- end -}}

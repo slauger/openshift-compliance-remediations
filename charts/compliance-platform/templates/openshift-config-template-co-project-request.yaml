@@ -1,0 +1,338 @@
+{{- define "cr.frag.openshift-config-template-co-project-request.ocp4-project-config-and-template-resource-quota.0" -}}
+objects:
+- apiVersion: project.openshift.io/v1
+  kind: Project
+  metadata:
+    annotations:
+      openshift.io/description: ${PROJECT_DESCRIPTION}
+      openshift.io/display-name: ${PROJECT_DISPLAYNAME}
+      openshift.io/requester: ${PROJECT_REQUESTING_USER}
+    creationTimestamp: null
+    name: ${PROJECT_NAME}
+  spec: {}
+  status: {}
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    creationTimestamp: null
+    name: admin
+    namespace: ${PROJECT_NAME}
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: admin
+  subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: ${PROJECT_ADMIN_USER}
+- apiVersion: v1
+  kind: ResourceQuota
+  metadata:
+    name: ${PROJECT_NAME}-quota
+  spec:
+    hard:
+      cpu: "2"
+      memory: 5Gi
+      pods: "40"
+- apiVersion: "v1"
+  kind: "LimitRange"
+  metadata:
+    name: ${PROJECT_NAME}-limit-range
+  spec:
+    limits:
+      - type: "Container"
+        default:
+          cpu: "200m"
+        defaultRequest:
+          cpu: "10m"    
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: allow-from-same-namespace
+  spec:
+    podSelector: {}
+    ingress:
+    - from:
+      - podSelector: {}
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: allow-from-openshift-ingress
+  spec:
+    ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            network.openshift.io/policy-group: ingress
+    podSelector: {}
+    policyTypes:
+    - Ingress
+parameters:
+- name: PROJECT_NAME
+- name: PROJECT_DISPLAYNAME
+- name: PROJECT_DESCRIPTION
+- name: PROJECT_ADMIN_USER
+- name: PROJECT_REQUESTING_USER
+{{- end -}}
+
+{{- define "cr.frag.openshift-config-template-co-project-request.ocp4-project-template-resource-quota.1" -}}
+objects:
+- apiVersion: project.openshift.io/v1
+  kind: Project
+  metadata:
+    annotations:
+      openshift.io/description: ${PROJECT_DESCRIPTION}
+      openshift.io/display-name: ${PROJECT_DISPLAYNAME}
+      openshift.io/requester: ${PROJECT_REQUESTING_USER}
+    creationTimestamp: null
+    name: ${PROJECT_NAME}
+  spec: {}
+  status: {}
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    creationTimestamp: null
+    name: admin
+    namespace: ${PROJECT_NAME}
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: admin
+  subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: ${PROJECT_ADMIN_USER}
+- apiVersion: v1
+  kind: ResourceQuota
+  metadata:
+    name: ${PROJECT_NAME}-quota
+  spec:
+    hard:
+      cpu: "2"
+      memory: 5Gi
+      pods: "40"
+- apiVersion: "v1"
+  kind: "LimitRange"
+  metadata:
+    name: ${PROJECT_NAME}-limit-range
+  spec:
+    limits:
+      - type: "Container"
+        default:
+          cpu: "200m"
+        defaultRequest:
+          cpu: "10m"    
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: allow-from-same-namespace
+  spec:
+    podSelector: {}
+    ingress:
+    - from:
+      - podSelector: {}
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: allow-from-openshift-ingress
+  spec:
+    ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            network.openshift.io/policy-group: ingress
+    podSelector: {}
+    policyTypes:
+    - Ingress
+parameters:
+- name: PROJECT_NAME
+- name: PROJECT_DISPLAYNAME
+- name: PROJECT_DESCRIPTION
+- name: PROJECT_ADMIN_USER
+- name: PROJECT_REQUESTING_USER
+{{- end -}}
+
+{{- define "cr.frag.openshift-config-template-co-project-request.ocp4-project-config-and-template-network-policy.2" -}}
+objects:
+- apiVersion: project.openshift.io/v1
+  kind: Project
+  metadata:
+    annotations:
+      openshift.io/description: ${PROJECT_DESCRIPTION}
+      openshift.io/display-name: ${PROJECT_DISPLAYNAME}
+      openshift.io/requester: ${PROJECT_REQUESTING_USER}
+    creationTimestamp: null
+    name: ${PROJECT_NAME}
+  spec: {}
+  status: {}
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    creationTimestamp: null
+    name: admin
+    namespace: ${PROJECT_NAME}
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: admin
+  subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: ${PROJECT_ADMIN_USER}
+- apiVersion: v1
+  kind: ResourceQuota
+  metadata:
+    name: ${PROJECT_NAME}-quota
+  spec:
+    hard:
+      cpu: "2"
+      memory: 5Gi
+      pods: "40"
+- apiVersion: "v1"
+  kind: "LimitRange"
+  metadata:
+    name: ${PROJECT_NAME}-limit-range
+  spec:
+    limits:
+      - type: "Container"
+        default:
+          cpu: "200m"
+        defaultRequest:
+          cpu: "10m"    
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: allow-from-same-namespace
+  spec:
+    podSelector: {}
+    ingress:
+    - from:
+      - podSelector: {}
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: allow-from-openshift-ingress
+  spec:
+    ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            network.openshift.io/policy-group: ingress
+    podSelector: {}
+    policyTypes:
+    - Ingress
+parameters:
+- name: PROJECT_NAME
+- name: PROJECT_DISPLAYNAME
+- name: PROJECT_DESCRIPTION
+- name: PROJECT_ADMIN_USER
+- name: PROJECT_REQUESTING_USER
+{{- end -}}
+
+{{- define "cr.frag.openshift-config-template-co-project-request.ocp4-project-template-network-policy.3" -}}
+objects:
+- apiVersion: project.openshift.io/v1
+  kind: Project
+  metadata:
+    annotations:
+      openshift.io/description: ${PROJECT_DESCRIPTION}
+      openshift.io/display-name: ${PROJECT_DISPLAYNAME}
+      openshift.io/requester: ${PROJECT_REQUESTING_USER}
+    creationTimestamp: null
+    name: ${PROJECT_NAME}
+  spec: {}
+  status: {}
+- apiVersion: rbac.authorization.k8s.io/v1
+  kind: RoleBinding
+  metadata:
+    creationTimestamp: null
+    name: admin
+    namespace: ${PROJECT_NAME}
+  roleRef:
+    apiGroup: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: admin
+  subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: ${PROJECT_ADMIN_USER}
+- apiVersion: v1
+  kind: ResourceQuota
+  metadata:
+    name: ${PROJECT_NAME}-quota
+  spec:
+    hard:
+      cpu: "2"
+      memory: 5Gi
+      pods: "40"
+- apiVersion: "v1"
+  kind: "LimitRange"
+  metadata:
+    name: ${PROJECT_NAME}-limit-range
+  spec:
+    limits:
+      - type: "Container"
+        default:
+          cpu: "200m"
+        defaultRequest:
+          cpu: "10m"    
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: allow-from-same-namespace
+  spec:
+    podSelector: {}
+    ingress:
+    - from:
+      - podSelector: {}
+- apiVersion: networking.k8s.io/v1
+  kind: NetworkPolicy
+  metadata:
+    name: allow-from-openshift-ingress
+  spec:
+    ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            network.openshift.io/policy-group: ingress
+    podSelector: {}
+    policyTypes:
+    - Ingress
+parameters:
+- name: PROJECT_NAME
+- name: PROJECT_DISPLAYNAME
+- name: PROJECT_DESCRIPTION
+- name: PROJECT_ADMIN_USER
+- name: PROJECT_REQUESTING_USER
+{{- end -}}
+
+{{- /* Template/co-project-request - rule(s): ocp4-project_config_and_template_resource_quota, ocp4-project_template_resource_quota, ocp4-project_config_and_template_network_policy, ocp4-project_template_network_policy */ -}}
+{{- if eq (include "cr.anyActive" (dict "root" . "rules" (list "ocp4-project_config_and_template_resource_quota" "ocp4-project_template_resource_quota" "ocp4-project_config_and_template_network_policy" "ocp4-project_template_network_policy"))) "true" -}}
+{{- $merged := dict -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-project_config_and_template_resource_quota")) "true" -}}
+{{- $frag := include "cr.frag.openshift-config-template-co-project-request.ocp4-project-config-and-template-resource-quota.0" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-project_template_resource_quota")) "true" -}}
+{{- $frag := include "cr.frag.openshift-config-template-co-project-request.ocp4-project-template-resource-quota.1" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-project_config_and_template_network_policy")) "true" -}}
+{{- $frag := include "cr.frag.openshift-config-template-co-project-request.ocp4-project-config-and-template-network-policy.2" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-project_template_network_policy")) "true" -}}
+{{- $frag := include "cr.frag.openshift-config-template-co-project-request.ocp4-project-template-network-policy.3" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+---
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: co-project-request
+  namespace: openshift-config
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    compliance.openshift.io/managed: "true"
+{{ $merged | toYaml }}
+{{- end -}}

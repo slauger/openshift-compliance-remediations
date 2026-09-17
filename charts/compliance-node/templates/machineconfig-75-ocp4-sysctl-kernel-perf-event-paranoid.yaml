@@ -1,0 +1,34 @@
+{{- define "cr.frag.machineconfig-75-ocp4-sysctl-kernel-perf-event-paranoid.rhcos4-sysctl-kernel-perf-event-paranoid.0" -}}
+spec:
+  config:
+    ignition:
+      version: 3.1.0
+    storage:
+      files:
+      - contents:
+          source: data:,kernel.perf_event_paranoid%3D2%0A
+        mode: 0644
+        path: /etc/sysctl.d/75-sysctl_kernel_perf_event_paranoid.conf
+        overwrite: true
+{{- end -}}
+
+{{- /* MachineConfig/75-ocp4-sysctl-kernel-perf-event-paranoid - rule(s): rhcos4-sysctl_kernel_perf_event_paranoid */ -}}
+{{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "rhcos4-sysctl_kernel_perf_event_paranoid"))) "true") -}}
+{{- $merged := dict -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sysctl_kernel_perf_event_paranoid")) "true" -}}
+{{- $frag := include "cr.frag.machineconfig-75-ocp4-sysctl-kernel-perf-event-paranoid.rhcos4-sysctl-kernel-perf-event-paranoid.0" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- range $role := (.Values.node.roles | uniq) }}
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: {{ printf "%s-%s" "75-ocp4-sysctl-kernel-perf-event-paranoid" $role }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}
+    compliance.openshift.io/managed: "true"
+    machineconfiguration.openshift.io/role: {{ $role | quote }}
+{{ $merged | toYaml }}
+{{- end }}
+{{- end -}}

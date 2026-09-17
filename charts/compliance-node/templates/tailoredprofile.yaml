@@ -1,0 +1,50 @@
+{{- /* Optional TailoredProfiles: one per enabled base profile. */ -}}
+{{- if .Values.tailoredProfile.enabled -}}
+{{- $profiles := list "ocp4-bsi-node" "ocp4-bsi-node-2022" "ocp4-cis-node" "ocp4-cis-node-1-7" "ocp4-cis-node-1-9" "ocp4-cis-vm-extension-node" "ocp4-high-node" "ocp4-high-node-rev-4" "ocp4-moderate-node" "ocp4-moderate-node-rev-4" "ocp4-nerc-cip-node" "ocp4-pci-dss-node" "ocp4-pci-dss-node-3-2" "ocp4-pci-dss-node-4-0" "ocp4-stig-node" "ocp4-stig-node-v2r2" "ocp4-stig-node-v2r3" "rhcos4-anssi_bp28_enhanced" "rhcos4-anssi_bp28_high" "rhcos4-anssi_bp28_intermediary" "rhcos4-bsi" "rhcos4-bsi-2022" "rhcos4-e8" "rhcos4-high" "rhcos4-high-rev-4" "rhcos4-moderate" "rhcos4-moderate-rev-4" "rhcos4-nerc-cip" "rhcos4-stig" "rhcos4-stig-v2r2" "rhcos4-stig-v2r3" -}}
+{{- $root := . -}}
+{{- range $profile := $profiles -}}
+{{- if index $root.Values.profiles $profile -}}
+{{- $ruleList := index $root.Values.profileRules $profile | default (list) -}}
+{{- $varList := index $root.Values.profileVariables $profile | default (list) -}}
+{{- $product := (splitList "-" $profile | first) -}}
+---
+apiVersion: compliance.openshift.io/v1alpha1
+kind: TailoredProfile
+metadata:
+  name: {{ printf "hardening-%s" $profile }}
+  namespace: {{ $root.Values.complianceNamespace | quote }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $root.Release.Service | quote }}
+  annotations:
+    compliance.openshift.io/product-type: "Node"
+spec:
+  extends: {{ $profile | quote }}
+  title: {{ printf "Hardening-managed selection of %s" $profile | quote }}
+  description: >-
+    Rule selection managed by the compliance-hardening Helm chart.
+  {{- $disabled := list -}}
+  {{- range $rule := $ruleList -}}
+  {{- if hasKey $root.Values.rules $rule -}}
+  {{- if not (index $root.Values.rules $rule) -}}
+  {{- $disabled = append $disabled $rule -}}
+  {{- end -}}{{- end -}}{{- end -}}
+  {{- if $disabled }}
+  disableRules:
+  {{- range $rule := $disabled }}
+    - name: {{ $rule | replace "_" "-" | quote }}
+      rationale: "Disabled via compliance-hardening chart values"
+  {{- end }}
+  {{- end }}
+  {{- if $varList }}
+  setValues:
+  {{- range $var := $varList }}
+  {{- if hasKey $root.Values.variables $var }}
+    - name: {{ printf "%s-%s" $product ($var | replace "_" "-") | quote }}
+      value: {{ index $root.Values.variables $var | quote }}
+      rationale: "Set via compliance-hardening chart values"
+  {{- end }}
+  {{- end }}
+  {{- end }}
+{{- end -}}
+{{- end -}}
+{{- end -}}

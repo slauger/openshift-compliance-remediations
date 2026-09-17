@@ -1,0 +1,34 @@
+# downloaded / extracted content (large, reproducible from config/content.yaml)
+.cache/
+*.tar.gz
+*.tar.bz2
+*.zip
+ssg-*-ds.xml
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+
+# helm
+*.tgz
+charts/*/charts/
+charts/*/Chart.lock
+
+# local release artifacts (CI writes these; keep local runs clean)
+sbom-*.spdx.json
+
+# editors / local tooling
+.claude/settings.local.json
+.idea/
+.vscode/
+
+# os
+.DS_Store
+*.swp

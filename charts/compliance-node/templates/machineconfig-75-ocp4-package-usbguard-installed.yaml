@@ -1,0 +1,29 @@
+{{- define "cr.frag.machineconfig-75-ocp4-package-usbguard-installed.rhcos4-package-usbguard-installed.0" -}}
+spec:
+  config:
+    ignition:
+      version: 3.1.0
+  extensions:
+    - usbguard
+{{- end -}}
+
+{{- /* MachineConfig/75-ocp4-package-usbguard-installed - rule(s): rhcos4-package_usbguard_installed */ -}}
+{{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "rhcos4-package_usbguard_installed"))) "true") -}}
+{{- $merged := dict -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-package_usbguard_installed")) "true" -}}
+{{- $frag := include "cr.frag.machineconfig-75-ocp4-package-usbguard-installed.rhcos4-package-usbguard-installed.0" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- range $role := (.Values.node.roles | uniq) }}
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: {{ printf "%s-%s" "75-ocp4-package-usbguard-installed" $role }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}
+    compliance.openshift.io/managed: "true"
+    machineconfiguration.openshift.io/role: {{ $role | quote }}
+{{ $merged | toYaml }}
+{{- end }}
+{{- end -}}

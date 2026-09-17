@@ -1,0 +1,43 @@
+{{- define "cr.frag.project-cluster.ocp4-project-config-and-template-resource-quota.0" -}}
+spec:
+  projectRequestTemplate:
+    name: co-project-request
+{{- end -}}
+
+{{- define "cr.frag.project-cluster.ocp4-project-config-has-template.1" -}}
+spec:
+  projectRequestTemplate:
+    name: co-project-request
+{{- end -}}
+
+{{- define "cr.frag.project-cluster.ocp4-project-config-and-template-network-policy.2" -}}
+spec:
+  projectRequestTemplate:
+    name: co-project-request
+{{- end -}}
+
+{{- /* Project/cluster - rule(s): ocp4-project_config_and_template_resource_quota, ocp4-project_config_has_template, ocp4-project_config_and_template_network_policy */ -}}
+{{- if eq (include "cr.anyActive" (dict "root" . "rules" (list "ocp4-project_config_and_template_resource_quota" "ocp4-project_config_has_template" "ocp4-project_config_and_template_network_policy"))) "true" -}}
+{{- $merged := dict -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-project_config_and_template_resource_quota")) "true" -}}
+{{- $frag := include "cr.frag.project-cluster.ocp4-project-config-and-template-resource-quota.0" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-project_config_has_template")) "true" -}}
+{{- $frag := include "cr.frag.project-cluster.ocp4-project-config-has-template.1" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-project_config_and_template_network_policy")) "true" -}}
+{{- $frag := include "cr.frag.project-cluster.ocp4-project-config-and-template-network-policy.2" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+---
+apiVersion: config.openshift.io/v1
+kind: Project
+metadata:
+  name: cluster
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    compliance.openshift.io/managed: "true"
+{{ $merged | toYaml }}
+{{- end -}}

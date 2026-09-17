@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "additionalProperties": true,
+  "properties": {
+    "complianceNamespace": {
+      "type": "string"
+    },
+    "profileRules": {
+      "type": "object"
+    },
+    "profileVariables": {
+      "type": "object"
+    },
+    "profiles": {
+      "additionalProperties": false,
+      "properties": {
+        "ocp4-bsi": {
+          "type": "boolean"
+        },
+        "ocp4-bsi-2022": {
+          "type": "boolean"
+        },
+        "ocp4-cis": {
+          "type": "boolean"
+        },
+        "ocp4-cis-1-7": {
+          "type": "boolean"
+        },
+        "ocp4-cis-1-9": {
+          "type": "boolean"
+        },
+        "ocp4-e8": {
+          "type": "boolean"
+        },
+        "ocp4-high": {
+          "type": "boolean"
+        },
+        "ocp4-high-rev-4": {
+          "type": "boolean"
+        },
+        "ocp4-moderate": {
+          "type": "boolean"
+        },
+        "ocp4-moderate-rev-4": {
+          "type": "boolean"
+        },
+        "ocp4-nerc-cip": {
+          "type": "boolean"
+        },
+        "ocp4-pci-dss": {
+          "type": "boolean"
+        },
+        "ocp4-pci-dss-3-2": {
+          "type": "boolean"
+        },
+        "ocp4-pci-dss-4-0": {
+          "type": "boolean"
+        },
+        "ocp4-stig": {
+          "type": "boolean"
+        },
+        "ocp4-stig-v2r2": {
+          "type": "boolean"
+        },
+        "ocp4-stig-v2r3": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "rules": {
+      "additionalProperties": false,
+      "properties": {
+        "ocp4-api_server_encryption_provider_cipher": {
+          "type": "boolean"
+        },
+        "ocp4-api_server_tls_security_profile_custom_min_tls_version": {
+          "type": "boolean"
+        },
+        "ocp4-api_server_tls_security_profile_not_old": {
+          "type": "boolean"
+        },
+        "ocp4-audit_error_alert_exists": {
+          "type": "boolean"
+        },
+        "ocp4-audit_profile_set": {
+          "type": "boolean"
+        },
+        "ocp4-ingress_controller_tls_cipher_suites": {
+          "type": "boolean"
+        },
+        "ocp4-ingress_controller_tls_security_profile_custom_min_tls_version": {
+          "type": "boolean"
+        },
+        "ocp4-ingress_controller_tls_security_profile_not_old": {
+          "type": "boolean"
+        },
+        "ocp4-oauth_or_oauthclient_inactivity_timeout": {
+          "type": "boolean"
+        },
+        "ocp4-oauth_or_oauthclient_token_maxage": {
+          "type": "boolean"
+        },
+        "ocp4-project_config_and_template_network_policy": {
+          "type": "boolean"
+        },
+        "ocp4-project_config_and_template_resource_quota": {
+          "type": "boolean"
+        },
+        "ocp4-project_config_has_template": {
+          "type": "boolean"
+        },
+        "ocp4-project_template_network_policy": {
+          "type": "boolean"
+        },
+        "ocp4-project_template_resource_quota": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "tailoredProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "targetOCPVersion": {
+      "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+      "type": "string"
+    },
+    "variables": {
+      "additionalProperties": false,
+      "properties": {
+        "var_event_record_qps": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_kubelet_evictionhard_imagefs_available": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_kubelet_evictionhard_imagefs_inodesfree": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_kubelet_evictionhard_memory_available": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_kubelet_evictionhard_nodefs_available": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_kubelet_evictionhard_nodefs_inodesfree": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_kubelet_evictionsoft_imagefs_available": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_kubelet_evictionsoft_imagefs_inodesfree": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_kubelet_evictionsoft_memory_available": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_kubelet_evictionsoft_nodefs_available": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_kubelet_evictionsoft_nodefs_inodesfree": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_kubelet_tls_cipher_suites": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_kubelet_tls_min_version": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_oauth_inactivity_timeout": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_oauth_token_maxage": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_openshift_audit_profile": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_streaming_connection_timeouts": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_system_crypto_policy": {
+          "type": [
+            "string",
+            "number"
+          ]
+        }
+      },
+      "type": "object"
+    }
+  },
+  "title": "compliance-platform values",
+  "type": "object"
+}

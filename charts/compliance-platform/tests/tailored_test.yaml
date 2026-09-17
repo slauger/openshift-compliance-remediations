@@ -1,0 +1,64 @@
+suite: tailored profile layer
+templates:
+  - templates/tailoredprofile.yaml
+tests:
+  - it: renders no TailoredProfile by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders a TailoredProfile per enabled profile when enabled
+    set:
+      tailoredProfile:
+        enabled: true
+      profiles:
+        ocp4-cis: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: kind
+          value: TailoredProfile
+      - equal:
+          path: metadata.name
+          value: hardening-ocp4-cis
+      - equal:
+          path: metadata.namespace
+          value: openshift-compliance
+      - equal:
+          path: metadata.annotations["compliance.openshift.io/product-type"]
+          value: Platform
+      - equal:
+          path: spec.extends
+          value: ocp4-cis
+
+  - it: sets product-prefixed variable names in setValues
+    documentIndex: 0
+    set:
+      tailoredProfile:
+        enabled: true
+      profiles:
+        ocp4-cis: true
+    asserts:
+      - contains:
+          path: spec.setValues
+          content:
+            name: ocp4-var-openshift-audit-profile
+            value: WriteRequestBodies
+            rationale: "Set via compliance-hardening chart values"
+
+  - it: puts blacklisted rules into disableRules with hyphenated names
+    documentIndex: 0
+    set:
+      tailoredProfile:
+        enabled: true
+      profiles:
+        ocp4-cis: true
+      rules:
+        ocp4-audit_profile_set: false
+    asserts:
+      - contains:
+          path: spec.disableRules
+          content:
+            name: ocp4-audit-profile-set
+            rationale: "Disabled via compliance-hardening chart values"

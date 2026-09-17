@@ -1,0 +1,23 @@
+# Umbrella values. Configure each subchart under its own prefix (no global).
+# Subcharts are also installable standalone.
+
+# -- Platform remediations (safe cluster config, no reboot).
+compliance-platform:
+  targetOCPVersion: "4.20"
+  profiles: {}
+  rules: {}
+  tailoredProfile:
+    enabled: false
+
+# -- Node remediations (MachineConfig/KubeletConfig; trigger reboots).
+compliance-node:
+  targetOCPVersion: "4.20"
+  node:
+    enabled: false
+    roles:
+      - worker
+      - master
+  profiles: {}
+  rules: {}
+  tailoredProfile:
+    enabled: false

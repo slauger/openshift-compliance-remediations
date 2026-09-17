@@ -1,0 +1,34 @@
+{{- define "cr.frag.machineconfig-75-ocp4-ensure-logrotate-activated.rhcos4-ensure-logrotate-activated.0" -}}
+spec:
+  config:
+    ignition:
+      version: 3.1.0
+    storage:
+      files:
+      - contents:
+          source: data:,{{ "{{" }} %23%20see%20%22man%20logrotate%22%20for%20details%0A%23%20rotate%20log%20files%20daily%0Adaily%0A%0A%23%20keep%204%20weeks%20worth%20of%20backlogs%0Arotate%2030%0A%0A%23%20create%20new%20%28empty%29%20log%20files%20after%20rotating%20old%20ones%0Acreate%0A%0A%23%20use%20date%20as%20a%20suffix%20of%20the%20rotated%20file%0Adateext%0A%0A%23%20uncomment%20this%20if%20you%20want%20your%20log%20files%20compressed%0A%23compress%0A%0A%23%20RPM%20packages%20drop%20log%20rotation%20information%20into%20this%20directory%0Ainclude%20/etc/logrotate.d%0A%0A%23%20system-specific%20logs%20may%20be%20also%20be%20configured%20here. {{ "}}" }}
+        mode: 0644
+        path: /etc/logrotate.conf
+        overwrite: true
+{{- end -}}
+
+{{- /* MachineConfig/75-ocp4-ensure-logrotate-activated - rule(s): rhcos4-ensure_logrotate_activated */ -}}
+{{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "rhcos4-ensure_logrotate_activated"))) "true") -}}
+{{- $merged := dict -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-ensure_logrotate_activated")) "true" -}}
+{{- $frag := include "cr.frag.machineconfig-75-ocp4-ensure-logrotate-activated.rhcos4-ensure-logrotate-activated.0" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- range $role := (.Values.node.roles | uniq) }}
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: {{ printf "%s-%s" "75-ocp4-ensure-logrotate-activated" $role }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}
+    compliance.openshift.io/managed: "true"
+    machineconfiguration.openshift.io/role: {{ $role | quote }}
+{{ $merged | toYaml }}
+{{- end }}
+{{- end -}}

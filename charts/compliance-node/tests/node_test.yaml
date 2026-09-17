@@ -1,0 +1,53 @@
+suite: node activation and per-role emission
+tests:
+  - it: renders nothing when node.enabled is false (default), even with rule set
+    template: templates/kubeletconfig-compliance-kubelet-configure-event-creation.yaml
+    set:
+      rules:
+        ocp4-kubelet_configure_event_creation: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: emits one object per node role when enabled
+    template: templates/kubeletconfig-compliance-kubelet-configure-event-creation.yaml
+    set:
+      node:
+        enabled: true
+        roles: [worker, master]
+      rules:
+        ocp4-kubelet_configure_event_creation: true
+    asserts:
+      - hasDocuments:
+          count: 2
+
+  - it: synthesizes per-role names and sets the MCP role label
+    template: templates/kubeletconfig-compliance-kubelet-configure-event-creation.yaml
+    documentIndex: 0
+    set:
+      node:
+        enabled: true
+        roles: [worker]
+      rules:
+        ocp4-kubelet_configure_event_creation: true
+    asserts:
+      - equal:
+          path: metadata.name
+          value: compliance-kubelet-configure-event-creation-worker
+      - equal:
+          path: metadata.labels["machineconfiguration.openshift.io/role"]
+          value: worker
+
+  - it: resolves the kubelet event-record-qps variable default
+    template: templates/kubeletconfig-compliance-kubelet-configure-event-creation.yaml
+    documentIndex: 0
+    set:
+      node:
+        enabled: true
+        roles: [worker]
+      rules:
+        ocp4-kubelet_configure_event_creation: true
+    asserts:
+      - equal:
+          path: spec.kubeletConfig.eventRecordQPS
+          value: 50

@@ -1,0 +1,26 @@
+{{- define "cr.frag.kubeletconfig-compliance-kubelet-configure-event-creation.ocp4-kubelet-configure-event-creation.0" -}}
+spec:
+  kubeletConfig:
+    eventRecordQPS: {{ .Values.variables.var_event_record_qps }}
+{{- end -}}
+
+{{- /* KubeletConfig/compliance-kubelet-configure-event-creation - rule(s): ocp4-kubelet_configure_event_creation */ -}}
+{{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "ocp4-kubelet_configure_event_creation"))) "true") -}}
+{{- $merged := dict -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_configure_event_creation")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-kubelet-configure-event-creation.ocp4-kubelet-configure-event-creation.0" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- range $role := (.Values.node.roles | uniq) }}
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: KubeletConfig
+metadata:
+  name: {{ printf "%s-%s" "compliance-kubelet-configure-event-creation" $role }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}
+    compliance.openshift.io/managed: "true"
+    machineconfiguration.openshift.io/role: {{ $role | quote }}
+{{ $merged | toYaml }}
+{{- end }}
+{{- end -}}

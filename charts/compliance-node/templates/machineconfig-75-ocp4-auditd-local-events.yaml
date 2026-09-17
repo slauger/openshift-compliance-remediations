@@ -1,0 +1,34 @@
+{{- define "cr.frag.machineconfig-75-ocp4-auditd-local-events.rhcos4-auditd-local-events.0" -}}
+spec:
+  config:
+    ignition:
+      version: 3.1.0
+    storage:
+      files:
+      - contents:
+          source: data:,{{ "{{" }} %23%0A%23%20This%20file%20controls%20the%20configuration%20of%20the%20audit%20daemon%0A%23%0A%0Alocal_events%20%3D%20yes%0Awrite_logs%20%3D%20yes%0Alog_file%20%3D%20/var/log/audit/audit.log%0Alog_group%20%3D%20root%0Alog_format%20%3D%20ENRICHED%0Aflush%20%3D%20%7B%7B.var_auditd_flush%7D%7D%0Afreq%20%3D%2050%0Amax_log_file%20%3D%20%7B%7B.var_auditd_max_log_file%7D%7D%0Anum_logs%20%3D%20%7B%7B.var_auditd_num_logs%7D%7D%0Apriority_boost%20%3D%204%0Aname_format%20%3D%20hostname%0A%23%23name%20%3D%20mydomain%0Amax_log_file_action%20%3D%20%7B%7B.var_auditd_max_log_file_action%7D%7D%0Aspace_left%20%3D%20%7B%7B.var_auditd_space_left%7D%7D%0Aspace_left_action%20%3D%20%7B%7B.var_auditd_space_left_action%7D%7D%0Averify_email%20%3D%20yes%0Aaction_mail_acct%20%3D%20%7B%7B.var_auditd_action_mail_acct%7D%7D%0Aadmin_space_left%20%3D%2050%0Aadmin_space_left_action%20%3D%20syslog%0Adisk_full_action%20%3D%20%7B%7B.var_auditd_disk_full_action%7D%7D%0Adisk_error_action%20%3D%20%7B%7B.var_auditd_disk_error_action%7D%7D%0Ause_libwrap%20%3D%20yes%0A%23%23tcp_listen_port%20%3D%2060%0Atcp_listen_queue%20%3D%205%0Atcp_max_per_addr%20%3D%201%0A%23%23tcp_client_ports%20%3D%201024-65535%0Atcp_client_max_idle%20%3D%200%0Atransport%20%3D%20TCP%0Akrb5_principal%20%3D%20auditd%0A%23%23krb5_key_file%20%3D%20/etc/audit/audit.key%0Adistribute_network%20%3D%20no%0Aq_depth%20%3D%20400%0Aoverflow_action%20%3D%20syslog%0Amax_restarts%20%3D%2010%0Aplugin_dir%20%3D%20/etc/audit/plugins.d {{ "}}" }}
+        mode: 0640
+        path: /etc/audit/auditd.conf
+        overwrite: true
+{{- end -}}
+
+{{- /* MachineConfig/75-ocp4-auditd-local-events - rule(s): rhcos4-auditd_local_events */ -}}
+{{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "rhcos4-auditd_local_events"))) "true") -}}
+{{- $merged := dict -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_local_events")) "true" -}}
+{{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd-local-events.rhcos4-auditd-local-events.0" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- range $role := (.Values.node.roles | uniq) }}
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: {{ printf "%s-%s" "75-ocp4-auditd-local-events" $role }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}
+    compliance.openshift.io/managed: "true"
+    machineconfiguration.openshift.io/role: {{ $role | quote }}
+{{ $merged | toYaml }}
+{{- end }}
+{{- end -}}

@@ -1,0 +1,35 @@
+suite: project/template multi-object rule (regression for duplicate named templates)
+templates:
+  - templates/project-cluster.yaml
+  - templates/openshift-config-template-co-project-request.yaml
+tests:
+  - it: Project/cluster renders projectRequestTemplate, not the Template objects body
+    template: templates/project-cluster.yaml
+    set:
+      rules:
+        ocp4-project_config_and_template_resource_quota: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: kind
+          value: Project
+      - equal:
+          path: spec.projectRequestTemplate.name
+          value: co-project-request
+      - notExists:
+          path: objects
+
+  - it: Template/co-project-request renders the objects body
+    template: templates/openshift-config-template-co-project-request.yaml
+    set:
+      rules:
+        ocp4-project_config_and_template_resource_quota: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: kind
+          value: Template
+      - exists:
+          path: objects

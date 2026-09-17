@@ -1,0 +1,36 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Track the pinned ComplianceAsCode/content release in config/content.yaml",
+      "managerFilePatterns": [
+        "/^config/content\\.yaml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) extractVersion=(?<extractVersion>\\S+)\\s+version:\\s*\"(?<currentValue>[^\"]+)\""
+      ]
+    }
+  ],
+  "packageRules": [
+    {
+      "matchDepNames": [
+        "ComplianceAsCode/content"
+      ],
+      "groupName": "compliance content",
+      "commitMessageTopic": "ComplianceAsCode/content",
+      "prBodyNotes": [
+        "After merge, refresh the pinned checksum and regenerate the charts:",
+        "```sh",
+        "make update-sha   # rewrites config/content.yaml sha512 for the new version",
+        "make generate     # regenerates charts/ and RULES.md",
+        "make verify       # lint + unit tests",
+        "```",
+        "Review the diff of `charts/` and `RULES.md`: it shows exactly which rules and fixes changed between content releases."
+      ]
+    }
+  ]
+}

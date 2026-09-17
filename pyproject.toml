@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openshift-compliance-remediations"
+version = "0.1.0"
+description = "Generate Helm charts of OpenShift compliance remediations from ComplianceAsCode SCAP datastreams"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Simon Lauger", email = "simon@lauger.de" }]
+keywords = ["compliance", "openshift", "hardening", "openscap", "helm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: System Administrators",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Systems Administration",
+    "Operating System :: OS Independent",
+]
+# stdlib-only: no runtime dependencies.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["ruff"]
+
+[project.urls]
+Homepage = "https://github.com/slauger/openshift-compliance-remediations"
+Source = "https://github.com/slauger/openshift-compliance-remediations"
+Issues = "https://github.com/slauger/openshift-compliance-remediations/issues"
+
+[project.scripts]
+compliance-remediations-gen = "compliance_remediations_helm.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/compliance_remediations_helm"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# Go-template string literals (Helm helpers) force some long lines; line length
+# is stylistic and not enforced.
+ignore = ["E501"]

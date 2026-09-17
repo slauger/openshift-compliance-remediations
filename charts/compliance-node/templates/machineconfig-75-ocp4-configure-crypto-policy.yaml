@@ -1,0 +1,40 @@
+{{- define "cr.frag.machineconfig-75-ocp4-configure-crypto-policy.rhcos4-configure-crypto-policy.0" -}}
+spec:
+  config:
+    ignition:
+      version: 3.1.0
+    systemd:
+      units:
+        - name: configure-crypto-policy.service
+          enabled: true
+          contents: |
+            [Unit]
+            Before=kubelet.service
+            [Service]
+            Type=oneshot
+            ExecStart=update-crypto-policies --set {{ .Values.variables.var_system_crypto_policy }}
+            RemainAfterExit=yes
+            [Install]
+            WantedBy=multi-user.target
+{{- end -}}
+
+{{- /* MachineConfig/75-ocp4-configure-crypto-policy - rule(s): rhcos4-configure_crypto_policy */ -}}
+{{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "rhcos4-configure_crypto_policy"))) "true") -}}
+{{- $merged := dict -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-configure_crypto_policy")) "true" -}}
+{{- $frag := include "cr.frag.machineconfig-75-ocp4-configure-crypto-policy.rhcos4-configure-crypto-policy.0" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- range $role := (.Values.node.roles | uniq) }}
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: {{ printf "%s-%s" "75-ocp4-configure-crypto-policy" $role }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}
+    compliance.openshift.io/managed: "true"
+    machineconfiguration.openshift.io/role: {{ $role | quote }}
+{{ $merged | toYaml }}
+{{- end }}
+{{- end -}}

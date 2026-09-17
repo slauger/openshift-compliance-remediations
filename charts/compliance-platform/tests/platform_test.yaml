@@ -1,0 +1,90 @@
+suite: platform activation logic
+templates:
+  - templates/apiserver-cluster.yaml
+  - templates/oauth-cluster.yaml
+  - templates/openshift-ingress-operator-ingresscontroller-default.yaml
+tests:
+  - it: renders nothing with all profiles off (defaults)
+    template: templates/apiserver-cluster.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: activates a single rule without any profile
+    template: templates/apiserver-cluster.yaml
+    set:
+      rules:
+        ocp4-audit_profile_set: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: kind
+          value: APIServer
+
+  - it: blacklist wins over profile (audit disabled)
+    template: templates/apiserver-cluster.yaml
+    set:
+      rules:
+        ocp4-audit_profile_set: true
+        ocp4-api_server_encryption_provider_cipher: false
+    asserts:
+      - hasDocuments:
+          count: 1
+      - notExists:
+          path: spec.encryption
+
+  - it: selects aesgcm on OCP 4.20
+    template: templates/apiserver-cluster.yaml
+    set:
+      targetOCPVersion: "4.20"
+      rules:
+        ocp4-api_server_encryption_provider_cipher: true
+    asserts:
+      - equal:
+          path: spec.encryption.type
+          value: aesgcm
+
+  - it: selects aescbc on OCP 4.12
+    template: templates/apiserver-cluster.yaml
+    set:
+      targetOCPVersion: "4.12"
+      rules:
+        ocp4-api_server_encryption_provider_cipher: true
+    asserts:
+      - equal:
+          path: spec.encryption.type
+          value: aescbc
+
+  - it: accepts a full X.Y.Z targetOCPVersion without crashing
+    template: templates/apiserver-cluster.yaml
+    set:
+      targetOCPVersion: "4.20.1"
+      rules:
+        ocp4-api_server_encryption_provider_cipher: true
+    asserts:
+      - equal:
+          path: spec.encryption.type
+          value: aesgcm
+
+  - it: fails when two mutually-exclusive TLS rules are active
+    template: templates/apiserver-cluster.yaml
+    set:
+      rules:
+        ocp4-api_server_tls_security_profile_custom_min_tls_version: true
+        ocp4-api_server_tls_security_profile_not_old: true
+    asserts:
+      - failedTemplate:
+          errorMessage: "Conflicting compliance rules active for APIServer/cluster at spec.tlsSecurityProfile: ocp4-api_server_tls_security_profile_custom_min_tls_version, ocp4-api_server_tls_security_profile_not_old. These are mutually-exclusive alternatives - enable only one."
+
+  - it: renders IngressController TLS hardening for ocp4-cis out of the box
+    template: templates/openshift-ingress-operator-ingresscontroller-default.yaml
+    set:
+      profiles:
+        ocp4-cis: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: kind
+          value: IngressController

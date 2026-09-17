@@ -1,0 +1,33 @@
+{{- define "cr.frag.oauth-cluster.ocp4-oauth-or-oauthclient-inactivity-timeout.0" -}}
+spec:
+  tokenConfig:
+    accessTokenInactivityTimeout: {{ .Values.variables.var_oauth_inactivity_timeout }}
+{{- end -}}
+
+{{- define "cr.frag.oauth-cluster.ocp4-oauth-or-oauthclient-token-maxage.1" -}}
+spec:
+  tokenConfig:
+    accessTokenMaxAgeSeconds: {{ .Values.variables.var_oauth_token_maxage }}
+{{- end -}}
+
+{{- /* OAuth/cluster - rule(s): ocp4-oauth_or_oauthclient_inactivity_timeout, ocp4-oauth_or_oauthclient_token_maxage */ -}}
+{{- if eq (include "cr.anyActive" (dict "root" . "rules" (list "ocp4-oauth_or_oauthclient_inactivity_timeout" "ocp4-oauth_or_oauthclient_token_maxage"))) "true" -}}
+{{- $merged := dict -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-oauth_or_oauthclient_inactivity_timeout")) "true" -}}
+{{- $frag := include "cr.frag.oauth-cluster.ocp4-oauth-or-oauthclient-inactivity-timeout.0" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-oauth_or_oauthclient_token_maxage")) "true" -}}
+{{- $frag := include "cr.frag.oauth-cluster.ocp4-oauth-or-oauthclient-token-maxage.1" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+---
+apiVersion: config.openshift.io/v1
+kind: OAuth
+metadata:
+  name: cluster
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    compliance.openshift.io/managed: "true"
+{{ $merged | toYaml }}
+{{- end -}}

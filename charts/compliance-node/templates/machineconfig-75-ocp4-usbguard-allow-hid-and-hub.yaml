@@ -1,0 +1,34 @@
+{{- define "cr.frag.machineconfig-75-ocp4-usbguard-allow-hid-and-hub.rhcos4-usbguard-allow-hid-and-hub.0" -}}
+spec:
+  config:
+    ignition:
+      version: 3.1.0
+    storage:
+      files:
+      - contents:
+          source: data:,{{ "{{" }} %0Aallow%20with-interface%20match-all%20%7B%2003%3A%2A%3A%2A%2009%3A00%3A%2A%20%7D {{ "}}" }}
+        mode: 0600
+        path: /etc/usbguard/rules.d/75-hid-and-hub.conf
+        overwrite: true
+{{- end -}}
+
+{{- /* MachineConfig/75-ocp4-usbguard-allow-hid-and-hub - rule(s): rhcos4-usbguard_allow_hid_and_hub */ -}}
+{{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "rhcos4-usbguard_allow_hid_and_hub"))) "true") -}}
+{{- $merged := dict -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-usbguard_allow_hid_and_hub")) "true" -}}
+{{- $frag := include "cr.frag.machineconfig-75-ocp4-usbguard-allow-hid-and-hub.rhcos4-usbguard-allow-hid-and-hub.0" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- range $role := (.Values.node.roles | uniq) }}
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: {{ printf "%s-%s" "75-ocp4-usbguard-allow-hid-and-hub" $role }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}
+    compliance.openshift.io/managed: "true"
+    machineconfiguration.openshift.io/role: {{ $role | quote }}
+{{ $merged | toYaml }}
+{{- end }}
+{{- end -}}

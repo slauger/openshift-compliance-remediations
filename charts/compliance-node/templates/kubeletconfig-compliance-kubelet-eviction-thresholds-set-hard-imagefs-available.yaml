@@ -1,0 +1,37 @@
+{{- define "cr.frag.kubeletconfig-compliance-kubelet-eviction-thresholds-set-hard-imagefs-available.ocp4-kubelet-eviction-thresholds-set-hard-imagefs-available.0" -}}
+spec:
+  kubeletConfig:
+    evictionHard:
+      imagefs.available: {{ .Values.variables.var_kubelet_evictionhard_imagefs_available }}
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-kubelet-eviction-thresholds-set-hard-imagefs-available.ocp4-kubelet-eviction-thresholds-set-hard-imagefs-available.1" -}}
+spec:
+  kubeletConfig:
+    evictionPressureTransitionPeriod: 0s
+{{- end -}}
+
+{{- /* KubeletConfig/compliance-kubelet-eviction-thresholds-set-hard-imagefs-available - rule(s): ocp4-kubelet_eviction_thresholds_set_hard_imagefs_available */ -}}
+{{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "ocp4-kubelet_eviction_thresholds_set_hard_imagefs_available"))) "true") -}}
+{{- $merged := dict -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_hard_imagefs_available")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-kubelet-eviction-thresholds-set-hard-imagefs-available.ocp4-kubelet-eviction-thresholds-set-hard-imagefs-available.0" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_hard_imagefs_available")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-kubelet-eviction-thresholds-set-hard-imagefs-available.ocp4-kubelet-eviction-thresholds-set-hard-imagefs-available.1" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- range $role := (.Values.node.roles | uniq) }}
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: KubeletConfig
+metadata:
+  name: {{ printf "%s-%s" "compliance-kubelet-eviction-thresholds-set-hard-imagefs-available" $role }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}
+    compliance.openshift.io/managed: "true"
+    machineconfiguration.openshift.io/role: {{ $role | quote }}
+{{ $merged | toYaml }}
+{{- end }}
+{{- end -}}
