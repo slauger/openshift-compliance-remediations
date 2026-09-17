@@ -87,9 +87,13 @@ jobs:
         if: steps.semrel.outputs.new_release_published == 'true'
         uses: anchore/sbom-action/download-syft@v0
 
+      # helm reads its own registry config; cosign/syft read the Docker config.
+      # Log in to both, or signing fails after the push (UNAUTHORIZED).
       - name: Log in to GHCR
         if: steps.semrel.outputs.new_release_published == 'true'
-        run: helm registry login "$REGISTRY" -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}"
+        run: |
+          helm registry login "$REGISTRY" -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}"
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login "$REGISTRY" -u "${{ github.actor }}" --password-stdin
 
       - name: Package, push, sign, SBOM
         if: steps.semrel.outputs.new_release_published == 'true'
