@@ -1107,6 +1107,78 @@
     "variables": {
       "additionalProperties": false,
       "properties": {
+        "sshd_idle_timeout_value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "sshd_max_auth_tries_value": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_accounts_passwords_pam_faillock_dir": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_auditd_action_mail_acct": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_auditd_disk_error_action": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_auditd_disk_full_action": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_auditd_flush": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_auditd_max_log_file": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_auditd_max_log_file_action": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_auditd_num_logs": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_auditd_space_left": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_auditd_space_left_action": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
         "var_event_record_qps": {
           "type": [
             "string",
@@ -1185,6 +1257,12 @@
             "number"
           ]
         },
+        "var_multiple_time_servers": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
         "var_oauth_inactivity_timeout": {
           "type": [
             "string",
@@ -1203,6 +1281,54 @@
             "number"
           ]
         },
+        "var_rekey_limit_size": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_rekey_limit_time": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_sshd_disable_compression": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_sshd_max_sessions": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_sshd_priv_separation": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_sshd_set_keepalive": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_sshd_set_login_grace_time": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_sshd_set_maxstartups": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
         "var_streaming_connection_timeouts": {
           "type": [
             "string",
@@ -1210,6 +1336,12 @@
           ]
         },
         "var_system_crypto_policy": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "var_time_service_set_maxpoll": {
           "type": [
             "string",
             "number"

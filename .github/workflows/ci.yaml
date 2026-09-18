@@ -55,5 +55,18 @@ jobs:
       - name: Helm unittest
         run: make test
 
+      - name: Install ignition-validate
+        env:
+          # renovate: datasource=github-releases depName=coreos/ignition
+          IGNITION_VERSION: v2.27.0
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/ignition-validate" \
+            "https://github.com/coreos/ignition/releases/download/$IGNITION_VERSION/ignition-validate-x86_64-linux"
+          sudo install -m 0755 "$RUNNER_TEMP/ignition-validate" /usr/local/bin/ignition-validate
+          ignition-validate --version
+
       - name: Python unit tests
         run: make test-py
+
+      - name: Validate rendered payloads
+        run: make validate-payloads

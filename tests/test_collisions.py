@@ -1,15 +1,13 @@
 """Conflict / merge-group detection tests."""
 import unittest
-from pathlib import Path
+
+from _datastream import OCP4, requires
 
 from compliance_remediations_helm import collisions
 from compliance_remediations_helm import parser as xccdf
 
-ROOT = Path(__file__).resolve().parents[1]
-OCP4 = ROOT / ".cache" / "ssg-ocp4-ds.xml"
 
-
-@unittest.skipUnless(OCP4.exists(), "run `make fetch` first")
+@requires(OCP4)
 class TestConflicts(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

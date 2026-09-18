@@ -6,7 +6,7 @@ spec:
     storage:
       files:
       - contents:
-          source: data:,{{ "{{" }} %0A-w%20/var/run/utmp%20-p%20wa%20-k%20session%0A-w%20/var/log/btmp%20-p%20wa%20-k%20session%0A-w%20/var/log/wtmp%20-p%20wa%20-k%20session%0A {{ "}}" }}
+          source: data:,%0A-w%20/var/run/utmp%20-p%20wa%20-k%20session%0A-w%20/var/log/btmp%20-p%20wa%20-k%20session%0A-w%20/var/log/wtmp%20-p%20wa%20-k%20session%0A
         mode: 0600
         path: /etc/audit/rules.d/75-audit-session-events.rules
         overwrite: true
