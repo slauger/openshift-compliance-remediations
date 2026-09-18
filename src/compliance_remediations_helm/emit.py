@@ -380,6 +380,11 @@ def _rule_applicability_block(appl: dict, layer_rules: set) -> str:
         if name not in layer_rules:
             continue
         app = appl[name]
+        if not app.gated:
+            # Role-only restrictions are handled by not rendering the object
+            # for that role, the way the operator never produces the
+            # remediation for a pool it did not scan. Nothing to refuse.
+            continue
         lines.append(f"  {name}:")
         if app.never:
             reason = "; ".join(app.reasons) or "not applicable to any supported target"
@@ -546,7 +551,8 @@ def values_yaml(contents: list[Content], layer: str, content_version: str,
 # --------------------------------------------------------------------------- #
 # object templates
 # --------------------------------------------------------------------------- #
-def object_template(group: MergeGroup) -> str:
+def object_template(group: MergeGroup, appl: dict | None = None) -> str:
+    appl = appl or {}
     key = group.key
     all_rules = group.rule_ids
     rules_literal = " ".join(f'"{r}"' for r in all_rules)
@@ -615,9 +621,29 @@ def object_template(group: MergeGroup) -> str:
                  '(.Values.cluster.ocpVersion | toString)) -}}')
     lines.append("{{- end -}}")
 
+    # Node roles this object applies to, if upstream restricts it. Mirrors the
+    # operator: it scans per pool and derives the MachineConfig role from the
+    # scan's node selector, so a master-only remediation never reaches a
+    # worker. We render per role, so the equivalent is to skip the roles it
+    # does not apply to.
+    role_sets = {frozenset(appl[d.rule_id].roles)
+                 if d.rule_id in appl else frozenset()
+                 for d in group.docs if _fragment_body(d.yaml)}
+    roles = next(iter(role_sets)) if len(role_sets) == 1 else frozenset()
+    if len(role_sets) > 1:
+        raise ValueError(
+            f"{key.kind}/{key.name} mixes rules with different node-role "
+            f"restrictions ({sorted(tuple(sorted(r)) for r in role_sets)}). "
+            f"Rendering it per role would need the fragment merge moved inside "
+            f"the role loop; teach object_template that before this ships."
+        )
+
     # Render the object, one per node role for node objects.
     if is_node:
         lines.append("{{- range $role := (.Values.node.roles | uniq) }}")
+        if roles:
+            role_list = " ".join(_go_str(r) for r in sorted(roles))
+            lines.append(f"{{{{- if has $role (list {role_list}) }}}}")
         lines.append("---")
         lines.append(f"apiVersion: {key.api_version}")
         lines.append(f"kind: {key.kind}")
@@ -628,6 +654,8 @@ def object_template(group: MergeGroup) -> str:
         lines.append('    compliance.openshift.io/managed: "true"')
         lines.append('    machineconfiguration.openshift.io/role: {{ $role | quote }}')
         lines.append("{{ $merged | toYaml }}")
+        if roles:
+            lines.append("{{- end }}")
         lines.append("{{- end }}")
     else:
         lines.append("---")
@@ -851,7 +879,8 @@ def _write_layer_chart(chart_dir: Path, name: str, description: str,
                 stats.setdefault("dropped", []).append(
                     f"{rid} -> {g.key.kind}/{g.key.name}")
             continue
-        (tpl / f"{g.key.slug()}.yaml").write_text(object_template(g), encoding="utf-8")
+        (tpl / f"{g.key.slug()}.yaml").write_text(
+            object_template(g, appl), encoding="utf-8")
         stats[layer] += 1
 
     # Optional TailoredProfile layer.
@@ -971,15 +1000,6 @@ def rules_matrix(contents: dict[str, Content], version: str,
     # Detect upstream-broken fixes: a tlsSecurityProfile written with a
     # capitalized `Custom:` block but no sibling `type:` - the OpenShift API
     # ignores it, so selecting this alternative is a silent no-op.
-    # Rules upstream restricts to the master pool. The layer split routes them
-    # into the node chart but still renders them for every role in node.roles,
-    # so report it rather than leaving the divergence invisible.
-    master_only: set[str] = set()
-    for content in content_list:
-        for rule in rules_with_fixes(content).values():
-            if any(r.lstrip("#") == "ocp4-master-node" for r in rule.all_platforms):
-                master_only.add(rule.helm_name)
-
     broken: set[str] = set()
     for content in content_list:
         for rule in rules_with_fixes(content).values():
@@ -1019,9 +1039,6 @@ def rules_matrix(contents: dict[str, Content], version: str,
                 marks.append("⛔ n/a")
             mark = (" " + " ".join(marks)) if marks else ""
             applies = applicability.describe(app) if app is not None else "-"
-            if hn in master_only:
-                applies = "master pool only" if applies == "-" \
-                    else f"{applies}; master pool only"
             rows.append(
                 f"| `{hn}`{mark} | `{target}` | {rule.severity or '-'} | "
                 f"{layer} | {content.product} | {applies} | {profs} |"
@@ -1046,7 +1063,11 @@ def rules_matrix(contents: dict[str, Content], version: str,
         "charts refuse to render one instead of shipping it. Architecture and "
         "HyperShift are declared via `cluster.architecture` and "
         "`cluster.hypershift`; for a non-default architecture apply the generated "
-        "`values-<arch>.yaml` overlay. Rules marked **⛔ n/a** are never "
+        "`values-<arch>.yaml` overlay. A rule restricted to one MachineConfigPool "
+        "(\"master pool only\") is simply not rendered for the other roles in "
+        "`node.roles`, mirroring the operator: it scans per pool and takes the "
+        "MachineConfig role from the scan's node selector, so such a remediation "
+        "never reaches a worker there. Rules marked **⛔ n/a** are never "
         "applicable to RHCOS/OKD at all and ship disabled - enable one explicitly "
         "only if you know the assumption behind it does not hold for you.",
         "",

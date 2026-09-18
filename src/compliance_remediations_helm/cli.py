@@ -85,7 +85,8 @@ def main(argv: list[str] | None = None) -> int:
     app = stats.get("applicability", {})
     print(f"    applicability:      {app.get('arch', 0)} arch-constrained, "
           f"{app.get('hypershift', 0)} hypershift-constrained, "
-          f"{app.get('never', 0)} never applicable")
+          f"{app.get('never', 0)} never applicable, "
+          f"{app.get('role', 0)} role-restricted")
     if stats.get("dropped"):
         print(f"    WARNING: {len(stats['dropped'])} fix(es) produced no "
               "recognized body and were NOT emitted (unexpected top-level key?):")
