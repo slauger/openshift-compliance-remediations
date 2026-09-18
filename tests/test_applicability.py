@@ -361,6 +361,65 @@ class TestRoleRestriction(unittest.TestCase):
         self.assertIn("node-role", str(cm.exception))
 
 
+class TestKubeletConfigConsolidation(unittest.TestCase):
+    """Every kubelet rule merges into one object per pool, with a selector.
+
+    Mirrors verifyAndCompleteKC in the operator, which names the object after
+    the pool and sets the selector the MCO needs. Without the selector the
+    object matches no pool and silently does nothing.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import tempfile
+        from pathlib import Path
+        def kc_rule(rule_id, field):
+            return xccdf.Rule(
+                rule_id=rule_id, xccdf_id=f"x_{rule_id}", product="ocp4",
+                fixes=[xccdf.FixVariant(yaml=(
+                    "apiVersion: machineconfiguration.openshift.io/v1\n"
+                    "kind: KubeletConfig\n"
+                    "spec:\n"
+                    "  kubeletConfig:\n"
+                    f"    {field}: true\n"))])
+        content = Content(
+            rules={"kc_one": kc_rule("kc_one", "protectKernelDefaults"),
+                   "kc_two": kc_rule("kc_two", "makeIPTablesUtilChains")},
+            values={}, profiles={}, product="ocp4")
+        cls._tmp = tempfile.TemporaryDirectory()
+        root = Path(cls._tmp.name)
+        emit.generate_charts({"ocp4": content}, root, "0.0.0")
+        cls.tpl = root / emit.NODE_CHART / "templates"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def test_one_template_for_every_kubelet_rule(self):
+        files = sorted(p.name for p in self.tpl.glob("kubeletconfig-*.yaml"))
+        self.assertEqual(files, ["kubeletconfig-compliance-operator-kubelet.yaml"])
+
+    def test_both_rules_contribute_to_it(self):
+        body = (self.tpl / "kubeletconfig-compliance-operator-kubelet.yaml").read_text()
+        self.assertIn("protectKernelDefaults", body)
+        self.assertIn("makeIPTablesUtilChains", body)
+
+    def test_the_pool_selector_is_emitted_per_role(self):
+        body = (self.tpl / "kubeletconfig-compliance-operator-kubelet.yaml").read_text()
+        self.assertIn("machineConfigPoolSelector", body)
+        self.assertIn("pools.operator.machineconfiguration.openshift.io/%s", body)
+        self.assertIn("deepCopy $merged", body)
+
+    def test_machineconfig_names_are_still_per_rule(self):
+        # Only KubeletConfig consolidates; MachineConfig keeps the operator's
+        # per-check naming.
+        from compliance_remediations_helm import classify
+        self.assertEqual(classify.synthesize_name("MachineConfig", "some_rule"),
+                         "75-ocp4-some-rule")
+        self.assertEqual(classify.synthesize_name("KubeletConfig", "some_rule"),
+                         "compliance-operator-kubelet")
+
+
 class TestDanglingPlatformReference(unittest.TestCase):
     def test_reference_to_an_undefined_platform_raises(self):
         # A ref the datastream does not define means the parse lost something;

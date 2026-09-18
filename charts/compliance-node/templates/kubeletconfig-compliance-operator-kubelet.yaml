@@ -1,0 +1,346 @@
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-configure-event-creation.0" -}}
+spec:
+  kubeletConfig:
+    eventRecordQPS: {{ .Values.variables.var_event_record_qps }}
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-configure-tls-cipher-suites.1" -}}
+spec:
+  kubeletConfig:
+    tlsCipherSuites: [{{ .Values.variables.var_kubelet_tls_cipher_suites }}]
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-configure-tls-min-version.2" -}}
+spec:
+  kubeletConfig:
+    tlsMinVersion: "{{ .Values.variables.var_kubelet_tls_min_version }}"
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-enable-iptables-util-chains.3" -}}
+spec:
+  kubeletConfig:
+    makeIPTablesUtilChains: true
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-enable-protect-kernel-defaults.4" -}}
+spec:
+  kubeletConfig:
+    protectKernelDefaults: true
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-enable-streaming-connections.5" -}}
+spec:
+  kubeletConfig:
+    streamingConnectionIdleTimeout: {{ .Values.variables.var_streaming_connection_timeouts }}
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-imagefs-available.6" -}}
+spec:
+  kubeletConfig:
+    evictionHard:
+      imagefs.available: {{ .Values.variables.var_kubelet_evictionhard_imagefs_available }}
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-imagefs-available.7" -}}
+spec:
+  kubeletConfig:
+    evictionPressureTransitionPeriod: 0s
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-imagefs-inodesfree.8" -}}
+spec:
+  kubeletConfig:
+    evictionHard:
+      imagefs.inodesFree: {{ .Values.variables.var_kubelet_evictionhard_imagefs_inodesfree }}
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-imagefs-inodesfree.9" -}}
+spec:
+  kubeletConfig:
+    evictionPressureTransitionPeriod: 0s
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-memory-available.10" -}}
+spec:
+  kubeletConfig:
+    evictionHard:
+      memory.available: {{ .Values.variables.var_kubelet_evictionhard_memory_available }}
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-memory-available.11" -}}
+spec:
+  kubeletConfig:
+    evictionPressureTransitionPeriod: 0s
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-nodefs-available.12" -}}
+spec:
+  kubeletConfig:
+    evictionHard:
+      nodefs.available: {{ .Values.variables.var_kubelet_evictionhard_nodefs_available }}
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-nodefs-available.13" -}}
+spec:
+  kubeletConfig:
+    evictionPressureTransitionPeriod: 0s
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-nodefs-inodesfree.14" -}}
+spec:
+  kubeletConfig:
+    evictionHard:
+      nodefs.inodesFree: {{ .Values.variables.var_kubelet_evictionhard_nodefs_inodesfree }}
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-nodefs-inodesfree.15" -}}
+spec:
+  kubeletConfig:
+    evictionPressureTransitionPeriod: 0s
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-imagefs-available.16" -}}
+spec:
+  kubeletConfig:
+    evictionSoft:
+      imagefs.available: {{ .Values.variables.var_kubelet_evictionsoft_imagefs_available }}
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-imagefs-available.17" -}}
+spec:
+  kubeletConfig:
+    evictionSoftGracePeriod:
+      imagefs.available: "1m30s"
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-imagefs-available.18" -}}
+spec:
+  kubeletConfig:
+    evictionPressureTransitionPeriod: 0s
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-imagefs-inodesfree.19" -}}
+spec:
+  kubeletConfig:
+    evictionSoft:
+      imagefs.inodesFree: {{ .Values.variables.var_kubelet_evictionsoft_imagefs_inodesfree }}
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-imagefs-inodesfree.20" -}}
+spec:
+  kubeletConfig:
+    evictionSoftGracePeriod:
+      imagefs.inodesFree: "1m30s"
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-imagefs-inodesfree.21" -}}
+spec:
+  kubeletConfig:
+    evictionPressureTransitionPeriod: 0s
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-memory-available.22" -}}
+spec:
+  kubeletConfig:
+    evictionSoft:
+      memory.available: {{ .Values.variables.var_kubelet_evictionsoft_memory_available }}
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-memory-available.23" -}}
+spec:
+  kubeletConfig:
+    evictionSoftGracePeriod:
+      memory.available: "1m30s"
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-memory-available.24" -}}
+spec:
+  kubeletConfig:
+    evictionPressureTransitionPeriod: 0s
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-nodefs-available.25" -}}
+spec:
+  kubeletConfig:
+    evictionSoft:
+      nodefs.available: {{ .Values.variables.var_kubelet_evictionsoft_nodefs_available }}
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-nodefs-available.26" -}}
+spec:
+  kubeletConfig:
+    evictionSoftGracePeriod:
+      nodefs.available: "1m30s"
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-nodefs-available.27" -}}
+spec:
+  kubeletConfig:
+    evictionPressureTransitionPeriod: 0s
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-nodefs-inodesfree.28" -}}
+spec:
+  kubeletConfig:
+    evictionSoft:
+      nodefs.inodesFree: {{ .Values.variables.var_kubelet_evictionsoft_nodefs_inodesfree }}
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-nodefs-inodesfree.29" -}}
+spec:
+  kubeletConfig:
+    evictionSoftGracePeriod:
+      nodefs.inodesFree: "1m30s"
+{{- end -}}
+
+{{- define "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-nodefs-inodesfree.30" -}}
+spec:
+  kubeletConfig:
+    evictionPressureTransitionPeriod: 0s
+{{- end -}}
+
+{{- /* KubeletConfig/compliance-operator-kubelet - rule(s): ocp4-kubelet_configure_event_creation, ocp4-kubelet_configure_tls_cipher_suites, ocp4-kubelet_configure_tls_min_version, ocp4-kubelet_enable_iptables_util_chains, ocp4-kubelet_enable_protect_kernel_defaults, ocp4-kubelet_enable_streaming_connections, ocp4-kubelet_eviction_thresholds_set_hard_imagefs_available, ocp4-kubelet_eviction_thresholds_set_hard_imagefs_inodesfree, ocp4-kubelet_eviction_thresholds_set_hard_memory_available, ocp4-kubelet_eviction_thresholds_set_hard_nodefs_available, ocp4-kubelet_eviction_thresholds_set_hard_nodefs_inodesfree, ocp4-kubelet_eviction_thresholds_set_soft_imagefs_available, ocp4-kubelet_eviction_thresholds_set_soft_imagefs_inodesfree, ocp4-kubelet_eviction_thresholds_set_soft_memory_available, ocp4-kubelet_eviction_thresholds_set_soft_nodefs_available, ocp4-kubelet_eviction_thresholds_set_soft_nodefs_inodesfree */ -}}
+{{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "ocp4-kubelet_configure_event_creation" "ocp4-kubelet_configure_tls_cipher_suites" "ocp4-kubelet_configure_tls_min_version" "ocp4-kubelet_enable_iptables_util_chains" "ocp4-kubelet_enable_protect_kernel_defaults" "ocp4-kubelet_enable_streaming_connections" "ocp4-kubelet_eviction_thresholds_set_hard_imagefs_available" "ocp4-kubelet_eviction_thresholds_set_hard_imagefs_inodesfree" "ocp4-kubelet_eviction_thresholds_set_hard_memory_available" "ocp4-kubelet_eviction_thresholds_set_hard_nodefs_available" "ocp4-kubelet_eviction_thresholds_set_hard_nodefs_inodesfree" "ocp4-kubelet_eviction_thresholds_set_soft_imagefs_available" "ocp4-kubelet_eviction_thresholds_set_soft_imagefs_inodesfree" "ocp4-kubelet_eviction_thresholds_set_soft_memory_available" "ocp4-kubelet_eviction_thresholds_set_soft_nodefs_available" "ocp4-kubelet_eviction_thresholds_set_soft_nodefs_inodesfree"))) "true") -}}
+{{- $merged := dict -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_configure_event_creation")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-configure-event-creation.0" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_configure_tls_cipher_suites")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-configure-tls-cipher-suites.1" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_configure_tls_min_version")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-configure-tls-min-version.2" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_enable_iptables_util_chains")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-enable-iptables-util-chains.3" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_enable_protect_kernel_defaults")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-enable-protect-kernel-defaults.4" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_enable_streaming_connections")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-enable-streaming-connections.5" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_hard_imagefs_available")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-imagefs-available.6" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_hard_imagefs_available")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-imagefs-available.7" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_hard_imagefs_inodesfree")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-imagefs-inodesfree.8" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_hard_imagefs_inodesfree")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-imagefs-inodesfree.9" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_hard_memory_available")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-memory-available.10" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_hard_memory_available")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-memory-available.11" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_hard_nodefs_available")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-nodefs-available.12" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_hard_nodefs_available")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-nodefs-available.13" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_hard_nodefs_inodesfree")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-nodefs-inodesfree.14" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_hard_nodefs_inodesfree")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-hard-nodefs-inodesfree.15" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_soft_imagefs_available")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-imagefs-available.16" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_soft_imagefs_available")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-imagefs-available.17" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_soft_imagefs_available")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-imagefs-available.18" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_soft_imagefs_inodesfree")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-imagefs-inodesfree.19" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_soft_imagefs_inodesfree")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-imagefs-inodesfree.20" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_soft_imagefs_inodesfree")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-imagefs-inodesfree.21" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_soft_memory_available")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-memory-available.22" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_soft_memory_available")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-memory-available.23" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_soft_memory_available")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-memory-available.24" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_soft_nodefs_available")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-nodefs-available.25" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_soft_nodefs_available")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-nodefs-available.26" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_soft_nodefs_available")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-nodefs-available.27" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_soft_nodefs_inodesfree")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-nodefs-inodesfree.28" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_soft_nodefs_inodesfree")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-nodefs-inodesfree.29" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubelet_eviction_thresholds_set_soft_nodefs_inodesfree")) "true" -}}
+{{- $frag := include "cr.frag.kubeletconfig-compliance-operator-kubelet.ocp4-kubelet-eviction-thresholds-set-soft-nodefs-inodesfree.30" . | fromYaml -}}
+{{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if not $merged -}}
+{{- fail (printf "No remediation applies to KubeletConfig/compliance-operator-kubelet at cluster.ocpVersion %s. Every fix variant of the active rule(s) (ocp4-kubelet_configure_event_creation, ocp4-kubelet_configure_tls_cipher_suites, ocp4-kubelet_configure_tls_min_version, ocp4-kubelet_enable_iptables_util_chains, ocp4-kubelet_enable_protect_kernel_defaults, ocp4-kubelet_enable_streaming_connections, ocp4-kubelet_eviction_thresholds_set_hard_imagefs_available, ocp4-kubelet_eviction_thresholds_set_hard_imagefs_inodesfree, ocp4-kubelet_eviction_thresholds_set_hard_memory_available, ocp4-kubelet_eviction_thresholds_set_hard_nodefs_available, ocp4-kubelet_eviction_thresholds_set_hard_nodefs_inodesfree, ocp4-kubelet_eviction_thresholds_set_soft_imagefs_available, ocp4-kubelet_eviction_thresholds_set_soft_imagefs_inodesfree, ocp4-kubelet_eviction_thresholds_set_soft_memory_available, ocp4-kubelet_eviction_thresholds_set_soft_nodefs_available, ocp4-kubelet_eviction_thresholds_set_soft_nodefs_inodesfree) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
+{{- end -}}
+{{- range $role := (.Values.node.roles | uniq) }}
+{{- $selector := dict "spec" (dict "machineConfigPoolSelector" (dict "matchLabels" (dict (printf "pools.operator.machineconfiguration.openshift.io/%s" $role) ""))) -}}
+{{- $obj := mustMergeOverwrite (deepCopy $merged) $selector }}
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: KubeletConfig
+metadata:
+  name: {{ printf "%s-%s" "compliance-operator-kubelet" $role }}
+  labels:
+    app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}
+    compliance.openshift.io/managed: "true"
+    machineconfiguration.openshift.io/role: {{ $role | quote }}
+{{ $obj | toYaml }}
+{{- end }}
+{{- end -}}
