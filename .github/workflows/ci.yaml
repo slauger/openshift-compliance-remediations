@@ -27,7 +27,7 @@ jobs:
         run: ruff check src tests
 
       - name: Set up Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@v5
         with:
           version: v3.22.0
 
