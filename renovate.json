@@ -13,12 +13,24 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+) extractVersion=(?<extractVersion>\\S+)\\s+version:\\s*\"(?<currentValue>[^\"]+)\""
       ]
+    },
+    {
+      "customType": "regex",
+      "description": "Track the pinned ignition-validate release used by the payload checks",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/ci\\.yaml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+IGNITION_VERSION:\\s*(?<currentValue>\\S+)"
+      ]
     }
   ],
   "packageRules": [
     {
       "description": "Automerge GitHub Actions dependency updates once CI is green",
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "automerge": true
     },
     {

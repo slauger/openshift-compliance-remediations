@@ -55,10 +55,12 @@ Which layer covers what:
 | Datastream unit tests (classes wrapped in `_datastream.requires(...)`) | after `make fetch` | parse invariants, variable default resolution, conflict groups and winner selection against the pinned content |
 | Determinism + drift | `make generate` + `git diff --exit-code charts/ RULES.md` in CI | byte-identical regeneration; every generator change surfaces as a reviewable diff of the committed output |
 | helm-unittest (`charts/*/tests/`) | `make test` | rendered object shape per kind, and the fail path when mutually-exclusive alternatives are enabled together |
+| Payload validation (`scripts/validate_payloads.py`) | `make validate-payloads` | every profile renders on its own; every Ignition `data:,` payload is decoded and run through the parser that owns that file on the node (`sshd -t`, sysctl/auditd syntax, `ignition-validate`) |
 
 Conventions:
 
 - Assertions against the datastream are **invariants, never exact counts**. A content bump must not require editing a number in `tests/`; if it does, the assertion was a change detector and the real intent belongs in the test instead. Exact counts live in the committed `charts/` diff, which is reviewed on every regeneration.
 - The datastream tests skip when `.cache/` is absent so a fresh clone can still run the offline half. `make test-py` depends on `fetch` and sets `REQUIRE_DATASTREAM=1`, which turns that skip into a failure - a green `make test-py` always means the gated tests actually ran.
+- A manifest can be valid YAML, a valid MachineConfig and still write a file the node rejects: the Ignition `data:,` payload is an opaque string to every YAML-level tool. That is what `validate_payloads.py` looks at, matrixed over `targetOCPVersion` because version-gated fix variants mean a payload can be correct at 4.18 and broken at 4.12. Checks whose tool is missing are reported as skipped, never silently passed.
 - The charts target OpenShift/OKD CRDs (APIServer, MachineConfig, KubeletConfig, etc.). They cannot be applied to a vanilla Kubernetes cluster; use `helm template`/`lint`/`unittest` locally and apply on a real OpenShift/OKD cluster.
 - On combined master+worker nodes (SNO / small OKD), the node lands in the master MachineConfigPool; set `node.roles` accordingly.

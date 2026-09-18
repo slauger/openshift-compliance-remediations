@@ -7,7 +7,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 GEN := $(VENV)/bin/compliance-remediations-gen
 
-.PHONY: venv fetch update-sha generate docs lint lint-py test test-py deps template show-ocp-version verify clean
+.PHONY: venv fetch update-sha generate docs lint lint-py test test-py validate-payloads deps template show-ocp-version verify clean
 
 ## Create the virtualenv and install the generator (editable).
 venv:
@@ -44,6 +44,12 @@ test:
 test-py: fetch
 	REQUIRE_DATASTREAM=1 $(PY) -m unittest discover -s tests -v
 
+## Validate what the charts write to a node: render every profile, then decode
+## every Ignition payload and run it through the parser that owns that file.
+validate-payloads: venv
+	$(VENV)/bin/pip install -q -e '.[dev]'
+	$(PY) scripts/validate_payloads.py all
+
 ## Build umbrella dependencies (pulls subcharts).
 deps:
 	helm dependency build $(CHARTS)/compliance-hardening
@@ -64,7 +70,7 @@ lint-py: venv
 	$(VENV)/bin/ruff check src tests
 
 ## Full pipeline: generate, docs, lint, unit tests, python tests, ruff.
-verify: generate docs deps lint test test-py lint-py
+verify: generate docs deps lint test test-py validate-payloads lint-py
 	@echo "== all verification passed =="
 
 clean:
