@@ -36,10 +36,21 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v5
         with:
-          version: v3.22.0
+          version: v4.3.0
 
       - name: Install helm-unittest plugin
-        run: helm plugin install https://github.com/helm-unittest/helm-unittest
+        env:
+          # renovate: datasource=github-releases depName=helm-unittest/helm-unittest
+          HELM_UNITTEST_VERSION: v1.1.2
+        run: |
+          # Helm 4 verifies plugin signatures by default and refuses VCS
+          # sources outright. helm-unittest does publish a signed release
+          # tarball, but it bundles every platform binary (~170 MB) and
+          # verifying it needs the maintainer's key in a local keyring - too
+          # much machinery for a test-only plugin. Pin the version instead, so
+          # the install is at least reproducible and Renovate-tracked.
+          helm plugin install https://github.com/helm-unittest/helm-unittest \
+            --version "$HELM_UNITTEST_VERSION" --verify=false
 
       - name: Refresh checksum + regenerate + verify
         run: |
