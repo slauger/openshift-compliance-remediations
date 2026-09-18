@@ -71,7 +71,7 @@ jobs:
       # back to main (git plugin), tags and creates the GitHub release.
       - name: Semantic release
         id: semrel
-        uses: cycjimmy/semantic-release-action@v4
+        uses: cycjimmy/semantic-release-action@v6.0.0
         with:
           extra_plugins: |
             @semantic-release/exec
