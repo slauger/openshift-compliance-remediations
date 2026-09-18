@@ -13,6 +13,8 @@ The remediation content itself is pinned to a specific [ComplianceAsCode/content
 
 Replace `<chart>` with `compliance-platform`, `compliance-node`, or `compliance-hardening`, and `<version>` with the released version.
 
+Requires **cosign v2.6 or newer**. Signing runs on cosign v3, which writes the Sigstore protobuf bundle format by default; cosign v2.5 and older cannot read it.
+
 ```sh
 cosign verify \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
