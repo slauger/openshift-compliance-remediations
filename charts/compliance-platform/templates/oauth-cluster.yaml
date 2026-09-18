@@ -21,6 +21,9 @@ spec:
 {{- $frag := include "cr.frag.oauth-cluster.ocp4-oauth-or-oauthclient-token-maxage.1" . | fromYaml -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
+{{- if not $merged -}}
+{{- fail (printf "No remediation applies to OAuth/cluster at cluster.ocpVersion %s. Every fix variant of the active rule(s) (ocp4-oauth_or_oauthclient_inactivity_timeout, ocp4-oauth_or_oauthclient_token_maxage) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
+{{- end -}}
 ---
 apiVersion: config.openshift.io/v1
 kind: OAuth

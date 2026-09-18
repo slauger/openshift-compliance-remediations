@@ -22,6 +22,9 @@ spec:
 {{- $frag := include "cr.frag.kubeletconfig-compliance-kubelet-eviction-thresholds-set-hard-nodefs-available.ocp4-kubelet-eviction-thresholds-set-hard-nodefs-available.1" . | fromYaml -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
+{{- if not $merged -}}
+{{- fail (printf "No remediation applies to KubeletConfig/compliance-kubelet-eviction-thresholds-set-hard-nodefs-available at cluster.ocpVersion %s. Every fix variant of the active rule(s) (ocp4-kubelet_eviction_thresholds_set_hard_nodefs_available) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
+{{- end -}}
 {{- range $role := (.Values.node.roles | uniq) }}
 ---
 apiVersion: machineconfiguration.openshift.io/v1

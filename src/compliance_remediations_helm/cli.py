@@ -82,6 +82,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"    platform templates: {stats['platform']}")
     print(f"    node templates:     {stats['node']}")
     print(f"    conflict guards:    {len(stats['conflicts'])}")
+    app = stats.get("applicability", {})
+    print(f"    applicability:      {app.get('arch', 0)} arch-constrained, "
+          f"{app.get('hypershift', 0)} hypershift-constrained, "
+          f"{app.get('never', 0)} never applicable")
     if stats.get("dropped"):
         print(f"    WARNING: {len(stats['dropped'])} fix(es) produced no "
               "recognized body and were NOT emitted (unexpected top-level key?):")

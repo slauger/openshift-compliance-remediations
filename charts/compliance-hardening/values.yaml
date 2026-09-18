@@ -3,7 +3,18 @@
 
 # -- Platform remediations (safe cluster config, no reboot).
 compliance-platform:
-  targetOCPVersion: "4.20"
+  # -- Facts about the target cluster. Rules that upstream marks as not
+  # applicable to this cluster are refused rather than silently shipped.
+  cluster:
+    # -- Target OpenShift version; selects version-dependent remediations.
+    # Find yours: oc get clusterversion version -o jsonpath='{.status.desired.version}'
+    ocpVersion: "4.20"
+    # -- Node architecture of the MachineConfigPools listed in node.roles.
+    # x86_64 | aarch64 | ppc64le | s390x (amd64 and arm64 are accepted too).
+    # Find yours: make show-node-arch
+    architecture: x86_64
+    # -- Set true on a HyperShift hosted cluster (hosted control plane).
+    hypershift: false
   profiles: {}
   rules: {}
   tailoredProfile:
@@ -11,7 +22,18 @@ compliance-platform:
 
 # -- Node remediations (MachineConfig/KubeletConfig; trigger reboots).
 compliance-node:
-  targetOCPVersion: "4.20"
+  # -- Facts about the target cluster. Rules that upstream marks as not
+  # applicable to this cluster are refused rather than silently shipped.
+  cluster:
+    # -- Target OpenShift version; selects version-dependent remediations.
+    # Find yours: oc get clusterversion version -o jsonpath='{.status.desired.version}'
+    ocpVersion: "4.20"
+    # -- Node architecture of the MachineConfigPools listed in node.roles.
+    # x86_64 | aarch64 | ppc64le | s390x (amd64 and arm64 are accepted too).
+    # Find yours: make show-node-arch
+    architecture: x86_64
+    # -- Set true on a HyperShift hosted cluster (hosted control plane).
+    hypershift: false
   node:
     enabled: false
     roles:

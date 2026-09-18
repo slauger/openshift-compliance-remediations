@@ -1,0 +1,49 @@
+suite: applicability gate (HyperShift)
+tests:
+  - it: refuses a hosted cluster when a rule upstream excludes it
+    template: templates/applicability.yaml
+    set:
+      cluster:
+        hypershift: true
+      rules:
+        ocp4-api_server_encryption_provider_cipher: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "ocp4-api_server_encryption_provider_cipher - not applicable when cluster.hypershift is true"
+
+  - it: passes on a standalone cluster
+    template: templates/applicability.yaml
+    set:
+      rules:
+        ocp4-api_server_encryption_provider_cipher: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders the encryption block on a standalone cluster
+    template: templates/apiserver-cluster.yaml
+    set:
+      rules:
+        ocp4-api_server_encryption_provider_cipher: true
+    asserts:
+      - exists:
+          path: spec.encryption
+
+  - it: still renders other rules on the shared object for a hosted cluster
+    # APIServer/cluster is the one object mixing a constrained rule with
+    # unconstrained ones. With the constrained rule switched off, the rest must
+    # render normally rather than the whole object disappearing.
+    template: templates/apiserver-cluster.yaml
+    set:
+      cluster:
+        hypershift: true
+      rules:
+        ocp4-api_server_encryption_provider_cipher: false
+        ocp4-audit_profile_set: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - exists:
+          path: spec.audit
+      - notExists:
+          path: spec.encryption

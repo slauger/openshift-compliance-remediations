@@ -24,6 +24,9 @@ spec:
 {{- $frag := include "cr.frag.openshift-kube-apiserver-prometheusrule-audit-errors.ocp4-audit-error-alert-exists.0" . | fromYaml -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
+{{- if not $merged -}}
+{{- fail (printf "No remediation applies to PrometheusRule/audit-errors at cluster.ocpVersion %s. Every fix variant of the active rule(s) (ocp4-audit_error_alert_exists) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
+{{- end -}}
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule

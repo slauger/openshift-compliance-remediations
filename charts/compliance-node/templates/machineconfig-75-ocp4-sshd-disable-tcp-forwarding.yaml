@@ -29,13 +29,16 @@ spec:
 {{- /* MachineConfig/75-ocp4-sshd-disable-tcp-forwarding - rule(s): rhcos4-sshd_disable_tcp_forwarding */ -}}
 {{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "rhcos4-sshd_disable_tcp_forwarding"))) "true") -}}
 {{- $merged := dict -}}
-{{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sshd_disable_tcp_forwarding")) "true") (semverCompare "<4.13.0" (printf "%s.%s.0" (.Values.targetOCPVersion | toString | splitList "." | first) (index (.Values.targetOCPVersion | toString | splitList ".") 1))) -}}
+{{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sshd_disable_tcp_forwarding")) "true") (semverCompare "<4.13.0" (printf "%s.%s.0" (.Values.cluster.ocpVersion | toString | splitList "." | first) (index (.Values.cluster.ocpVersion | toString | splitList ".") 1))) -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-sshd-disable-tcp-forwarding.rhcos4-sshd-disable-tcp-forwarding.0" . | fromYaml -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
-{{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sshd_disable_tcp_forwarding")) "true") (semverCompare ">=4.13.0" (printf "%s.%s.0" (.Values.targetOCPVersion | toString | splitList "." | first) (index (.Values.targetOCPVersion | toString | splitList ".") 1))) -}}
+{{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sshd_disable_tcp_forwarding")) "true") (semverCompare ">=4.13.0" (printf "%s.%s.0" (.Values.cluster.ocpVersion | toString | splitList "." | first) (index (.Values.cluster.ocpVersion | toString | splitList ".") 1))) -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-sshd-disable-tcp-forwarding.rhcos4-sshd-disable-tcp-forwarding.1" . | fromYaml -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if not $merged -}}
+{{- fail (printf "No remediation applies to MachineConfig/75-ocp4-sshd-disable-tcp-forwarding at cluster.ocpVersion %s. Every fix variant of the active rule(s) (rhcos4-sshd_disable_tcp_forwarding) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
 {{- end -}}
 {{- range $role := (.Values.node.roles | uniq) }}
 ---

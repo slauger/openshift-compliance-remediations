@@ -16,6 +16,9 @@ spec:
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-disable-ctrlaltdel-reboot.rhcos4-disable-ctrlaltdel-reboot.0" . | fromYaml -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
+{{- if not $merged -}}
+{{- fail (printf "No remediation applies to MachineConfig/75-ocp4-disable-ctrlaltdel-reboot at cluster.ocpVersion %s. Every fix variant of the active rule(s) (rhcos4-disable_ctrlaltdel_reboot) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
+{{- end -}}
 {{- range $role := (.Values.node.roles | uniq) }}
 ---
 apiVersion: machineconfiguration.openshift.io/v1

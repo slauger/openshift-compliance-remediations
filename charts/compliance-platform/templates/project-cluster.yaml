@@ -31,6 +31,9 @@ spec:
 {{- $frag := include "cr.frag.project-cluster.ocp4-project-config-and-template-network-policy.2" . | fromYaml -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
+{{- if not $merged -}}
+{{- fail (printf "No remediation applies to Project/cluster at cluster.ocpVersion %s. Every fix variant of the active rule(s) (ocp4-project_config_and_template_resource_quota, ocp4-project_config_has_template, ocp4-project_config_and_template_network_policy) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
+{{- end -}}
 ---
 apiVersion: config.openshift.io/v1
 kind: Project

@@ -1,0 +1,145 @@
+suite: applicability gate (architecture)
+tests:
+  # --- the gate refuses, and says which rules and why --------------------
+  - it: refuses an aarch64 cluster when an inapplicable rule is active
+    template: templates/applicability.yaml
+    set:
+      node:
+        enabled: true
+      cluster:
+        architecture: aarch64
+      rules:
+        rhcos4-audit_rules_time_stime: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "rhcos4-audit_rules_time_stime - not applicable on aarch64"
+
+  - it: refuses s390x for the same rule (both architectures are excluded)
+    template: templates/applicability.yaml
+    set:
+      node:
+        enabled: true
+      cluster:
+        architecture: s390x
+      rules:
+        rhcos4-audit_rules_time_stime: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "not applicable on s390x"
+
+  - it: normalizes the Kubernetes architecture spelling
+    # `oc get nodes` reports arm64, the compliance content says aarch64. If
+    # these did not normalize, the gate would silently pass.
+    template: templates/applicability.yaml
+    set:
+      node:
+        enabled: true
+      cluster:
+        architecture: arm64
+      rules:
+        rhcos4-audit_rules_time_stime: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "not applicable on aarch64"
+
+  - it: refuses a rule constrained only through its upstream group
+    # usbguard_allow_hid_and_hub carries no <platform> of its own; the s390x
+    # exclusion comes from content_group_usbguard. Parsing rule-level platforms
+    # alone would miss it.
+    template: templates/applicability.yaml
+    set:
+      node:
+        enabled: true
+      cluster:
+        architecture: s390x
+      rules:
+        rhcos4-usbguard_allow_hid_and_hub: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "rhcos4-usbguard_allow_hid_and_hub - not applicable on s390x"
+
+  - it: reports every offending rule in one message, not just the first
+    template: templates/applicability.yaml
+    set:
+      node:
+        enabled: true
+      cluster:
+        architecture: aarch64
+      rules:
+        rhcos4-audit_rules_time_stime: true
+        rhcos4-audit_rules_dac_modification_chmod: true
+    asserts:
+      # helm-unittest matches against the error body, which drops the leading
+      # count line - assert on both rule names instead.
+      - failedTemplate:
+          errorPattern: "rhcos4-audit_rules_dac_modification_chmod - not applicable"
+      - failedTemplate:
+          errorPattern: "rhcos4-audit_rules_time_stime - not applicable"
+
+  - it: names the overlay that resolves it
+    template: templates/applicability.yaml
+    set:
+      node:
+        enabled: true
+      cluster:
+        architecture: aarch64
+      rules:
+        rhcos4-audit_rules_time_stime: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "values-aarch64.yaml"
+
+  # --- and stays out of the way otherwise --------------------------------
+  - it: passes on an architecture the rule applies to
+    template: templates/applicability.yaml
+    set:
+      node:
+        enabled: true
+      cluster:
+        architecture: ppc64le
+      rules:
+        rhcos4-audit_rules_time_stime: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders the gated object on the default architecture
+    template: templates/machineconfig-75-ocp4-audit-rules-time-stime.yaml
+    set:
+      node:
+        enabled: true
+        roles: [worker, master]
+      rules:
+        rhcos4-audit_rules_time_stime: true
+    asserts:
+      - hasDocuments:
+          count: 2
+      - exists:
+          path: spec.config.storage.files
+
+  - it: does not gate an unconstrained rule on aarch64
+    # Guards against over-gating: only rules with an upstream constraint may be
+    # refused.
+    template: templates/kubeletconfig-compliance-kubelet-configure-event-creation.yaml
+    set:
+      node:
+        enabled: true
+        roles: [worker, master]
+      cluster:
+        architecture: aarch64
+      rules:
+        ocp4-kubelet_configure_event_creation: true
+    asserts:
+      - hasDocuments:
+          count: 2
+
+  - it: ignores a constrained rule that is not active
+    template: templates/applicability.yaml
+    set:
+      node:
+        enabled: true
+      cluster:
+        architecture: aarch64
+    asserts:
+      - hasDocuments:
+          count: 0

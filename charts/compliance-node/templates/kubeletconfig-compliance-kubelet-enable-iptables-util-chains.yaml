@@ -11,6 +11,9 @@ spec:
 {{- $frag := include "cr.frag.kubeletconfig-compliance-kubelet-enable-iptables-util-chains.ocp4-kubelet-enable-iptables-util-chains.0" . | fromYaml -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
+{{- if not $merged -}}
+{{- fail (printf "No remediation applies to KubeletConfig/compliance-kubelet-enable-iptables-util-chains at cluster.ocpVersion %s. Every fix variant of the active rule(s) (ocp4-kubelet_enable_iptables_util_chains) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
+{{- end -}}
 {{- range $role := (.Values.node.roles | uniq) }}
 ---
 apiVersion: machineconfiguration.openshift.io/v1

@@ -1,0 +1,30 @@
+# Overlay for aarch64 nodes.
+# Generated from ComplianceAsCode/content v0.1.82.
+#
+# Upstream marks these rules as not applicable on aarch64, so the chart
+# refuses to render them. Apply this file to switch them off in one go:
+#   helm install <release> <chart> -f values-aarch64.yaml
+cluster:
+  architecture: aarch64
+rules:
+  rhcos4-audit_rules_dac_modification_chmod: false  # not applicable on aarch64
+  rhcos4-audit_rules_dac_modification_chown: false  # not applicable on aarch64
+  rhcos4-audit_rules_dac_modification_lchown: false  # not applicable on aarch64
+  rhcos4-audit_rules_dac_modification_umount: false  # not applicable on aarch64
+  rhcos4-audit_rules_etc_group_open: false  # not applicable on aarch64
+  rhcos4-audit_rules_etc_gshadow_open: false  # not applicable on aarch64
+  rhcos4-audit_rules_etc_passwd_open: false  # not applicable on aarch64
+  rhcos4-audit_rules_etc_shadow_open: false  # not applicable on aarch64
+  rhcos4-audit_rules_file_deletion_events_rename: false  # not applicable on aarch64
+  rhcos4-audit_rules_file_deletion_events_rmdir: false  # not applicable on aarch64
+  rhcos4-audit_rules_file_deletion_events_unlink: false  # not applicable on aarch64
+  rhcos4-audit_rules_time_stime: false  # not applicable on aarch64
+  rhcos4-audit_rules_unsuccessful_file_modification_chmod: false  # not applicable on aarch64
+  rhcos4-audit_rules_unsuccessful_file_modification_chown: false  # not applicable on aarch64
+  rhcos4-audit_rules_unsuccessful_file_modification_creat: false  # not applicable on aarch64
+  rhcos4-audit_rules_unsuccessful_file_modification_lchown: false  # not applicable on aarch64
+  rhcos4-audit_rules_unsuccessful_file_modification_open: false  # not applicable on aarch64
+  rhcos4-audit_rules_unsuccessful_file_modification_open_o_creat: false  # not applicable on aarch64
+  rhcos4-audit_rules_unsuccessful_file_modification_open_o_trunc_write: false  # not applicable on aarch64
+  rhcos4-audit_rules_unsuccessful_file_modification_rename: false  # not applicable on aarch64
+  rhcos4-audit_rules_unsuccessful_file_modification_unlink: false  # not applicable on aarch64

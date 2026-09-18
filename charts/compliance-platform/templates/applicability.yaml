@@ -1,0 +1,5 @@
+{{- /*
+  Applicability preflight. Renders nothing; aborts when an active rule is one
+  the Compliance Operator would report as notapplicable for this cluster.
+*/ -}}
+{{- include "cr.applicabilityPreflight" . -}}
