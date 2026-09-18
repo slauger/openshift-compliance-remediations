@@ -81,7 +81,7 @@ jobs:
 
       - name: Install cosign
         if: steps.semrel.outputs.new_release_published == 'true'
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@v4.1.2
 
       - name: Install syft (SBOM)
         if: steps.semrel.outputs.new_release_published == 'true'
