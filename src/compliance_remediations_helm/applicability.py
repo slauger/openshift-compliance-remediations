@@ -35,6 +35,16 @@ ARCHITECTURES = ("aarch64", "ppc64le", "s390x", "x86_64")
 # Kubernetes reports the Go spellings; accept and normalize them.
 ARCH_ALIASES = {"amd64": "x86_64", "arm64": "aarch64"}
 
+# Node roles are a different kind of fact from the axes above: they are not one
+# value the user declares for the cluster but a list of pools the chart renders
+# for, so they are extracted separately and gate the render per role rather
+# than aborting it. The operator gets this for free - it scans per pool and
+# derives the MachineConfig role from the scan's node selector - so a
+# master-only rule never reaches a worker there.
+ROLE_FACTS: dict[str, frozenset] = {
+    "node_is_ocp4_master_node": frozenset(("master",)),
+}
+
 DOMAINS: dict[str, frozenset] = {
     AXIS_ARCH: frozenset(ARCHITECTURES),
     AXIS_HYPERSHIFT: frozenset((True, False)),
@@ -91,8 +101,11 @@ FACTS: dict[str, Fact] = {
         why="node-layer rules are routed to the node chart by kind",
         const=True),
     "node_is_ocp4_master_node": Fact(
+        # The pool restriction is enforced, but not through the axes: see
+        # ROLE_FACTS. As an axis leaf it is simply true - the layer split has
+        # already routed the rule into the node chart.
         why="node-layer rules are routed to the node chart by kind; the pool "
-            "restriction is reported in RULES.md, not enforced",
+            "restriction is enforced per role, see ROLE_FACTS",
         const=True),
     "package_audit": Fact(why="audit ships in RHCOS", const=True),
     "package_autofs": Fact(why="autofs ships in RHCOS", const=True),
@@ -136,12 +149,19 @@ class Applicability:
     never: bool = False
     # axis -> allowed values, present only where narrower than the full domain
     constraints: dict[str, frozenset] = field(default_factory=dict)
+    # Node roles this rule applies to; empty means every role.
+    roles: frozenset = frozenset()
     platform_ids: tuple = ()
     reasons: tuple = ()
 
     @property
     def unconstrained(self) -> bool:
-        return not self.never and not self.constraints
+        return not self.never and not self.constraints and not self.roles
+
+    @property
+    def gated(self) -> bool:
+        """Constrained in a way the preflight can refuse."""
+        return self.never or bool(self.constraints)
 
 
 def _fact(name: str, where: str) -> Fact:
@@ -226,6 +246,25 @@ def reduce(exprs, platform_ids=(), where="<unknown>") -> Applicability:
                          reasons=reasons)
 
 
+def _roles_for(expr, where: str) -> frozenset:
+    """Role restriction carried by one CPE expression, if any.
+
+    Only a expression whose single leaf is a role fact is understood. A role
+    fact buried in a larger expression would need the same enumeration the axes
+    get; raise rather than approximate it.
+    """
+    names = _referenced(expr, [])
+    role_names = [n for n in names if n in ROLE_FACTS]
+    if not role_names:
+        return frozenset()
+    if len(names) > 1:
+        raise UnsupportedFact(
+            f"role fact {role_names[0]!r} appears in a compound expression on "
+            f"{where}; teach _roles_for how to reduce it rather than guessing"
+        )
+    return ROLE_FACTS[role_names[0]]
+
+
 def build_map(contents) -> dict[str, Applicability]:
     """helm_name -> Applicability, for every fix-carrying rule."""
     out: dict[str, Applicability] = {}
@@ -254,6 +293,12 @@ def build_map(contents) -> dict[str, Applicability]:
             if not exprs:
                 continue
             app = reduce(exprs, ids, where=rule.helm_name)
+            roles: frozenset = frozenset()
+            for expr in exprs:
+                r = _roles_for(expr, rule.helm_name)
+                if r:
+                    roles = roles & r if roles else r
+            app.roles = roles
             if not app.unconstrained:
                 out[rule.helm_name] = app
     return out
@@ -283,6 +328,8 @@ def describe(app: Applicability) -> str:
     hs = app.constraints.get(AXIS_HYPERSHIFT)
     if hs is not None:
         parts.append("hypershift only" if True in hs else "not hypershift")
+    if app.roles:
+        parts.append(", ".join(sorted(app.roles)) + " pool only")
     return "; ".join(parts) or "-"
 
 
@@ -292,4 +339,5 @@ def summarize(appl: dict[str, Applicability]) -> dict[str, int]:
         "hypershift": sum(1 for a in appl.values()
                           if AXIS_HYPERSHIFT in a.constraints),
         "never": sum(1 for a in appl.values() if a.never),
+        "role": sum(1 for a in appl.values() if a.roles),
     }

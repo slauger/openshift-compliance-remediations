@@ -23,6 +23,7 @@ spec:
 {{- fail (printf "No remediation applies to MachineConfig/75-ocp4-directory-access-var-log-oauth-audit at cluster.ocpVersion %s. Every fix variant of the active rule(s) (ocp4-directory_access_var_log_oauth_audit) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
 {{- end -}}
 {{- range $role := (.Values.node.roles | uniq) }}
+{{- if has $role (list "master") }}
 ---
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
@@ -33,5 +34,6 @@ metadata:
     compliance.openshift.io/managed: "true"
     machineconfiguration.openshift.io/role: {{ $role | quote }}
 {{ $merged | toYaml }}
+{{- end }}
 {{- end }}
 {{- end -}}

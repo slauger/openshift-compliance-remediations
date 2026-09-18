@@ -143,3 +143,59 @@ tests:
     asserts:
       - hasDocuments:
           count: 0
+
+  # --- node-role restriction ---------------------------------------------
+  - it: renders a master-only rule for the master pool only
+    # The audit rules watch /var/log/{kube,oauth,openshift}-apiserver/, which
+    # exist only where those control-plane components run.
+    template: templates/machineconfig-75-ocp4-directory-access-var-log-kube-audit.yaml
+    set:
+      node:
+        enabled: true
+        roles: [worker, master]
+      rules:
+        ocp4-directory_access_var_log_kube_audit: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.labels["machineconfiguration.openshift.io/role"]
+          value: master
+
+  - it: renders nothing for a worker-only pool list
+    template: templates/machineconfig-75-ocp4-directory-access-var-log-kube-audit.yaml
+    set:
+      node:
+        enabled: true
+        roles: [worker]
+      rules:
+        ocp4-directory_access_var_log_kube_audit: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: does not abort for a master-only rule, unlike an arch mismatch
+    # With both roles listed the rule is legitimately wanted on one of them, so
+    # skipping the other is right and failing would be wrong.
+    template: templates/applicability.yaml
+    set:
+      node:
+        enabled: true
+        roles: [worker]
+      rules:
+        ocp4-directory_access_var_log_kube_audit: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: still renders an unrestricted node rule for every role
+    template: templates/kubeletconfig-compliance-kubelet-configure-event-creation.yaml
+    set:
+      node:
+        enabled: true
+        roles: [worker, master]
+      rules:
+        ocp4-kubelet_configure_event_creation: true
+    asserts:
+      - hasDocuments:
+          count: 2

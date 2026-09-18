@@ -196,9 +196,9 @@ class TestEmittedGuard(unittest.TestCase):
         self.assertFalse((self.node / "values-ppc64le.yaml").exists())
 
 
-def _mc_rule(rule_id: str, platforms=()):
+def _mc_rule(rule_id: str, platforms=(), product="rhcos4"):
     return xccdf.Rule(
-        rule_id=rule_id, xccdf_id=f"x_{rule_id}", product="rhcos4",
+        rule_id=rule_id, xccdf_id=f"x_{rule_id}", product=product,
         fixes=[xccdf.FixVariant(yaml=(
             "apiVersion: machineconfiguration.openshift.io/v1\n"
             "kind: MachineConfig\n"
@@ -281,6 +281,86 @@ class TestUnconstrainedRules(unittest.TestCase):
         self.assertEqual(len(self.templates), 3)
 
 
+MASTER_NODE = FactRef("node_is_ocp4_master_node")
+
+
+class TestRoleRestriction(unittest.TestCase):
+    """A rule upstream restricts to the master pool must not reach workers.
+
+    The operator gets this from its scan topology: it scans per pool and takes
+    the MachineConfig role from the scan's node selector, so a master-only
+    remediation is never generated for a worker. We render per role, so the
+    equivalent is to skip the roles the rule does not apply to - not to abort,
+    because with both roles listed the rule is legitimately wanted for one.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import tempfile
+        from pathlib import Path
+        content = Content(
+            rules={
+                "master_only": _mc_rule("master_only", ["#ocp4-master-node"], "ocp4"),
+                "any_role": _mc_rule("any_role", product="ocp4"),
+            },
+            values={}, profiles={}, product="ocp4",
+            platforms={"ocp4-master-node": _wrap(_and(MASTER_NODE))})
+        cls.appl = ap.build_map([content])
+        cls._tmp = tempfile.TemporaryDirectory()
+        root = Path(cls._tmp.name)
+        emit.generate_charts({"ocp4": content}, root, "0.0.0")
+        cls.tpl = root / emit.NODE_CHART / "templates"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def test_role_is_extracted(self):
+        self.assertEqual(self.appl["ocp4-master_only"].roles, frozenset({"master"}))
+
+    def test_role_only_rule_is_not_otherwise_constrained(self):
+        app = self.appl["ocp4-master_only"]
+        self.assertFalse(app.never)
+        self.assertEqual(app.constraints, {})
+        # It is not something the preflight can refuse - it is a render skip.
+        self.assertFalse(app.gated)
+
+    def test_describe_reports_the_pool(self):
+        self.assertEqual(ap.describe(self.appl["ocp4-master_only"]),
+                         "master pool only")
+
+    def test_restricted_template_gates_on_the_role(self):
+        body = (self.tpl / "machineconfig-75-ocp4-master-only.yaml").read_text()
+        self.assertIn('{{- if has $role (list "master") }}', body)
+
+    def test_unrestricted_template_does_not(self):
+        body = (self.tpl / "machineconfig-75-ocp4-any-role.yaml").read_text()
+        self.assertNotIn("has $role", body)
+
+    def test_role_only_rule_stays_out_of_the_preflight_map(self):
+        # Putting it there would abort the render for a rule that is wanted on
+        # the other pool.
+        values = (self.tpl.parent / "values.yaml").read_text()
+        section = values.split("ruleApplicability:", 1)[1]
+        self.assertNotIn("ocp4-master_only", section)
+
+    def test_mixed_role_restrictions_raise(self):
+        # Impossible today - node object names are synthesized per rule, so
+        # every rule is the sole contributor to its object. If that ever
+        # changes, the merge has to move inside the role loop; fail loudly
+        # rather than render one rule's restriction over another's.
+        from compliance_remediations_helm.collisions import FixDoc, MergeGroup, ObjectKey
+        key = ObjectKey("machineconfiguration.openshift.io/v1", "MachineConfig",
+                        "", "75-ocp4-shared")
+        body = "kind: MachineConfig\nspec:\n  config:\n    ignition:\n      version: 3.1.0\n"
+        group = MergeGroup(key=key, docs=[FixDoc("ocp4-a", key, body),
+                                          FixDoc("ocp4-b", key, body)])
+        appl = {"ocp4-a": ap.Applicability(roles=frozenset({"master"}))}
+        with self.assertRaises(ValueError) as cm:
+            emit.object_template(group, appl)
+        self.assertIn("node-role", str(cm.exception))
+
+
 class TestDanglingPlatformReference(unittest.TestCase):
     def test_reference_to_an_undefined_platform_raises(self):
         # A ref the datastream does not define means the parse lost something;
@@ -349,6 +429,16 @@ class TestAgainstPinnedContent(unittest.TestCase):
                 selected = {f"{content.product}-{r}" for r in prof.selected_rules}
                 overlap = sorted(never & selected)
                 self.assertEqual(overlap, [], f"{pid} selects {overlap}")
+
+    def test_the_master_only_rules_are_recognized(self):
+        # These three write audit rules watching /var/log/*-apiserver/, which
+        # exist only on control-plane nodes.
+        for rid in ("directory_access_var_log_kube_audit",
+                    "directory_access_var_log_oauth_audit",
+                    "directory_access_var_log_ocp_audit"):
+            app = self.appl[f"ocp4-{rid}"]
+            self.assertEqual(app.roles, frozenset({"master"}), rid)
+            self.assertFalse(app.gated, rid)
 
     def test_arch_constrained_rules_are_all_node_layer(self):
         # The values.yaml comments say architecture matters to the node chart.
