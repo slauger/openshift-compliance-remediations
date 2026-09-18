@@ -307,6 +307,26 @@ def check_object_has_body(where: str, docs: list, fnd: Findings) -> None:
     fnd.ok("object-has-body")
 
 
+def check_pool_selectors(where: str, docs: list, fnd: Findings) -> None:
+    """A KubeletConfig without a pool selector applies to nothing.
+
+    The MCO treats a nil selector as matching no pool - "nothing, not
+    everything" - and its kubelet-config controller errors out, so the object
+    is created and then does nothing. This assertion is cheap and catches a
+    whole-kind no-op that every YAML-level check happily passes.
+    """
+    for doc in docs:
+        if not doc or doc.get("kind") != "KubeletConfig":
+            continue
+        selector = (doc.get("spec") or {}).get("machineConfigPoolSelector") or {}
+        if not (selector.get("matchLabels") or selector.get("matchExpressions")):
+            name = doc.get("metadata", {}).get("name", "<unnamed>")
+            fnd.error(where, f"KubeletConfig/{name} has no machineConfigPoolSelector "
+                             f"and would apply to no MachineConfigPool")
+            return
+        fnd.ok("kubeletconfig-pool-selector")
+
+
 def validate_renders(fnd: Findings) -> None:
     for chart, extra in ((PLATFORM, {}), (NODE, {"node.enabled": "true"})):
         for profile in profiles_of(chart):
@@ -334,6 +354,7 @@ def validate_renders(fnd: Findings) -> None:
                     break
                 seen[key] = where
             check_object_has_body(where, docs, fnd)
+            check_pool_selectors(where, docs, fnd)
             fnd.ok("render")
 
 
@@ -364,6 +385,7 @@ def validate_architectures(fnd: Findings) -> None:
             continue
         docs = [d for d in yaml.safe_load_all(rendered) if d]
         check_object_has_body(where, docs, fnd)
+        check_pool_selectors(where, docs, fnd)
         counts[arch] = len(docs)
         fnd.ok("arch-render")
 

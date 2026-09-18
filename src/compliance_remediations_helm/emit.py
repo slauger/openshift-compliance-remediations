@@ -644,6 +644,22 @@ def object_template(group: MergeGroup, appl: dict | None = None) -> str:
         if roles:
             role_list = " ".join(_go_str(r) for r in sorted(roles))
             lines.append(f"{{{{- if has $role (list {role_list}) }}}}")
+        body = "$merged"
+        if key.kind == "KubeletConfig":
+            # A KubeletConfig without a pool selector matches NO pool - the MCO
+            # treats a nil selector as "nothing, not everything" and its
+            # kubelet-config controller errors out - so the object would be
+            # created and then do nothing at all. The label is the one the
+            # operator sets and the one the MCO puts on the built-in pools.
+            # Merged per role rather than into $merged, because the label name
+            # contains the role.
+            lines.append(
+                "{{- $selector := dict \"spec\" (dict "
+                "\"machineConfigPoolSelector\" (dict \"matchLabels\" (dict "
+                "(printf \"pools.operator.machineconfiguration.openshift.io/%s\" $role) "
+                "\"\"))) -}}")
+            lines.append("{{- $obj := mustMergeOverwrite (deepCopy $merged) $selector }}")
+            body = "$obj"
         lines.append("---")
         lines.append(f"apiVersion: {key.api_version}")
         lines.append(f"kind: {key.kind}")
@@ -653,7 +669,7 @@ def object_template(group: MergeGroup, appl: dict | None = None) -> str:
         lines.append('    app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}')
         lines.append('    compliance.openshift.io/managed: "true"')
         lines.append('    machineconfiguration.openshift.io/role: {{ $role | quote }}')
-        lines.append("{{ $merged | toYaml }}")
+        lines.append(f"{{{{ {body} | toYaml }}}}")
         if roles:
             lines.append("{{- end }}")
         lines.append("{{- end }}")
