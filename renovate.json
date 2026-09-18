@@ -23,6 +23,16 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+IGNITION_VERSION:\\s*(?<currentValue>\\S+)"
       ]
+    },
+    {
+      "customType": "regex",
+      "description": "Track the pinned helm-unittest plugin version in the workflows",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/.+\\.yaml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+HELM_UNITTEST_VERSION:\\s*(?<currentValue>\\S+)"
+      ]
     }
   ],
   "packageRules": [
