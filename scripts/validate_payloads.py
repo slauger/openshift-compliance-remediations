@@ -23,6 +23,8 @@ silently passed.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import re
 import shutil
 import subprocess
@@ -52,6 +54,8 @@ class Findings:
         self.errors: list[str] = []
         self.skipped: dict[str, int] = {}
         self.checked: dict[str, int] = {}
+        self._seen: set[str] = set()
+        self.duplicates = 0
 
     def error(self, where: str, msg: str) -> None:
         self.errors.append(f"{where}: {msg}")
@@ -61,6 +65,21 @@ class Findings:
 
     def ok(self, check: str) -> None:
         self.checked[check] = self.checked.get(check, 0) + 1
+
+    def first_time(self, check: str, payload: str) -> bool:
+        """False if this exact content was already checked.
+
+        The same file is emitted for every role and every targetOCPVersion it
+        applies to, so the matrix produces an order of magnitude more payloads
+        than there are distinct ones. Checking each distinct payload once keeps
+        the run honest and fast; `duplicates` reports what was collapsed.
+        """
+        digest = hashlib.sha256(f"{check}\0{payload}".encode()).hexdigest()
+        if digest in self._seen:
+            self.duplicates += 1
+            return False
+        self._seen.add(digest)
+        return True
 
 
 def helm_template(chart: Path, sets: dict[str, str]) -> str:
@@ -222,6 +241,8 @@ def validate_payloads(fnd: Findings) -> None:
         docs = [d for d in yaml.safe_load_all(rendered) if d]
         for mc, path, _mode, body in iter_files(docs):
             loc = f"{where}/{mc}"
+            if not fnd.first_time(f"payload:{path}", body):
+                continue
             check_no_template_syntax(loc, path, body, fnd)
             for pattern, check in DISPATCH:
                 if pattern.match(path):
@@ -234,13 +255,17 @@ def validate_payloads(fnd: Findings) -> None:
                 config = doc.get("spec", {}).get("config")
                 if not config:
                     continue
+                serialized = json.dumps(config, sort_keys=True)
+                if not fnd.first_time("ignition", serialized):
+                    continue
+                # Ignition configs are JSON; the validator rejects YAML.
                 proc = subprocess.run([ignition_validate, "-"],
-                                      input=yaml.safe_dump(config),
+                                      input=json.dumps(config),
                                       capture_output=True, text=True)
                 if proc.returncode != 0:
                     name = doc.get("metadata", {}).get("name")
-                    fnd.error(where, f"{name} rejected by ignition-validate: "
-                                     f"{proc.stderr.strip()[:200]}")
+                    out = (proc.stdout + proc.stderr).strip() or "no output"
+                    fnd.error(where, f"{name} rejected by ignition-validate: {out[:200]}")
                 else:
                     fnd.ok("ignition-validate")
         else:
@@ -293,6 +318,8 @@ def main() -> int:
 
     for check, n in sorted(fnd.checked.items()):
         print(f"  ok       {check}: {n}")
+    if fnd.duplicates:
+        print(f"  (skipped {fnd.duplicates} payloads identical to one already checked)")
     for check, n in sorted(fnd.skipped.items()):
         print(f"  SKIPPED  {check}: {n} (tool not installed)")
     for err in fnd.errors:
