@@ -36,11 +36,11 @@ spec:
 {{- fail "Conflicting compliance rules active for APIServer/cluster at spec.tlsSecurityProfile: ocp4-api_server_tls_security_profile_custom_min_tls_version, ocp4-api_server_tls_security_profile_not_old. These are mutually-exclusive alternatives - enable only one." -}}
 {{- end -}}
 {{- $merged := dict -}}
-{{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-api_server_encryption_provider_cipher")) "true") (semverCompare "<4.13.0" (printf "%s.%s.0" (.Values.targetOCPVersion | toString | splitList "." | first) (index (.Values.targetOCPVersion | toString | splitList ".") 1))) -}}
+{{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-api_server_encryption_provider_cipher")) "true") (semverCompare "<4.13.0" (printf "%s.%s.0" (.Values.cluster.ocpVersion | toString | splitList "." | first) (index (.Values.cluster.ocpVersion | toString | splitList ".") 1))) -}}
 {{- $frag := include "cr.frag.apiserver-cluster.ocp4-api-server-encryption-provider-cipher.0" . | fromYaml -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
-{{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-api_server_encryption_provider_cipher")) "true") (semverCompare ">=4.13.0" (printf "%s.%s.0" (.Values.targetOCPVersion | toString | splitList "." | first) (index (.Values.targetOCPVersion | toString | splitList ".") 1))) -}}
+{{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-api_server_encryption_provider_cipher")) "true") (semverCompare ">=4.13.0" (printf "%s.%s.0" (.Values.cluster.ocpVersion | toString | splitList "." | first) (index (.Values.cluster.ocpVersion | toString | splitList ".") 1))) -}}
 {{- $frag := include "cr.frag.apiserver-cluster.ocp4-api-server-encryption-provider-cipher.1" . | fromYaml -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
@@ -55,6 +55,9 @@ spec:
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-audit_profile_set")) "true" -}}
 {{- $frag := include "cr.frag.apiserver-cluster.ocp4-audit-profile-set.4" . | fromYaml -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if not $merged -}}
+{{- fail (printf "No remediation applies to APIServer/cluster at cluster.ocpVersion %s. Every fix variant of the active rule(s) (ocp4-api_server_encryption_provider_cipher, ocp4-api_server_tls_security_profile_custom_min_tls_version, ocp4-api_server_tls_security_profile_not_old, ocp4-audit_profile_set) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
 {{- end -}}
 ---
 apiVersion: config.openshift.io/v1

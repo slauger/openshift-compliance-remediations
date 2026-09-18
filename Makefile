@@ -7,7 +7,7 @@ VENV := .venv
 PY := $(VENV)/bin/python
 GEN := $(VENV)/bin/compliance-remediations-gen
 
-.PHONY: venv fetch update-sha generate docs lint lint-py test test-py validate-payloads deps template show-ocp-version verify clean
+.PHONY: venv fetch update-sha generate docs lint lint-py test test-py validate-payloads deps template show-ocp-version show-node-arch verify clean
 
 ## Create the virtualenv and install the generator (editable).
 venv:
@@ -58,11 +58,17 @@ deps:
 template:
 	helm template compliance $(CHARTS)/compliance-platform --set profiles.ocp4-cis=true
 
-## Suggest the live cluster's OpenShift version for targetOCPVersion.
+## Suggest the live cluster's OpenShift version for cluster.ocpVersion.
 show-ocp-version:
 	@oc get clusterversion version -o jsonpath='{.status.desired.version}' 2>/dev/null \
 		&& echo "" \
-		|| echo "not an OpenShift cluster or no access (set targetOCPVersion manually)"
+		|| echo "not an OpenShift cluster or no access (set cluster.ocpVersion manually)"
+
+## Suggest the live cluster's node architecture for cluster.architecture.
+show-node-arch:
+	@oc get nodes -o jsonpath='{range .items[*]}{.status.nodeInfo.architecture}{"\\n"}{end}' 2>/dev/null \
+		| sort -u \
+		|| echo "not an OpenShift cluster or no access (set cluster.architecture manually)"
 
 ## Ruff lint the generator + tests (installs ruff via the dev extra).
 lint-py: venv

@@ -51,6 +51,9 @@ spec:
 {{- $frag := include "cr.frag.openshift-ingress-operator-ingresscontroller-default.ocp4-ingress-controller-tls-security-profile-not-old.2" . | fromYaml -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
+{{- if not $merged -}}
+{{- fail (printf "No remediation applies to IngressController/default at cluster.ocpVersion %s. Every fix variant of the active rule(s) (ocp4-ingress_controller_tls_cipher_suites, ocp4-ingress_controller_tls_security_profile_custom_min_tls_version, ocp4-ingress_controller_tls_security_profile_not_old) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
+{{- end -}}
 ---
 apiVersion: operator.openshift.io/v1
 kind: IngressController

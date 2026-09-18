@@ -45,6 +45,16 @@ Bump `version` and `sha512` in `config/content.yaml` (the sha512 is published al
 
 Releases are cut manually (`workflow_dispatch` on the release workflow), never on push: `charts/` must be generated and committed first, and the workflow enforces that with a drift check. semantic-release computes the version from conventional commits (`fix:` -> patch, `feat:` -> minor), writes it to `VERSION`, regenerates the charts so every `Chart.yaml` carries it, commits + tags, then packages, pushes, signs (cosign) and attests (SBOM) the OCI charts. The `VERSION` file is the single source of truth for the chart version - never edit it or `Chart.yaml` versions by hand. `0.0.0` means "unreleased working tree".
 
+## Applicability
+
+XCCDF `<platform>` constraints are parsed and enforced. The leaves of those CPE expressions are split in two: facts the user declares (`cluster.architecture`, `cluster.hypershift`) become gates, everything else is an assumption recorded in `applicability.FACTS` with a mandatory justification.
+
+- **The vocabulary is closed.** A CPE leaf that is not classified raises, and `make generate` fails with its name. Guessing it true would ship content the operator reports as `notapplicable`; guessing it false would silently disable a control.
+- **Assuming a fact holds is the safe direction.** `const=True` leaves today's behaviour. `const=False` disables a rule, so it is only allowed where the fact is verifiably impossible on the target - e.g. `package_openssh-server_le_7_5`, since RHCOS ships OpenSSH 8+. Note the counter-example: `package_usbguard` is assumed **true** even though a stock node lacks usbguard, because `rhcos4-package_usbguard_installed` in the same chart installs it.
+- **Group inheritance is not optional.** Rules inherit `<platform>` from ancestor `<Group>`s, and four profile-selected usbguard rules are arch-constrained purely that way. Rule-level parsing alone misses them.
+- **Reduction is by enumeration**, not symbolic simplification: the axis space is four architectures times two HyperShift states. A separability check refuses any expression a per-axis guard could only approximate.
+- **A non-applicable active rule aborts the render**, centrally, listing every offender. Per-architecture overlays (`values-<arch>.yaml`) are generated so the remedy is one `-f`, not a hand-maintained list.
+
 ## Testing notes
 
 Which layer covers what:
@@ -55,12 +65,13 @@ Which layer covers what:
 | Datastream unit tests (classes wrapped in `_datastream.requires(...)`) | after `make fetch` | parse invariants, variable default resolution, conflict groups and winner selection against the pinned content |
 | Determinism + drift | `make generate` + `git diff --exit-code charts/ RULES.md` in CI | byte-identical regeneration; every generator change surfaces as a reviewable diff of the committed output |
 | helm-unittest (`charts/*/tests/`) | `make test` | rendered object shape per kind, and the fail path when mutually-exclusive alternatives are enabled together |
+| Applicability (`scripts/validate_payloads.py arch`, `charts/*/tests/applicability_test.yaml`) | `make validate-payloads` | renders once per architecture with its overlay, proves the gate fires without it, and that the schema rejects a bad architecture |
 | Payload validation (`scripts/validate_payloads.py`) | `make validate-payloads` | every profile renders on its own; every Ignition `data:,` payload is decoded and run through the parser that owns that file on the node (`sshd -t`, sysctl/auditd syntax, `ignition-validate`) |
 
 Conventions:
 
 - Assertions against the datastream are **invariants, never exact counts**. A content bump must not require editing a number in `tests/`; if it does, the assertion was a change detector and the real intent belongs in the test instead. Exact counts live in the committed `charts/` diff, which is reviewed on every regeneration.
 - The datastream tests skip when `.cache/` is absent so a fresh clone can still run the offline half. `make test-py` depends on `fetch` and sets `REQUIRE_DATASTREAM=1`, which turns that skip into a failure - a green `make test-py` always means the gated tests actually ran.
-- A manifest can be valid YAML, a valid MachineConfig and still write a file the node rejects: the Ignition `data:,` payload is an opaque string to every YAML-level tool. That is what `validate_payloads.py` looks at, matrixed over `targetOCPVersion` because version-gated fix variants mean a payload can be correct at 4.18 and broken at 4.12. Checks whose tool is missing are reported as skipped, never silently passed.
+- A manifest can be valid YAML, a valid MachineConfig and still write a file the node rejects: the Ignition `data:,` payload is an opaque string to every YAML-level tool. That is what `validate_payloads.py` looks at, matrixed over `cluster.ocpVersion` because version-gated fix variants mean a payload can be correct at 4.18 and broken at 4.12. Checks whose tool is missing are reported as skipped, never silently passed.
 - The charts target OpenShift/OKD CRDs (APIServer, MachineConfig, KubeletConfig, etc.). They cannot be applied to a vanilla Kubernetes cluster; use `helm template`/`lint`/`unittest` locally and apply on a real OpenShift/OKD cluster.
 - On combined master+worker nodes (SNO / small OKD), the node lands in the master MachineConfigPool; set `node.roles` accordingly.

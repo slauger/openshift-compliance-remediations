@@ -29,13 +29,16 @@ spec:
 {{- /* MachineConfig/75-ocp4-sshd-use-priv-separation - rule(s): rhcos4-sshd_use_priv_separation */ -}}
 {{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "rhcos4-sshd_use_priv_separation"))) "true") -}}
 {{- $merged := dict -}}
-{{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sshd_use_priv_separation")) "true") (semverCompare "<4.13.0" (printf "%s.%s.0" (.Values.targetOCPVersion | toString | splitList "." | first) (index (.Values.targetOCPVersion | toString | splitList ".") 1))) -}}
+{{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sshd_use_priv_separation")) "true") (semverCompare "<4.13.0" (printf "%s.%s.0" (.Values.cluster.ocpVersion | toString | splitList "." | first) (index (.Values.cluster.ocpVersion | toString | splitList ".") 1))) -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-sshd-use-priv-separation.rhcos4-sshd-use-priv-separation.0" . | fromYaml -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
-{{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sshd_use_priv_separation")) "true") (semverCompare ">=4.13.0" (printf "%s.%s.0" (.Values.targetOCPVersion | toString | splitList "." | first) (index (.Values.targetOCPVersion | toString | splitList ".") 1))) -}}
+{{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sshd_use_priv_separation")) "true") (semverCompare ">=4.13.0" (printf "%s.%s.0" (.Values.cluster.ocpVersion | toString | splitList "." | first) (index (.Values.cluster.ocpVersion | toString | splitList ".") 1))) -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-sshd-use-priv-separation.rhcos4-sshd-use-priv-separation.1" . | fromYaml -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if not $merged -}}
+{{- fail (printf "No remediation applies to MachineConfig/75-ocp4-sshd-use-priv-separation at cluster.ocpVersion %s. Every fix variant of the active rule(s) (rhcos4-sshd_use_priv_separation) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
 {{- end -}}
 {{- range $role := (.Values.node.roles | uniq) }}
 ---

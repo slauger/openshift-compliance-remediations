@@ -29,13 +29,16 @@ spec:
 {{- /* MachineConfig/75-ocp4-sshd-set-maxstartups - rule(s): rhcos4-sshd_set_maxstartups */ -}}
 {{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "rhcos4-sshd_set_maxstartups"))) "true") -}}
 {{- $merged := dict -}}
-{{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sshd_set_maxstartups")) "true") (semverCompare "<4.13.0" (printf "%s.%s.0" (.Values.targetOCPVersion | toString | splitList "." | first) (index (.Values.targetOCPVersion | toString | splitList ".") 1))) -}}
+{{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sshd_set_maxstartups")) "true") (semverCompare "<4.13.0" (printf "%s.%s.0" (.Values.cluster.ocpVersion | toString | splitList "." | first) (index (.Values.cluster.ocpVersion | toString | splitList ".") 1))) -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-sshd-set-maxstartups.rhcos4-sshd-set-maxstartups.0" . | fromYaml -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
-{{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sshd_set_maxstartups")) "true") (semverCompare ">=4.13.0" (printf "%s.%s.0" (.Values.targetOCPVersion | toString | splitList "." | first) (index (.Values.targetOCPVersion | toString | splitList ".") 1))) -}}
+{{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sshd_set_maxstartups")) "true") (semverCompare ">=4.13.0" (printf "%s.%s.0" (.Values.cluster.ocpVersion | toString | splitList "." | first) (index (.Values.cluster.ocpVersion | toString | splitList ".") 1))) -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-sshd-set-maxstartups.rhcos4-sshd-set-maxstartups.1" . | fromYaml -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if not $merged -}}
+{{- fail (printf "No remediation applies to MachineConfig/75-ocp4-sshd-set-maxstartups at cluster.ocpVersion %s. Every fix variant of the active rule(s) (rhcos4-sshd_set_maxstartups) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
 {{- end -}}
 {{- range $role := (.Values.node.roles | uniq) }}
 ---

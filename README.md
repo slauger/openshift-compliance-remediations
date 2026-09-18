@@ -66,6 +66,32 @@ Two standalone charts plus a thin umbrella wrapper:
 
 Several rules target the **same** object (e.g. four rules edit `APIServer/cluster`). The generator merges disjoint contributions into one object, each rule individually togglable. Some rules are **mutually-exclusive alternatives**, e.g. two rules both write `spec.tlsSecurityProfile`. If more than one such rule is active, the chart **fails to render** with a clear message, forcing you to pick one. See [`RULES.md`](RULES.md) (rules marked ⚠️ alt).
 
+## Applicability
+
+Upstream rules carry XCCDF `<platform>` constraints. The Compliance Operator evaluates them at scan time and reports a rule that does not apply as `notapplicable`, generating no remediation for it. The charts mirror that: rather than shipping a remediation the operator would never produce, they **refuse to render** and name every offending rule at once.
+
+Two constraints depend on facts only you can supply, so they are values:
+
+```yaml
+cluster:
+  architecture: x86_64        # of the pools listed in node.roles
+  hypershift: false
+```
+
+`make show-node-arch` reads the architecture off a live cluster. `amd64` and `arm64` are accepted and normalized, so `oc get nodes` output can be pasted straight in.
+
+For a non-default architecture the generator ships a ready-made overlay listing exactly the rules that architecture cannot use:
+
+```sh
+helm install compliance ./charts/compliance-node -f charts/compliance-node/values-aarch64.yaml
+```
+
+On aarch64 that is 21 rules (audit rules for syscalls ARM64 does not have), on s390x 5. Without the overlay the render aborts and tells you which rules and why.
+
+**Mixed-architecture clusters**: `cluster.architecture` describes the pools named in `node.roles`, and MachineConfigs target pools. Install the node chart once per architecture with the matching `node.roles` and `cluster.architecture` — object names are role-suffixed, so the releases do not collide. Leaving the default on a mixed cluster keeps today's behaviour (the operator reports the ARM nodes' rules as `notapplicable`); setting `aarch64` would remove those rules from your x86 pools too.
+
+Every other constraint is an assumption about RHCOS/OKD, documented per fact in [`applicability.py`](src/compliance_remediations_helm/applicability.py) with the reasoning. Three rules are never applicable at all and ship disabled. The **Applicability** column in [`RULES.md`](RULES.md) carries the constraint for every rule.
+
 ## Install
 
 Released charts are published as signed OCI artifacts under `ghcr.io/slauger/charts/`. Install a chart directly:
@@ -91,7 +117,10 @@ Finer-grained targets (`docs`, `lint`, `test`, `test-py`, `show-ocp-version`) ar
 Configure via a values override (standalone platform chart shown):
 
 ```yaml
-targetOCPVersion: "4.20"      # selects version-dependent remediations
+cluster:
+  ocpVersion: "4.20"          # selects version-dependent remediations
+  architecture: x86_64        # x86_64 | aarch64 | ppc64le | s390x
+  hypershift: false           # true on a HyperShift hosted cluster
 profiles:
   ocp4-cis: true              # whitelist whole profiles
   ocp4-bsi: true

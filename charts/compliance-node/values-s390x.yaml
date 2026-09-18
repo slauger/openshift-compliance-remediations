@@ -1,0 +1,14 @@
+# Overlay for s390x nodes.
+# Generated from ComplianceAsCode/content v0.1.82.
+#
+# Upstream marks these rules as not applicable on s390x, so the chart
+# refuses to render them. Apply this file to switch them off in one go:
+#   helm install <release> <chart> -f values-s390x.yaml
+cluster:
+  architecture: s390x
+rules:
+  rhcos4-audit_rules_time_stime: false  # not applicable on s390x
+  rhcos4-configure_usbguard_auditbackend: false  # not applicable on s390x
+  rhcos4-package_usbguard_installed: false  # not applicable on s390x
+  rhcos4-service_usbguard_enabled: false  # not applicable on s390x
+  rhcos4-usbguard_allow_hid_and_hub: false  # not applicable on s390x

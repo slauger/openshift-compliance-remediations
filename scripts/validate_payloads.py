@@ -13,7 +13,11 @@ Two modes:
             render, produces empty documents, or emits two objects with the
             same kind/namespace/name.
 
-  payloads  Render with everything enabled across a targetOCPVersion matrix,
+  arch      Render once per architecture with the generated overlay, prove
+            the applicability gate fires without it, and that the schema
+            rejects a bad architecture.
+
+  payloads  Render with everything enabled across a cluster.ocpVersion matrix,
             decode every file payload, and run it through the parser that owns
             that file on the node.
 
@@ -44,6 +48,8 @@ NODE = CHARTS / "compliance-node"
 PLATFORM = CHARTS / "compliance-platform"
 # Version-gated fix variants mean a payload can be correct at 4.18 and broken at
 # 4.12, so the matrix is the point, not noise.
+ARCHITECTURES = ("x86_64", "aarch64", "ppc64le", "s390x")
+
 VERSIONS = ("4.12", "4.14", "4.16", "4.18", "4.20")
 
 _DATA_URI_RE = re.compile(r"^data:([^,]*),(.*)$", re.DOTALL)
@@ -69,7 +75,7 @@ class Findings:
     def first_time(self, check: str, payload: str) -> bool:
         """False if this exact content was already checked.
 
-        The same file is emitted for every role and every targetOCPVersion it
+        The same file is emitted for every role and every cluster.ocpVersion it
         applies to, so the matrix produces an order of magnitude more payloads
         than there are distinct ones. Checking each distinct payload once keeps
         the run honest and fast; `duplicates` reports what was collapsed.
@@ -82,8 +88,11 @@ class Findings:
         return True
 
 
-def helm_template(chart: Path, sets: dict[str, str]) -> str:
+def helm_template(chart: Path, sets: dict[str, str],
+                  files: list[str] | None = None) -> str:
     cmd = ["helm", "template", "t", str(chart)]
+    for f in files or []:
+        cmd += ["-f", f]
     for k, v in sets.items():
         cmd += ["--set", f"{k}={v}"]
     proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -229,7 +238,7 @@ DISPATCH = (
 def validate_payloads(fnd: Findings) -> None:
     ignition_validate = shutil.which("ignition-validate")
     for version in VERSIONS:
-        sets = {"node.enabled": "true", "targetOCPVersion": version}
+        sets = {"node.enabled": "true", "cluster.ocpVersion": version}
         for profile in profiles_of(NODE):
             sets[f"profiles.{profile}"] = "true"
         where = f"node@{version}"
@@ -276,6 +285,28 @@ def validate_payloads(fnd: Findings) -> None:
 # render checks
 
 
+# The same key set object_template() looks for when deciding a fix has content.
+_BODY_KEYS = ("spec", "data", "rules", "parameters", "projectRequestTemplate",
+              "objects")
+
+
+def check_object_has_body(where: str, docs: list, fnd: Findings) -> None:
+    """A manifest without a body is content-free but still triggers a rollout.
+
+    This is the structural counterpart to the render-time guard: if every
+    fragment of an object is gated off, the object must not be emitted at all.
+    """
+    for doc in docs:
+        if not doc:
+            continue
+        if not any(k in doc for k in _BODY_KEYS):
+            name = doc.get("metadata", {}).get("name", "<unnamed>")
+            fnd.error(where, f"{doc.get('kind')}/{name} has no body "
+                             f"({'/'.join(_BODY_KEYS)} all absent)")
+            return
+    fnd.ok("object-has-body")
+
+
 def validate_renders(fnd: Findings) -> None:
     for chart, extra in ((PLATFORM, {}), (NODE, {"node.enabled": "true"})):
         for profile in profiles_of(chart):
@@ -302,12 +333,76 @@ def validate_renders(fnd: Findings) -> None:
                     fnd.error(where, f"duplicate object {key}")
                     break
                 seen[key] = where
+            check_object_has_body(where, docs, fnd)
             fnd.ok("render")
+
+
+# --------------------------------------------------------------------------
+# applicability checks
+
+
+def validate_architectures(fnd: Findings) -> None:
+    """Render once per architecture, with the overlay the generator wrote.
+
+    Version-gated variants are already covered by the payload matrix; what this
+    adds is proof that the applicability gate fires, that the overlay is
+    sufficient to satisfy it, and that no architecture ends up with a
+    content-free object.
+    """
+    counts: dict[str, int] = {}
+    for arch in ARCHITECTURES:
+        where = f"node@{arch}"
+        sets = {"node.enabled": "true", "cluster.architecture": arch}
+        for profile in profiles_of(NODE):
+            sets[f"profiles.{profile}"] = "true"
+        overlay = NODE / f"values-{arch}.yaml"
+        files = [str(overlay)] if overlay.exists() else []
+        try:
+            rendered = helm_template(NODE, sets, files)
+        except RuntimeError as exc:
+            fnd.error(where, f"render failed even with its overlay: {exc}")
+            continue
+        docs = [d for d in yaml.safe_load_all(rendered) if d]
+        check_object_has_body(where, docs, fnd)
+        counts[arch] = len(docs)
+        fnd.ok("arch-render")
+
+        # Without the overlay the gate must refuse to render.
+        if overlay.exists():
+            try:
+                helm_template(NODE, sets)
+                fnd.error(where, "renders without its overlay - the "
+                                 "applicability gate did not fire")
+            except RuntimeError as exc:
+                if "not applicable" not in str(exc):
+                    fnd.error(where, f"refused for the wrong reason: {exc}")
+                else:
+                    fnd.ok("arch-gate-fires")
+
+    for arch in ("aarch64", "s390x"):
+        if arch in counts and "x86_64" in counts:
+            if counts[arch] >= counts["x86_64"]:
+                fnd.error(f"node@{arch}",
+                          f"{counts[arch]} objects, not fewer than x86_64's "
+                          f"{counts['x86_64']} - exclusions had no effect")
+            else:
+                fnd.ok("arch-excludes-objects")
+
+
+def validate_schema_rejects_typos(fnd: Findings) -> None:
+    """A bad architecture must fail, not silently disable every gated rule."""
+    try:
+        helm_template(NODE, {"node.enabled": "true",
+                             "cluster.architecture": "amd644"})
+        fnd.error("schema", "cluster.architecture=amd644 was accepted - the "
+                            "enum in values.schema.json regressed")
+    except RuntimeError:
+        fnd.ok("schema-rejects-bad-arch")
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("mode", choices=("render", "payloads", "all"))
+    ap.add_argument("mode", choices=("render", "payloads", "arch", "all"))
     args = ap.parse_args()
 
     fnd = Findings()
@@ -315,6 +410,9 @@ def main() -> int:
         validate_renders(fnd)
     if args.mode in ("payloads", "all"):
         validate_payloads(fnd)
+    if args.mode in ("arch", "all"):
+        validate_architectures(fnd)
+        validate_schema_rejects_typos(fnd)
 
     for check, n in sorted(fnd.checked.items()):
         print(f"  ok       {check}: {n}")

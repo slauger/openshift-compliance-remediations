@@ -19,6 +19,9 @@ spec:
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-kernel-module-udf-disabled.rhcos4-kernel-module-udf-disabled.0" . | fromYaml -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
+{{- if not $merged -}}
+{{- fail (printf "No remediation applies to MachineConfig/75-ocp4-kernel-module-udf-disabled at cluster.ocpVersion %s. Every fix variant of the active rule(s) (rhcos4-kernel_module_udf_disabled) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
+{{- end -}}
 {{- range $role := (.Values.node.roles | uniq) }}
 ---
 apiVersion: machineconfiguration.openshift.io/v1
