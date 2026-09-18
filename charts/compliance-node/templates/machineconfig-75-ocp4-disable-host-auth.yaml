@@ -20,7 +20,7 @@ spec:
     storage:
       files:
       - contents:
-          source: data:,{{ "{{" }} HostbasedAuthentication%20no {{ "}}" }}
+          source: data:,HostbasedAuthentication%20no
         mode: 0600
         path: /etc/ssh/sshd_config.d/00-complianceascode-disable_host_auth.conf
         overwrite: true

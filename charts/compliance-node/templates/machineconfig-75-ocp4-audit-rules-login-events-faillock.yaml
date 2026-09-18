@@ -7,7 +7,7 @@ spec:
       files:
       - contents:
 
-          source: data:,-w%20{{ "{{" }} %7B%7B.var_accounts_passwords_pam_faillock_dir%7D%7D {{ "}}" }}%20-p%20wa%20-k%20logins%0A
+          source: data:,-w%20{{ .Values.variables.var_accounts_passwords_pam_faillock_dir }}%20-p%20wa%20-k%20logins%0A
 
         mode: 0644
         path: /etc/audit/rules.d/75-audit_rules_login_events_faillock.rules

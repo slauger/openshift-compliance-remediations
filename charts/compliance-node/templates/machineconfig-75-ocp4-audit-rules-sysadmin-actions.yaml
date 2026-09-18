@@ -6,7 +6,7 @@ spec:
     storage:
       files:
       - contents:
-          source: data:,{{ "{{" }} -w%20/etc/sudoers.d/%20-p%20wa%20-k%20actions%0A-w%20/etc/sudoers%20-p%20wa%20-k%20actions%0A {{ "}}" }}
+          source: data:,-w%20/etc/sudoers.d/%20-p%20wa%20-k%20actions%0A-w%20/etc/sudoers%20-p%20wa%20-k%20actions%0A
         mode: 0600
         path: /etc/audit/rules.d/75-audit-sysadmin-actions.rules
         overwrite: true
