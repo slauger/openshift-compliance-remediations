@@ -47,7 +47,7 @@ jobs:
           make verify
 
       - name: Open/update pull request with regenerated charts
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           branch: update-compliance-rules
           base: main
