@@ -38,9 +38,11 @@ lint:
 test:
 	@for c in $(SUBCHARTS); do echo "== test $$c =="; helm unittest $$c || exit 1; done
 
-## Python unit tests (parser + collisions).
-test-py: venv
-	$(PY) -m unittest discover -s tests -v
+## Python unit tests (parser + collisions). Depends on fetch: the datastream
+## tests skip without .cache, and REQUIRE_DATASTREAM turns that skip into a
+## failure so a green run never means "asserted nothing".
+test-py: fetch
+	REQUIRE_DATASTREAM=1 $(PY) -m unittest discover -s tests -v
 
 ## Build umbrella dependencies (pulls subcharts).
 deps:

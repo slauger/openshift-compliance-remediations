@@ -4,12 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from _datastream import OCP4, RHCOS4, requires
+
 from compliance_remediations_helm import classify, emit
 from compliance_remediations_helm import parser as xccdf
-
-ROOT = Path(__file__).resolve().parents[1]
-OCP4 = ROOT / ".cache" / "ssg-ocp4-ds.xml"
-RHCOS4 = ROOT / ".cache" / "ssg-rhcos4-ds.xml"
 
 
 class TestNameSynthesis(unittest.TestCase):
@@ -31,7 +29,7 @@ def _dir_equal(a: Path, b: Path) -> bool:
     return all(_dir_equal(a / d, b / d) for d in cmp.common_dirs)
 
 
-@unittest.skipUnless(OCP4.exists() and RHCOS4.exists(), "run `make fetch` first")
+@requires(OCP4, RHCOS4)
 class TestDeterminism(unittest.TestCase):
     def test_two_generations_are_byte_identical(self):
         contents = {
