@@ -196,6 +196,111 @@ class TestEmittedGuard(unittest.TestCase):
         self.assertFalse((self.node / "values-ppc64le.yaml").exists())
 
 
+def _mc_rule(rule_id: str, platforms=()):
+    return xccdf.Rule(
+        rule_id=rule_id, xccdf_id=f"x_{rule_id}", product="rhcos4",
+        fixes=[xccdf.FixVariant(yaml=(
+            "apiVersion: machineconfiguration.openshift.io/v1\n"
+            "kind: MachineConfig\n"
+            "spec:\n"
+            "  config:\n"
+            "    ignition:\n"
+            "      version: 3.1.0\n"))],
+        platforms=list(platforms))
+
+
+class TestUnconstrainedRules(unittest.TestCase):
+    """A rule the upstream content does not constrain must come out untouched.
+
+    Three shapes side by side: no `<platform>` at all, a `<platform>` that is
+    trivially true on the target, and a real constraint. Only the last one may
+    produce a gate, a ruleApplicability entry or an overlay line - over-gating
+    would drop hardening the operator does apply.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import tempfile
+        from pathlib import Path
+        content = Content(
+            rules={
+                "no_platform": _mc_rule("no_platform"),
+                "trivial_platform": _mc_rule("trivial_platform", ["#only_a_kernel"]),
+                "arch_gated": _mc_rule("arch_gated", ["#not_aarch64_arch"]),
+            },
+            values={}, profiles={}, product="rhcos4",
+            platforms={
+                "only_a_kernel": _wrap(_and(KERNEL)),
+                "not_aarch64_arch": _wrap(_and(AARCH64, negate=True)),
+            })
+        cls.content = content
+        cls.appl = ap.build_map([content])
+        cls._tmp = tempfile.TemporaryDirectory()
+        root = Path(cls._tmp.name)
+        emit.generate_charts({"rhcos4": content}, root, "0.0.0")
+        cls.node = root / emit.NODE_CHART
+        cls.templates = {
+            t.name: t.read_text()
+            for t in (cls.node / "templates").glob("machineconfig-*.yaml")
+        }
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def test_only_the_constrained_rule_is_in_the_map(self):
+        self.assertEqual(set(self.appl), {"rhcos4-arch_gated"})
+
+    def test_a_trivially_true_platform_constrains_nothing(self):
+        # The rule does carry a <platform>; it just cannot exclude anything.
+        self.assertTrue(self.content.rules["trivial_platform"].all_platforms)
+        self.assertNotIn("rhcos4-trivial_platform", self.appl)
+
+    def test_no_object_template_carries_a_gate(self):
+        # The gate is central, in the preflight: one render reports every
+        # offending rule instead of failing on the first object reached. So no
+        # object template may consult the architecture, constrained or not.
+        for name, body in self.templates.items():
+            self.assertNotIn('include "cr.arch"', body, name)
+            self.assertNotIn("ruleApplicability", body, name)
+
+    def test_values_map_lists_only_the_constrained_rule(self):
+        values = (self.node / "values.yaml").read_text()
+        section = values.split("ruleApplicability:", 1)[1]
+        self.assertIn("rhcos4-arch_gated:", section)
+        self.assertNotIn("rhcos4-no_platform:", section)
+        self.assertNotIn("rhcos4-trivial_platform:", section)
+
+    def test_overlay_disables_only_the_constrained_rule(self):
+        overlay = (self.node / "values-aarch64.yaml").read_text()
+        self.assertIn("rhcos4-arch_gated: false", overlay)
+        self.assertNotIn("rhcos4-no_platform", overlay)
+        self.assertNotIn("rhcos4-trivial_platform", overlay)
+
+    def test_all_three_rules_still_produce_objects(self):
+        self.assertEqual(len(self.templates), 3)
+
+
+class TestDanglingPlatformReference(unittest.TestCase):
+    def test_reference_to_an_undefined_platform_raises(self):
+        # A ref the datastream does not define means the parse lost something;
+        # treating it as unconstrained would silently ship the rule.
+        content = Content(
+            rules={"r": _mc_rule("r", ["#nowhere_to_be_found"])},
+            values={}, profiles={}, product="rhcos4", platforms={})
+        with self.assertRaises(ap.UnsupportedFact) as cm:
+            ap.build_map([content])
+        self.assertIn("nowhere_to_be_found", str(cm.exception))
+
+    def test_bare_cpe_product_name_is_skipped_not_rejected(self):
+        # Benchmark/Profile-level refs are CPE product names; the product is
+        # already decided by which datastream we parsed.
+        content = Content(
+            rules={"r": _mc_rule("r", ["cpe:/o:redhat:enterprise_linux_coreos:4"])},
+            values={}, profiles={}, product="rhcos4", platforms={})
+        self.assertEqual(ap.build_map([content]), {})
+
+
 @requires(OCP4, RHCOS4)
 class TestAgainstPinnedContent(unittest.TestCase):
     @classmethod
