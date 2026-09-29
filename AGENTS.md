@@ -80,6 +80,7 @@ Which layer covers what:
 | Determinism + drift | `make generate` + `git diff --exit-code charts/ RULES.md` in CI | byte-identical regeneration; every generator change surfaces as a reviewable diff of the committed output |
 | helm-unittest (`charts/*/tests/`) | `make test` | rendered object shape per kind, and the fail path when mutually-exclusive alternatives are enabled together |
 | Applicability (`scripts/validate_payloads.py arch`, `charts/*/tests/applicability_test.yaml`) | `make validate-payloads` | renders once per architecture with its overlay, proves the gate fires without it, and that the schema rejects a bad architecture |
+| Cross-object files (`scripts/validate_payloads.py`) | `make validate-payloads` | no two MachineConfigs for one pool write the same path with different content - the collision detector only sees inside one object, and across objects the MCO silently takes the alphanumerically later one |
 | Object-shape checks (`scripts/validate_payloads.py`) | `make validate-payloads` | every rendered document has a body, and every KubeletConfig a non-empty pool selector - a whole kind can otherwise be a no-op that passes every YAML-level check |
 | Payload validation (`scripts/validate_payloads.py`) | `make validate-payloads` | every profile renders on its own; every Ignition `data:,` payload is decoded and run through the parser that owns that file on the node (`sshd -t`, sysctl/auditd syntax, `ignition-validate`) |
 
