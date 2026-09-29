@@ -453,15 +453,32 @@ def rule_dependencies(contents: list[Content], layer_rules: set) -> dict[str, li
 
 
 def unverifiable_dependencies(contents: list[Content]) -> list[str]:
-    """Dependencies this chart cannot check, because it does not emit them."""
-    emitted = {r.helm_name for c in contents for r in rules_with_fixes(c).values()}
+    """Dependencies no chart can check.
+
+    Two ways that happens: the dependency carries no Kubernetes fix, so no
+    chart emits it at all; or it is emitted but in the *other* layer, and
+    cr.ruleActive only ever resolves rules of its own chart. The layer split is
+    this generator's own invention, so upstream has no reason to respect it -
+    and RULES.md prints `requires <rule>` either way, which would be a claim
+    the preflight cannot keep.
+    """
+    by_layer: dict[str, set[str]] = {}
+    for content in contents:
+        for rule in rules_with_fixes(content).values():
+            by_layer.setdefault(_rule_layer(rule), set()).add(rule.helm_name)
+    emitted = set().union(*by_layer.values()) if by_layer else set()
+
     missing = []
     for content in contents:
         for rule in rules_with_fixes(content).values():
+            layer = _rule_layer(rule)
             for dep in rule.depends_on:
                 name = f"{content.product}-{dep}"
                 if name not in emitted:
-                    missing.append(f"{rule.helm_name} -> {name}")
+                    missing.append(f"{rule.helm_name} -> {name} (no Kubernetes fix)")
+                elif name not in by_layer.get(layer, set()):
+                    missing.append(
+                        f"{rule.helm_name} ({layer}) -> {name} (other layer)")
     return sorted(missing)
 
 
@@ -1112,7 +1129,8 @@ def generate_charts(contents: dict[str, Content], charts_dir: Path, version: str
     stats = {"platform": 0, "node": 0, "unparseable": [d.rule_id for d in unparseable],
              "conflicts": [], "dropped": [],
              "applicability": applicability.summarize(appl),
-             "unverifiable_dependencies": unverifiable_dependencies(content_list)}
+             "unverifiable_dependencies": unverifiable_dependencies(content_list),
+             "missing_values": resolver.missing_values(content_list)}
 
     _write_layer_chart(charts_dir / PLATFORM_CHART, PLATFORM_CHART,
                        "OpenShift platform compliance remediations (no reboot).",
@@ -1335,18 +1353,26 @@ def values_schema(contents: list[Content], layer: str) -> str:
     edge = r"[^\s#'\"\\]"
     var_pattern = rf"^{edge}({inner}*{edge})?$"
     # A bare `~`, `null`, `no` or `y` passes the pattern and then changes the
-    # YAML *type* in the 18 fragments that interpolate a variable unquoted:
+    # YAML *type* in the fragments that interpolate a variable unquoted:
     # `streamingConnectionIdleTimeout: null`, `memory.available: false`. Valid
     # YAML, so neither the fromYaml guard nor the empty-merge guard notices,
     # and the control is simply not implemented. Same list _yaml_scalar quotes
     # against, plus the indicator characters that start a non-scalar node.
-    forbidden = sorted({*_YAML11_BOOL_NULL,
-                        *(w.upper() for w in _YAML11_BOOL_NULL),
-                        *(w.capitalize() for w in _YAML11_BOOL_NULL)})
+    # Only the tokens YAML actually retypes. `none` is NOT one of them - it
+    # parses as the string "none" - and banning it made `None`, a documented
+    # value of APIServer.spec.audit.profile, unreachable. _YAML11_BOOL_NULL is
+    # the right list for *quoting* (conservative); it is too wide for a ban.
+    retyping = _YAML11_BOOL_NULL - {"none"}
+    forbidden = sorted({*retyping,
+                        *(w.upper() for w in retyping),
+                        *(w.capitalize() for w in retyping)})
     unquoted = resolver.unquoted_scalar_variables(contents)
     numeric = resolver.numeric_variables(contents)
     var_props = {
-        v: ({"type": ["string", "number"], "pattern": r"^\d+$"}
+        # A trailing % is allowed: auditd takes a percentage for space_left,
+        # and the upstream selectors offer only digits, so deriving from the
+        # datastream alone would have rejected a value the tool accepts.
+        v: ({"type": ["string", "number"], "pattern": r"^\d+%?$"}
             if v in numeric
             else {"type": ["string", "number"], "pattern": var_pattern,
                   **({"not": {"enum": forbidden}} if v in unquoted else {})})

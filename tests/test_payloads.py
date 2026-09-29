@@ -28,7 +28,10 @@ class TestActionTranslation(unittest.TestCase):
         out = resolver.rewrite_placeholders(block)
         self.assertIn('{{ range $e:=.Values.variables.var_multiple_time_servers'
                       ' | splitList "," }}', out)
-        self.assertIn("{{ $e }}", out)
+        # The loop variable *emits* into the encoded payload, so it goes
+        # through cr.enc like any other reference; the range and end do not
+        # emit and must stay raw.
+        self.assertIn('{{ include "cr.enc" $e }}', out)
         self.assertIn("{{ end }}", out)
         self.assertNotIn("%7B%7B", out)
 

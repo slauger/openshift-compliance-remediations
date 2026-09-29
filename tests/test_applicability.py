@@ -14,6 +14,9 @@ from compliance_remediations_helm import applicability as ap
 from compliance_remediations_helm import emit
 from compliance_remediations_helm import parser as xccdf
 from compliance_remediations_helm.parser import Content, FactRef, LogicalTest
+from compliance_remediations_helm.resolver import (
+    rewrite_placeholders as resolver_rewrite,
+)
 
 ALL = set(ap.ARCHITECTURES)
 
@@ -586,8 +589,10 @@ class TestRuleDependencies(unittest.TestCase):
         layer_rules = {"ocp4-dependent", "ocp4-emitted"}
         deps = emit.rule_dependencies([content], layer_rules)
         self.assertEqual(deps, {"ocp4-dependent": ["ocp4-emitted"]})
+        # The message names why it cannot be checked: no Kubernetes fix at
+        # all, or emitted but in the other layer.
         self.assertEqual(emit.unverifiable_dependencies([content]),
-                         ["ocp4-dependent -> ocp4-not_emitted"])
+                         ["ocp4-dependent -> ocp4-not_emitted (no Kubernetes fix)"])
 
     def test_helper_and_map_are_emitted(self):
         import tempfile
@@ -639,6 +644,72 @@ class TestRuleDependencies(unittest.TestCase):
         self.assertEqual(emit.unverifiable_dependencies(contents), [])
 
 
+class TestLoudOnContentChange(unittest.TestCase):
+    """A content bump must fail or report, never degrade silently."""
+
+    def test_any_annotation_quoting_keeps_the_version_gate(self):
+        # Matching only single quotes dropped the gate silently: both variants
+        # then render unconditionally and the merge keeps the last, so a
+        # control lands in the wrong file and stops applying.
+        fix = ("apiVersion: v1\nkind: MachineConfig\nmetadata:\n  annotations:\n"
+               "    complianceascode.io/ocp-version: {v}\nspec:\n  config: {{}}\n")
+        for quoted in ("'>=4.13.0'", '">=4.13.0"', ">=4.13.0"):
+            variants = xccdf._split_fix_by_ocp_version(fix.format(v=quoted))
+            self.assertEqual(variants[0].ocp_version, ">=4.13.0", quoted)
+
+    def test_template_source_in_a_plain_block_raises(self):
+        # Dropping the markers emitted the action as literal text into the
+        # object, and the no-template-syntax check looks for exactly the
+        # markers that were stripped.
+        from compliance_remediations_helm import resolver
+        with self.assertRaises(ValueError) as cm:
+            resolver.rewrite_placeholders(
+                'x: {{ printf "%d" .var_event_record_qps }}')
+        self.assertIn("not a percent-encoded payload", str(cm.exception))
+
+    def test_an_encoded_payload_without_references_is_fine(self):
+        # The audit rules are payloads with no variables at all and must not
+        # trip that check.
+        out = resolver_rewrite("source: data:,{{ -a%20always%2Cexit%20-F%20dir%3D/var/log }}")
+        self.assertEqual(out, "source: data:,-a%20always%2Cexit%20-F%20dir%3D/var/log")
+
+    def test_every_emitting_action_in_a_payload_is_encoded(self):
+        # A bare $var emits into the encoded payload and needs the same
+        # encoding a bare .var gets; an assignment or range/end does not emit
+        # and must be left alone, or the template breaks.
+        from compliance_remediations_helm import resolver
+        self.assertEqual(resolver._translate_action("%24element"),
+                         '{{ include "cr.enc" $element }}')
+        self.assertNotIn("cr.enc", resolver._translate_action("end"))
+        self.assertNotIn("cr.enc", resolver._translate_action(
+            "range%20%24e%3A%3D.var_y%7CtoArrayByComma"))
+
+    @requires(OCP4, RHCOS4)
+    def test_a_missing_upstream_value_is_reported(self):
+        from compliance_remediations_helm import resolver
+        contents = [xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))]
+        # Nothing is missing today; the reporting path must exist and be empty.
+        self.assertEqual(resolver.missing_values(contents), [])
+
+    @requires(OCP4, RHCOS4)
+    def test_a_cross_layer_dependency_would_be_reported(self):
+        # cr.ruleActive only resolves rules of its own chart, so a dependency
+        # in the other layer can never be checked - and RULES.md would still
+        # print `requires <rule>`.
+        contents = [xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))]
+        self.assertEqual(emit.unverifiable_dependencies(contents), [])
+        platform = next(c for c in contents if c.product == "ocp4")
+        rule = platform.rules["audit_profile_set"]
+        rule.depends_on.append("kubelet_enable_protect_kernel_sysctl")
+        try:
+            reported = emit.unverifiable_dependencies(contents)
+            self.assertTrue(any("other layer" in r for r in reported), reported)
+        finally:
+            rule.depends_on.remove("kubelet_enable_protect_kernel_sysctl")
+
+
 class TestValuesContract(unittest.TestCase):
     """What the templates read, values.yaml declares and the schema allows."""
 
@@ -658,7 +729,9 @@ class TestValuesContract(unittest.TestCase):
         props = schema["properties"]["variables"]["properties"]
         for name in numeric:
             if name in props:
-                self.assertEqual(props[name]["pattern"], r"^\d+$", name)
+                # A trailing % is allowed: auditd takes a percentage for
+                # space_left, which the digit-only selectors do not reveal.
+                self.assertEqual(props[name]["pattern"], r"^\d+%?$", name)
 
     def test_only_variables_whose_options_are_all_digits_are_constrained(self):
         # The declared XCCDF type alone is not enough - a number-typed value

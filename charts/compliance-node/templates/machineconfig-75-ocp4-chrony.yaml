@@ -16,7 +16,7 @@ spec:
         overwrite: true
         path: /etc/chrony.d/.mco-keep
       - contents:
-          source: data:,%23%0A%23%20This%20file%20controls%20the%20configuration%20of%20the%20ntp%20server%0A%23%20{{ include "cr.enc" .Values.variables.var_multiple_time_servers }}%20we%20have%20to%20put%20variable%20array%20name%20here%20for%20mutilines%20remediation%0A{{ $var_time_service_set_maxpoll:=.Values.variables.var_time_service_set_maxpoll }}%0A{{ range $element:=.Values.variables.var_multiple_time_servers | splitList "," }}server%20{{ $element }}%20minpoll%204%20maxpoll%20{{ $var_time_service_set_maxpoll }}%0A{{ end }}
+          source: data:,%23%0A%23%20This%20file%20controls%20the%20configuration%20of%20the%20ntp%20server%0A%23%20{{ include "cr.enc" .Values.variables.var_multiple_time_servers }}%20we%20have%20to%20put%20variable%20array%20name%20here%20for%20mutilines%20remediation%0A{{ $var_time_service_set_maxpoll:=.Values.variables.var_time_service_set_maxpoll }}%0A{{ range $element:=.Values.variables.var_multiple_time_servers | splitList "," }}server%20{{ include "cr.enc" $element }}%20minpoll%204%20maxpoll%20{{ include "cr.enc" $var_time_service_set_maxpoll }}%0A{{ end }}
         mode: 420
         overwrite: true
         path: /etc/chrony.d/ntp-server.conf
@@ -40,7 +40,7 @@ spec:
         overwrite: true
         path: /etc/chrony.d/.mco-keep
       - contents:
-          source: data:,%23%0A%23%20This%20file%20controls%20the%20configuration%20of%20the%20ntp%20server%0A%23%20{{ include "cr.enc" .Values.variables.var_multiple_time_servers }}%20we%20have%20to%20put%20variable%20array%20name%20here%20for%20mutilines%20remediation%0A{{ $var_time_service_set_maxpoll:=.Values.variables.var_time_service_set_maxpoll }}%0A{{ range $element:=.Values.variables.var_multiple_time_servers | splitList "," }}server%20{{ $element }}%20minpoll%204%20maxpoll%20{{ $var_time_service_set_maxpoll }}%0A{{ end }}
+          source: data:,%23%0A%23%20This%20file%20controls%20the%20configuration%20of%20the%20ntp%20server%0A%23%20{{ include "cr.enc" .Values.variables.var_multiple_time_servers }}%20we%20have%20to%20put%20variable%20array%20name%20here%20for%20mutilines%20remediation%0A{{ $var_time_service_set_maxpoll:=.Values.variables.var_time_service_set_maxpoll }}%0A{{ range $element:=.Values.variables.var_multiple_time_servers | splitList "," }}server%20{{ include "cr.enc" $element }}%20minpoll%204%20maxpoll%20{{ include "cr.enc" $var_time_service_set_maxpoll }}%0A{{ end }}
         mode: 420
         overwrite: true
         path: /etc/chrony.d/ntp-server.conf
@@ -64,7 +64,7 @@ spec:
         overwrite: true
         path: /etc/chrony.d/.mco-keep
       - contents:
-          source: data:,%23%0A%23%20This%20file%20controls%20the%20configuration%20of%20the%20ntp%20server%0A%23%20{{ include "cr.enc" .Values.variables.var_multiple_time_servers }}%20we%20have%20to%20put%20variable%20array%20name%20here%20for%20mutilines%20remediation%0A{{ $var_time_service_set_maxpoll:=.Values.variables.var_time_service_set_maxpoll }}%0A{{ range $element:=.Values.variables.var_multiple_time_servers | splitList "," }}server%20{{ $element }}%20minpoll%204%20maxpoll%20{{ $var_time_service_set_maxpoll }}%0A{{ end }}
+          source: data:,%23%0A%23%20This%20file%20controls%20the%20configuration%20of%20the%20ntp%20server%0A%23%20{{ include "cr.enc" .Values.variables.var_multiple_time_servers }}%20we%20have%20to%20put%20variable%20array%20name%20here%20for%20mutilines%20remediation%0A{{ $var_time_service_set_maxpoll:=.Values.variables.var_time_service_set_maxpoll }}%0A{{ range $element:=.Values.variables.var_multiple_time_servers | splitList "," }}server%20{{ include "cr.enc" $element }}%20minpoll%204%20maxpoll%20{{ include "cr.enc" $var_time_service_set_maxpoll }}%0A{{ end }}
         mode: 420
         overwrite: true
         path: /etc/chrony.d/ntp-server.conf
@@ -88,7 +88,7 @@ spec:
         overwrite: true
         path: /etc/chrony.d/.mco-keep
       - contents:
-          source: data:,%23%0A%23%20This%20file%20controls%20the%20configuration%20of%20the%20ntp%20server%0A%23%20{{ include "cr.enc" .Values.variables.var_multiple_time_servers }}%20we%20have%20to%20put%20variable%20array%20name%20here%20for%20mutilines%20remediation%0A{{ $var_time_service_set_maxpoll:=.Values.variables.var_time_service_set_maxpoll }}%0A{{ range $element:=.Values.variables.var_multiple_time_servers | splitList "," }}server%20{{ $element }}%20minpoll%204%20maxpoll%20{{ $var_time_service_set_maxpoll }}%0A{{ end }}
+          source: data:,%23%0A%23%20This%20file%20controls%20the%20configuration%20of%20the%20ntp%20server%0A%23%20{{ include "cr.enc" .Values.variables.var_multiple_time_servers }}%20we%20have%20to%20put%20variable%20array%20name%20here%20for%20mutilines%20remediation%0A{{ $var_time_service_set_maxpoll:=.Values.variables.var_time_service_set_maxpoll }}%0A{{ range $element:=.Values.variables.var_multiple_time_servers | splitList "," }}server%20{{ include "cr.enc" $element }}%20minpoll%204%20maxpoll%20{{ include "cr.enc" $var_time_service_set_maxpoll }}%0A{{ end }}
         mode: 420
         overwrite: true
         path: /etc/chrony.d/ntp-server.conf
@@ -112,7 +112,7 @@ spec:
         overwrite: true
         path: /etc/chrony.d/.mco-keep
       - contents:
-          source: data:,%23%0A%23%20This%20file%20controls%20the%20configuration%20of%20the%20ntp%20server%0A%23%20{{ include "cr.enc" .Values.variables.var_multiple_time_servers }}%20we%20have%20to%20put%20variable%20array%20name%20here%20for%20mutilines%20remediation%0A{{ $var_time_service_set_maxpoll:=.Values.variables.var_time_service_set_maxpoll }}%0A{{ range $element:=.Values.variables.var_multiple_time_servers | splitList "," }}server%20{{ $element }}%20minpoll%204%20maxpoll%20{{ $var_time_service_set_maxpoll }}%0A{{ end }}
+          source: data:,%23%0A%23%20This%20file%20controls%20the%20configuration%20of%20the%20ntp%20server%0A%23%20{{ include "cr.enc" .Values.variables.var_multiple_time_servers }}%20we%20have%20to%20put%20variable%20array%20name%20here%20for%20mutilines%20remediation%0A{{ $var_time_service_set_maxpoll:=.Values.variables.var_time_service_set_maxpoll }}%0A{{ range $element:=.Values.variables.var_multiple_time_servers | splitList "," }}server%20{{ include "cr.enc" $element }}%20minpoll%204%20maxpoll%20{{ include "cr.enc" $var_time_service_set_maxpoll }}%0A{{ end }}
         mode: 420
         overwrite: true
         path: /etc/chrony.d/ntp-server.conf
