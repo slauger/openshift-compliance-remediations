@@ -377,24 +377,30 @@ def default_disabled_rules(contents: list[Content]) -> dict[str, str]:
 
 
 def _profile_variables_block(contents: list[Content], layer: str) -> str:
-    """Map each profile to the variables its fix-rules reference (scopes TP setValues)."""
-    from .resolver import _VAR_RE
+    """Map each profile to the variables its fix-rules reference (scopes TP setValues).
+
+    Uses the same extraction as the rest of the generator: matching only the
+    plain `{{.var_x}}` form missed every percent-encoded reference - 22 of the
+    40 variables - so a TailoredProfile left those unset and the operator
+    scanned against upstream defaults while the chart applied ours.
+    """
     lines = [
         "# profileVariables maps each profile to the XCCDF variables its rules use",
         "# (auto-generated; scopes TailoredProfile setValues).",
         "# @ignored",
         "profileVariables:",
     ]
+    layer_profiles = set(_profiles_with_layer(contents, layer))
     for content in contents:
         fixset = rules_with_fixes(content)
-        for pid in sorted(content.profiles):
+        for pid in sorted(p for p in content.profiles if p in layer_profiles):
             prof = content.profiles[pid]
             used: set[str] = set()
             for r in prof.selected_rules:
                 rule = fixset.get(r)
                 if rule and _rule_layer(rule) == layer:
                     for fix in rule.fixes:
-                        used.update(_VAR_RE.findall(fix.yaml))
+                        used.update(resolver.variables_in_fix(fix.yaml))
             if used:
                 lines.append(f"  {pid}:")
                 lines.extend(f"    - {v}" for v in sorted(used))

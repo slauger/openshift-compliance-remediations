@@ -682,6 +682,15 @@ class TestValuesContract(unittest.TestCase):
         for v in ("x.y", "", "4"):
             self.assertNotRegex(v, pattern, v)
 
+    def test_profile_variables_cover_encoded_references(self):
+        # Matching only the plain form missed 22 of the 40 variables, so a node
+        # TailoredProfile set none of them.
+        import yaml
+        values = yaml.safe_load(emit.values_yaml(self.contents, "node", "0.0.0"))
+        stig = values["profileVariables"].get("rhcos4-stig") or []
+        self.assertTrue(stig, "rhcos4-stig references no variables at all")
+        self.assertIn("var_auditd_action_mail_acct", stig)
+
     def test_profile_maps_only_carry_this_layer(self):
         # They used to carry all 49 profiles in both charts, while `profiles`
         # declares only its own - so most entries were unreachable.

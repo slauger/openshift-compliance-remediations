@@ -235,25 +235,17 @@ profileRules:
 profileVariables:
   ocp4-bsi: []
   ocp4-bsi-2022: []
-  ocp4-bsi-node: []
-  ocp4-bsi-node-2022: []
   ocp4-cis:
     - var_openshift_audit_profile
   ocp4-cis-1-7:
     - var_openshift_audit_profile
   ocp4-cis-1-9:
     - var_openshift_audit_profile
-  ocp4-cis-node: []
-  ocp4-cis-node-1-7: []
-  ocp4-cis-node-1-9: []
-  ocp4-cis-vm-extension-node: []
   ocp4-e8: []
   ocp4-high:
     - var_oauth_inactivity_timeout
     - var_oauth_token_maxage
     - var_openshift_audit_profile
-  ocp4-high-node: []
-  ocp4-high-node-rev-4: []
   ocp4-high-rev-4:
     - var_oauth_inactivity_timeout
     - var_oauth_token_maxage
@@ -262,8 +254,6 @@ profileVariables:
     - var_oauth_inactivity_timeout
     - var_oauth_token_maxage
     - var_openshift_audit_profile
-  ocp4-moderate-node: []
-  ocp4-moderate-node-rev-4: []
   ocp4-moderate-rev-4:
     - var_oauth_inactivity_timeout
     - var_oauth_token_maxage
@@ -272,7 +262,6 @@ profileVariables:
     - var_oauth_inactivity_timeout
     - var_oauth_token_maxage
     - var_openshift_audit_profile
-  ocp4-nerc-cip-node: []
   ocp4-pci-dss:
     - var_oauth_inactivity_timeout
     - var_openshift_audit_profile
@@ -281,16 +270,10 @@ profileVariables:
   ocp4-pci-dss-4-0:
     - var_oauth_inactivity_timeout
     - var_openshift_audit_profile
-  ocp4-pci-dss-node: []
-  ocp4-pci-dss-node-3-2: []
-  ocp4-pci-dss-node-4-0: []
   ocp4-stig:
     - var_oauth_inactivity_timeout
     - var_oauth_token_maxage
     - var_openshift_audit_profile
-  ocp4-stig-node: []
-  ocp4-stig-node-v2r2: []
-  ocp4-stig-node-v2r3: []
   ocp4-stig-v2r2:
     - var_oauth_inactivity_timeout
     - var_oauth_token_maxage
@@ -299,21 +282,6 @@ profileVariables:
     - var_oauth_inactivity_timeout
     - var_oauth_token_maxage
     - var_openshift_audit_profile
-  rhcos4-anssi_bp28_enhanced: []
-  rhcos4-anssi_bp28_high: []
-  rhcos4-anssi_bp28_intermediary: []
-  rhcos4-anssi_bp28_minimal: []
-  rhcos4-bsi: []
-  rhcos4-bsi-2022: []
-  rhcos4-e8: []
-  rhcos4-high: []
-  rhcos4-high-rev-4: []
-  rhcos4-moderate: []
-  rhcos4-moderate-rev-4: []
-  rhcos4-nerc-cip: []
-  rhcos4-stig: []
-  rhcos4-stig-v2r2: []
-  rhcos4-stig-v2r3: []
 
 # ruleApplicability records, per constrained rule, which cluster facts
 # it requires. Consulted by cr.applicabilityPreflight

@@ -72,6 +72,14 @@ def _block_variables(block: str) -> set[str]:
     return names
 
 
+def variables_in_fix(fix_yaml: str) -> set[str]:
+    """Variables one fix payload references, in either shape."""
+    names: set[str] = set()
+    for block in _BLOCK_RE.findall(fix_yaml):
+        names.update(_block_variables(block))
+    return names
+
+
 def referenced_variables(content: Content) -> set[str]:
     names: set[str] = set()
     for rule in content.rules.values():

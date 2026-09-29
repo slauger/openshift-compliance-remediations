@@ -2021,17 +2021,12 @@ profileRules:
 # (auto-generated; scopes TailoredProfile setValues).
 # @ignored
 profileVariables:
-  ocp4-bsi: []
-  ocp4-bsi-2022: []
   ocp4-bsi-node:
     - var_kubelet_tls_cipher_suites
     - var_kubelet_tls_min_version
   ocp4-bsi-node-2022:
     - var_kubelet_tls_cipher_suites
     - var_kubelet_tls_min_version
-  ocp4-cis: []
-  ocp4-cis-1-7: []
-  ocp4-cis-1-9: []
   ocp4-cis-node:
     - var_event_record_qps
     - var_kubelet_evictionhard_imagefs_available
@@ -2057,8 +2052,6 @@ profileVariables:
     - var_kubelet_tls_cipher_suites
     - var_streaming_connection_timeouts
   ocp4-cis-vm-extension-node: []
-  ocp4-e8: []
-  ocp4-high: []
   ocp4-high-node:
     - var_event_record_qps
     - var_kubelet_evictionhard_imagefs_available
@@ -2077,8 +2070,6 @@ profileVariables:
     - var_kubelet_tls_cipher_suites
     - var_kubelet_tls_min_version
     - var_streaming_connection_timeouts
-  ocp4-high-rev-4: []
-  ocp4-moderate: []
   ocp4-moderate-node:
     - var_event_record_qps
     - var_kubelet_evictionhard_imagefs_available
@@ -2097,8 +2088,6 @@ profileVariables:
     - var_kubelet_tls_cipher_suites
     - var_kubelet_tls_min_version
     - var_streaming_connection_timeouts
-  ocp4-moderate-rev-4: []
-  ocp4-nerc-cip: []
   ocp4-nerc-cip-node:
     - var_event_record_qps
     - var_kubelet_evictionhard_imagefs_available
@@ -2108,9 +2097,6 @@ profileVariables:
     - var_kubelet_tls_cipher_suites
     - var_kubelet_tls_min_version
     - var_streaming_connection_timeouts
-  ocp4-pci-dss: []
-  ocp4-pci-dss-3-2: []
-  ocp4-pci-dss-4-0: []
   ocp4-pci-dss-node:
     - var_event_record_qps
     - var_kubelet_evictionhard_imagefs_available
@@ -2137,36 +2123,240 @@ profileVariables:
     - var_kubelet_tls_cipher_suites
     - var_kubelet_tls_min_version
     - var_streaming_connection_timeouts
-  ocp4-stig: []
   ocp4-stig-node:
     - var_kubelet_tls_min_version
   ocp4-stig-node-v2r2:
     - var_kubelet_tls_min_version
   ocp4-stig-node-v2r3:
     - var_kubelet_tls_min_version
-  ocp4-stig-v2r2: []
-  ocp4-stig-v2r3: []
-  rhcos4-anssi_bp28_enhanced: []
-  rhcos4-anssi_bp28_high: []
-  rhcos4-anssi_bp28_intermediary: []
-  rhcos4-anssi_bp28_minimal: []
-  rhcos4-bsi: []
-  rhcos4-bsi-2022: []
+  rhcos4-anssi_bp28_enhanced:
+    - sshd_idle_timeout_value
+    - var_accounts_passwords_pam_faillock_dir
+    - var_rekey_limit_size
+    - var_rekey_limit_time
+    - var_sshd_disable_compression
+    - var_sshd_priv_separation
+    - var_sshd_set_keepalive
+    - var_sshd_set_login_grace_time
+  rhcos4-anssi_bp28_high:
+    - sshd_idle_timeout_value
+    - var_accounts_passwords_pam_faillock_dir
+    - var_rekey_limit_size
+    - var_rekey_limit_time
+    - var_sshd_disable_compression
+    - var_sshd_priv_separation
+    - var_sshd_set_keepalive
+    - var_sshd_set_login_grace_time
+  rhcos4-anssi_bp28_intermediary:
+    - sshd_idle_timeout_value
+    - var_rekey_limit_size
+    - var_rekey_limit_time
+    - var_sshd_disable_compression
+    - var_sshd_priv_separation
+    - var_sshd_set_keepalive
+    - var_sshd_set_login_grace_time
+  rhcos4-bsi:
+    - sshd_idle_timeout_value
+    - var_accounts_passwords_pam_faillock_dir
+    - var_rekey_limit_size
+    - var_rekey_limit_time
+    - var_sshd_disable_compression
+    - var_sshd_priv_separation
+    - var_sshd_set_keepalive
+    - var_sshd_set_login_grace_time
+  rhcos4-bsi-2022:
+    - sshd_idle_timeout_value
+    - var_accounts_passwords_pam_faillock_dir
+    - var_rekey_limit_size
+    - var_rekey_limit_time
+    - var_sshd_disable_compression
+    - var_sshd_priv_separation
+    - var_sshd_set_keepalive
+    - var_sshd_set_login_grace_time
   rhcos4-e8:
+    - sshd_idle_timeout_value
+    - var_accounts_passwords_pam_faillock_dir
+    - var_auditd_action_mail_acct
+    - var_auditd_disk_error_action
+    - var_auditd_disk_full_action
+    - var_auditd_flush
+    - var_auditd_max_log_file
+    - var_auditd_max_log_file_action
+    - var_auditd_num_logs
+    - var_auditd_space_left
+    - var_auditd_space_left_action
+    - var_rekey_limit_size
+    - var_rekey_limit_time
+    - var_sshd_disable_compression
+    - var_sshd_priv_separation
+    - var_sshd_set_keepalive
+    - var_sshd_set_login_grace_time
     - var_system_crypto_policy
   rhcos4-high:
+    - sshd_idle_timeout_value
+    - var_accounts_passwords_pam_faillock_dir
+    - var_auditd_action_mail_acct
+    - var_auditd_disk_error_action
+    - var_auditd_disk_full_action
+    - var_auditd_flush
+    - var_auditd_max_log_file
+    - var_auditd_max_log_file_action
+    - var_auditd_num_logs
+    - var_auditd_space_left
+    - var_auditd_space_left_action
+    - var_multiple_time_servers
+    - var_rekey_limit_size
+    - var_rekey_limit_time
+    - var_sshd_disable_compression
+    - var_sshd_priv_separation
+    - var_sshd_set_keepalive
+    - var_sshd_set_login_grace_time
     - var_system_crypto_policy
+    - var_time_service_set_maxpoll
   rhcos4-high-rev-4:
+    - sshd_idle_timeout_value
+    - var_accounts_passwords_pam_faillock_dir
+    - var_auditd_action_mail_acct
+    - var_auditd_disk_error_action
+    - var_auditd_disk_full_action
+    - var_auditd_flush
+    - var_auditd_max_log_file
+    - var_auditd_max_log_file_action
+    - var_auditd_num_logs
+    - var_auditd_space_left
+    - var_auditd_space_left_action
+    - var_multiple_time_servers
+    - var_rekey_limit_size
+    - var_rekey_limit_time
+    - var_sshd_disable_compression
+    - var_sshd_priv_separation
+    - var_sshd_set_keepalive
+    - var_sshd_set_login_grace_time
     - var_system_crypto_policy
+    - var_time_service_set_maxpoll
   rhcos4-moderate:
+    - sshd_idle_timeout_value
+    - var_accounts_passwords_pam_faillock_dir
+    - var_auditd_action_mail_acct
+    - var_auditd_disk_error_action
+    - var_auditd_disk_full_action
+    - var_auditd_flush
+    - var_auditd_max_log_file
+    - var_auditd_max_log_file_action
+    - var_auditd_num_logs
+    - var_auditd_space_left
+    - var_auditd_space_left_action
+    - var_multiple_time_servers
+    - var_rekey_limit_size
+    - var_rekey_limit_time
+    - var_sshd_disable_compression
+    - var_sshd_priv_separation
+    - var_sshd_set_keepalive
+    - var_sshd_set_login_grace_time
     - var_system_crypto_policy
+    - var_time_service_set_maxpoll
   rhcos4-moderate-rev-4:
+    - sshd_idle_timeout_value
+    - var_accounts_passwords_pam_faillock_dir
+    - var_auditd_action_mail_acct
+    - var_auditd_disk_error_action
+    - var_auditd_disk_full_action
+    - var_auditd_flush
+    - var_auditd_max_log_file
+    - var_auditd_max_log_file_action
+    - var_auditd_num_logs
+    - var_auditd_space_left
+    - var_auditd_space_left_action
+    - var_multiple_time_servers
+    - var_rekey_limit_size
+    - var_rekey_limit_time
+    - var_sshd_disable_compression
+    - var_sshd_priv_separation
+    - var_sshd_set_keepalive
+    - var_sshd_set_login_grace_time
     - var_system_crypto_policy
+    - var_time_service_set_maxpoll
   rhcos4-nerc-cip:
+    - sshd_idle_timeout_value
+    - var_accounts_passwords_pam_faillock_dir
+    - var_auditd_action_mail_acct
+    - var_auditd_disk_error_action
+    - var_auditd_disk_full_action
+    - var_auditd_flush
+    - var_auditd_max_log_file
+    - var_auditd_max_log_file_action
+    - var_auditd_num_logs
+    - var_auditd_space_left
+    - var_auditd_space_left_action
+    - var_multiple_time_servers
+    - var_rekey_limit_size
+    - var_rekey_limit_time
+    - var_sshd_disable_compression
+    - var_sshd_priv_separation
+    - var_sshd_set_keepalive
+    - var_sshd_set_login_grace_time
     - var_system_crypto_policy
-  rhcos4-stig: []
-  rhcos4-stig-v2r2: []
-  rhcos4-stig-v2r3: []
+    - var_time_service_set_maxpoll
+  rhcos4-stig:
+    - sshd_idle_timeout_value
+    - var_accounts_passwords_pam_faillock_dir
+    - var_auditd_action_mail_acct
+    - var_auditd_disk_error_action
+    - var_auditd_disk_full_action
+    - var_auditd_flush
+    - var_auditd_max_log_file
+    - var_auditd_max_log_file_action
+    - var_auditd_num_logs
+    - var_auditd_space_left
+    - var_auditd_space_left_action
+    - var_multiple_time_servers
+    - var_rekey_limit_size
+    - var_rekey_limit_time
+    - var_sshd_disable_compression
+    - var_sshd_priv_separation
+    - var_sshd_set_keepalive
+    - var_sshd_set_login_grace_time
+    - var_time_service_set_maxpoll
+  rhcos4-stig-v2r2:
+    - sshd_idle_timeout_value
+    - var_accounts_passwords_pam_faillock_dir
+    - var_auditd_action_mail_acct
+    - var_auditd_disk_error_action
+    - var_auditd_disk_full_action
+    - var_auditd_flush
+    - var_auditd_max_log_file
+    - var_auditd_max_log_file_action
+    - var_auditd_num_logs
+    - var_auditd_space_left
+    - var_auditd_space_left_action
+    - var_multiple_time_servers
+    - var_rekey_limit_size
+    - var_rekey_limit_time
+    - var_sshd_disable_compression
+    - var_sshd_priv_separation
+    - var_sshd_set_keepalive
+    - var_sshd_set_login_grace_time
+    - var_time_service_set_maxpoll
+  rhcos4-stig-v2r3:
+    - sshd_idle_timeout_value
+    - var_accounts_passwords_pam_faillock_dir
+    - var_auditd_action_mail_acct
+    - var_auditd_disk_error_action
+    - var_auditd_disk_full_action
+    - var_auditd_flush
+    - var_auditd_max_log_file
+    - var_auditd_max_log_file_action
+    - var_auditd_num_logs
+    - var_auditd_space_left
+    - var_auditd_space_left_action
+    - var_multiple_time_servers
+    - var_rekey_limit_size
+    - var_rekey_limit_time
+    - var_sshd_disable_compression
+    - var_sshd_priv_separation
+    - var_sshd_set_keepalive
+    - var_sshd_set_login_grace_time
+    - var_time_service_set_maxpoll
 
 # ruleApplicability records, per constrained rule, which cluster facts
 # it requires. Consulted by cr.applicabilityPreflight

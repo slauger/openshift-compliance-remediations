@@ -413,3 +413,26 @@ tests:
       - equal:
           path: spec.extends
           value: rhcos4-anssi-bp28-high
+
+  - it: sets the variables it configures on the TailoredProfile
+    # profileVariables matched only the plain {{.var_x}} form, and rhcos4 uses
+    # the percent-encoded one almost exclusively - so node TailoredProfiles
+    # carried zero setValues and the operator scanned against upstream
+    # defaults while the chart applied ours.
+    template: templates/tailoredprofile.yaml
+    set:
+      node:
+        enabled: true
+      tailoredProfile:
+        enabled: true
+      profiles:
+        rhcos4-stig: true
+    asserts:
+      - exists:
+          path: spec.setValues
+      - contains:
+          path: spec.setValues
+          content:
+            name: rhcos4-var-auditd-action-mail-acct
+            value: root
+            rationale: Set via compliance-hardening chart values
