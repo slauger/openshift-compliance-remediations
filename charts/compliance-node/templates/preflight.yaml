@@ -1,0 +1,7 @@
+{{- /*
+  Preflight. Renders nothing; aborts when an active rule is one the Compliance
+  Operator would refuse to apply - because it does not apply to this cluster,
+  or because a rule it depends on is switched off.
+*/ -}}
+{{- include "cr.applicabilityPreflight" . -}}
+{{- include "cr.dependencyPreflight" . -}}

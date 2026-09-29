@@ -91,6 +91,20 @@ The first one deserves a word on ordering. `protectKernelDefaults: true` makes t
 
 The bar for this list is deliberately high — only rules whose failure mode is losing the node, or losing the access needed to fix it. A chart that quietly waters down the profile it claims to implement would be worse than one that reboots a node.
 
+## Rule dependencies
+
+Some rules must not be applied without another — upstream marks them `complianceascode.io/depends-on`, and the Compliance Operator refuses to apply a remediation whose dependency is unmet. The charts do the same: if a rule is active and a rule it requires is not, the render aborts and names both.
+
+```
+Error: 3 active rule(s) have an unmet dependency:
+  rhcos4-usbguard_allow_hid_and_hub requires rhcos4-package_usbguard_installed, which is not active
+  ...
+```
+
+This is **directional**. The dependency applied without the rule that needs it is fine and does not fail — only the other way round. The `requires` entries in [`RULES.md`](RULES.md) show which rules have one.
+
+Every profile that selects a dependent rule also selects its dependency, so this only fires if you switch one off yourself through `rules:`. That is worth guarding: `ocp4-kubelet_enable_protect_kernel_defaults` needs `ocp4-kubelet_enable_protect_kernel_sysctl` to have set the kernel parameters first, and without them the kubelet refuses to start.
+
 ## Applicability
 
 Upstream rules carry XCCDF `<platform>` constraints. The Compliance Operator evaluates them at scan time and reports a rule that does not apply as `notapplicable`, generating no remediation for it. The charts mirror that: rather than shipping a remediation the operator would never produce, they **refuse to render** and name every offending rule at once.

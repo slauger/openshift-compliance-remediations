@@ -165,7 +165,7 @@ class TestEmittedGuard(unittest.TestCase):
         self.assertIn('eq $a "arm64"', helpers)
 
     def test_preflight_template_is_emitted(self):
-        tpl = (self.node / "templates" / "applicability.yaml").read_text()
+        tpl = (self.node / "templates" / "preflight.yaml").read_text()
         self.assertIn('include "cr.applicabilityPreflight"', tpl)
 
     def test_values_carry_the_cluster_block_and_the_map(self):
@@ -477,6 +477,82 @@ class TestConsolidatedObjects(unittest.TestCase):
         with self.assertRaises(ValueError) as cm:
             emit.object_template(group)
         self.assertIn("no longer identical", str(cm.exception))
+
+
+class TestRuleDependencies(unittest.TestCase):
+    """Upstream says some rules must not be applied without another."""
+
+    def test_parsing_strips_the_xccdf_prefix(self):
+        rule = xccdf.Rule(rule_id="dependent", xccdf_id="x", product="ocp4")
+        # Mirrors what parse() does with the annotation body.
+        self.assertEqual(
+            "xccdf_org.ssgproject.content_rule_some_other"
+            .split("content_rule_")[-1], "some_other")
+        self.assertEqual(rule.depends_on, [])
+
+    def test_only_same_layer_emitted_rules_are_checkable(self):
+        # cr.ruleActive resolves through profileRules and the rules override,
+        # and both only carry rules this chart emits. A dependency outside
+        # that set would always read as inactive and fail every render.
+        dependent = _mc_rule("dependent", product="ocp4")
+        dependent.depends_on = ["emitted", "not_emitted"]
+        emitted = _mc_rule("emitted", product="ocp4")
+        content = Content(rules={"dependent": dependent, "emitted": emitted},
+                          values={}, profiles={}, product="ocp4")
+        layer_rules = {"ocp4-dependent", "ocp4-emitted"}
+        deps = emit.rule_dependencies([content], layer_rules)
+        self.assertEqual(deps, {"ocp4-dependent": ["ocp4-emitted"]})
+        self.assertEqual(emit.unverifiable_dependencies([content]),
+                         ["ocp4-dependent -> ocp4-not_emitted"])
+
+    def test_helper_and_map_are_emitted(self):
+        import tempfile
+        from pathlib import Path
+        dependent = _mc_rule("dependent", product="ocp4")
+        dependent.depends_on = ["emitted"]
+        content = Content(
+            rules={"dependent": dependent, "emitted": _mc_rule("emitted", product="ocp4")},
+            values={}, profiles={}, product="ocp4")
+        with tempfile.TemporaryDirectory() as d:
+            emit.generate_charts({"ocp4": content}, Path(d), "0.0.0")
+            node = Path(d) / emit.NODE_CHART
+            helpers = (node / "templates" / "_helpers.tpl").read_text()
+            self.assertIn('define "cr.dependencyPreflight"', helpers)
+            preflight = (node / "templates" / "preflight.yaml").read_text()
+            self.assertIn('include "cr.dependencyPreflight"', preflight)
+            values = (node / "values.yaml").read_text()
+            section = values.split("ruleDependencies:", 1)[1]
+            self.assertIn("ocp4-dependent:", section)
+            self.assertIn("- ocp4-emitted", section)
+
+    @requires(OCP4, RHCOS4)
+    def test_the_known_relations(self):
+        contents = {p: xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))}
+        found = {}
+        for product, content in contents.items():
+            for rule in xccdf.rules_with_fixes(content).values():
+                if rule.depends_on:
+                    found[rule.helm_name] = [f"{product}-{d}" for d in rule.depends_on]
+        self.assertEqual(found, {
+            "ocp4-kubelet_enable_protect_kernel_defaults":
+                ["ocp4-kubelet_enable_protect_kernel_sysctl"],
+            "rhcos4-configure_usbguard_auditbackend":
+                ["rhcos4-package_usbguard_installed"],
+            "rhcos4-service_usbguard_enabled":
+                ["rhcos4-package_usbguard_installed"],
+            "rhcos4-usbguard_allow_hid_and_hub":
+                ["rhcos4-package_usbguard_installed"],
+        })
+
+    @requires(OCP4, RHCOS4)
+    def test_every_dependency_is_checkable(self):
+        # If a content bump introduces a dependency on a rule this chart does
+        # not emit, the generator reports it - and this fails, so it is not
+        # only a line of output nobody reads.
+        contents = [xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))]
+        self.assertEqual(emit.unverifiable_dependencies(contents), [])
 
 
 class TestOptInRules(unittest.TestCase):

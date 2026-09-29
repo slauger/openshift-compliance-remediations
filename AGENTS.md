@@ -56,6 +56,13 @@ XCCDF `<platform>` constraints are parsed and enforced. The leaves of those CPE 
 - **KubeletConfig is consolidated per pool, not per rule.** `classify.synthesize_name` returns a constant for that kind, so every kubelet fix lands in one merge group rendered per role - mirroring the operator's `verifyAndCompleteKC`, which names the object `compliance-operator-kubelet-<pool>` and sets `spec.machineConfigPoolSelector`. The selector is the load-bearing part: without it the MCO matches no pool and the object silently does nothing. It is merged per role (the label contains the pool name), so the render deep-copies `$merged` inside the role loop.
 - **A non-applicable active rule aborts the render**, centrally, listing every offender. Per-architecture overlays (`values-<arch>.yaml`) are generated so the remedy is one `-f`, not a hand-maintained list.
 
+## Rule dependencies
+
+`complianceascode.io/depends-on` is parsed onto `Rule.depends_on` and enforced by `cr.dependencyPreflight`, next to the applicability preflight in the same generated `preflight.yaml`.
+
+- **Directional.** Only "rule active, dependency not" fails. The reverse is legitimate and must not - the operator would not complain either.
+- **Only dependencies this chart emits can be checked.** `cr.ruleActive` resolves through `profileRules` and the `rules` override, and both only carry fix-carrying rules; a dependency outside that set would read as inactive and fail every render. `unverifiable_dependencies()` reports any such case through the CLI, and a datastream test asserts the list is empty, so it is not just a line of output nobody reads.
+
 ## Opt-in rules
 
 `emit.OPT_IN_RULES` ships a rule disabled even though a profile selects it. This is **our** judgement, not an upstream constraint - nothing in the content says not to apply these - so the bar is high: only rules whose failure mode is loss of the node or of the access needed to fix it. Each entry carries its reason, which lands in `values.yaml` next to the entry and as **⚠️ opt-in** in `RULES.md`.

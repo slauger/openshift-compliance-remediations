@@ -62,6 +62,8 @@ class Rule:
     # that way (the usbguard family is arch-constrained purely by its group).
     platforms: list[str] = field(default_factory=list)
     group_platforms: list[str] = field(default_factory=list)
+    # Short rule ids this rule's fix declares a dependency on.
+    depends_on: list[str] = field(default_factory=list)
 
     @property
     def helm_name(self) -> str:
@@ -105,6 +107,11 @@ class Content:
     # CPE applicability expressions, keyed by id *without* the leading "#".
     platforms: dict[str, LogicalTest] = field(default_factory=dict)
 
+
+# The operator refuses to apply a remediation whose dependency is unmet
+# (RemediationDependencyAnnotation in its complianceremediation controller).
+_DEPENDS_ON_RE = re.compile(
+    r"(?m)^\s*complianceascode\.io/depends-on:\s*(.+)$")
 
 _OCP_VERSION_RE = re.compile(r"complianceascode\.io/ocp-version:\s*'([^']+)'")
 
@@ -212,6 +219,11 @@ def parse(datastream_path: Path, product: str = "ocp4") -> Content:
                 elif ct == "fix" and c.get("system") == K8S_FIX_SYSTEM:
                     fix_text = "".join(c.itertext())
                     rule.fixes.extend(_split_fix_by_ocp_version(fix_text))
+                    for m in _DEPENDS_ON_RE.finditer(fix_text):
+                        for dep in m.group(1).split(","):
+                            dep = dep.strip().split(_RULE_PREFIX)[-1]
+                            if dep and dep not in rule.depends_on:
+                                rule.depends_on.append(dep)
             rules[rule_id] = rule
 
         elif tag == "platform" and el.get("id"):
