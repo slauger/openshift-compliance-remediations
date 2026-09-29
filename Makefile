@@ -34,9 +34,11 @@ docs:
 lint:
 	@for c in $(ALL_CHARTS); do echo "== lint $$c =="; helm lint $$c || exit 1; done
 
-## helm unittest the subcharts.
-test:
-	@for c in $(SUBCHARTS); do echo "== test $$c =="; helm unittest $$c || exit 1; done
+## helm unittest every chart. Depends on deps: the umbrella can only render
+## once its subchart archives are built, and leaving it untested is how an
+## overlay that only works for standalone subcharts got through.
+test: deps
+	@for c in $(ALL_CHARTS); do echo "== test $$c =="; helm unittest $$c || exit 1; done
 
 ## Python unit tests (parser + collisions). Depends on fetch: the datastream
 ## tests skip without .cache, and REQUIRE_DATASTREAM turns that skip into a

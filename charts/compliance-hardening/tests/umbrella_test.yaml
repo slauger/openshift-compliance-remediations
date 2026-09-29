@@ -1,0 +1,66 @@
+suite: umbrella wiring
+# The umbrella is a thin wrapper, but nothing rendered it until an overlay bug
+# slipped through precisely because every check went through the subcharts.
+# These cases exist to make the wrapper's own plumbing observable.
+tests:
+  - it: renders a platform object through the subchart prefix
+    template: charts/compliance-platform/templates/apiserver-cluster.yaml
+    set:
+      compliance-platform:
+        rules:
+          ocp4-audit_profile_set: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - exists:
+          path: spec.audit
+
+  - it: keeps node remediations off unless the subchart is enabled
+    template: charts/compliance-node/templates/kubeletconfig-compliance-operator-kubelet.yaml
+    set:
+      compliance-node:
+        rules:
+          ocp4-kubelet_configure_event_creation: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: passes cluster facts through to the node subchart
+    template: charts/compliance-node/templates/preflight.yaml
+    set:
+      compliance-node:
+        node:
+          enabled: true
+        cluster:
+          architecture: aarch64
+        rules:
+          rhcos4-audit_rules_time_stime: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "not applicable on aarch64"
+
+  - it: applies the nested overlay to satisfy the same gate
+    # The flat subchart overlay is silently ignored here; this is the reason
+    # the umbrella ships its own. Asserted on an object that must RENDER:
+    # `hasDocuments: 0` on the preflight would also hold when the render
+    # fails, which is how the first version of this test stayed green with the
+    # bug put back in.
+    template: charts/compliance-node/templates/machineconfig-75-ocp4-auditd.yaml
+    values:
+      - ../values-aarch64.yaml
+    set:
+      # The architecture is set here on purpose, not taken from the overlay:
+      # a flat overlay fails to set it either, so the gate would never fire
+      # and the test would pass for the wrong reason.
+      compliance-node:
+        node:
+          enabled: true
+        cluster:
+          architecture: aarch64
+        profiles:
+          rhcos4-moderate: true
+    asserts:
+      - hasDocuments:
+          count: 2
+      - exists:
+          path: spec.config.storage.files
