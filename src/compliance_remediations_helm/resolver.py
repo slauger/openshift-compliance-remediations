@@ -224,6 +224,29 @@ def _rewrite_block(block: str) -> str:
     return _ENC_ACTION_RE.sub(lambda m: _translate_action(m.group(1)), inner)
 
 
+_PLAIN_USE_RE = re.compile(r"(.?)\{\{ \.Values\.variables\.(\w+) \}\}")
+
+
+def unquoted_scalar_variables(contents) -> set[str]:
+    """Variables interpolated into a YAML scalar without quotes.
+
+    Only these can change the *type* of the field they land in - a bare `~` or
+    `no` becomes null or false, which is valid YAML and therefore invisible to
+    every render-time guard. Values inside an encoded Ignition payload are
+    plain config text, where `no` is a perfectly good value, so constraining
+    them would reject shipped defaults such as var_sshd_disable_compression.
+    """
+    out: set[str] = set()
+    for content in contents:
+        for rule in content.rules.values():
+            for fix in rule.fixes:
+                for before, name in _PLAIN_USE_RE.findall(
+                        rewrite_placeholders(fix.yaml)):
+                    if before not in ('"', "'"):
+                        out.add(name)
+    return out
+
+
 def numeric_variables(contents) -> set[str]:
     """Variables XCCDF declares as numbers, and whose options really are.
 

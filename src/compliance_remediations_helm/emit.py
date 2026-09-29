@@ -1038,7 +1038,7 @@ def tailored_profile_template(contents: list[Content], layer: str) -> str:
         f"{{{{- $profiles := list {' '.join(_go_str(p) for p in profiles)} -}}}}",
         "{{- $root := . -}}",
         "{{- range $profile := $profiles -}}",
-        '{{- if index $root.Values.profiles $profile -}}',
+        '{{- if index ($root.Values.profiles | default dict) $profile -}}',
         "{{- $ruleList := (index ($root.Values.profileRules | default dict) "
         "$profile) | default (list) -}}",
         "{{- $varList := (index ($root.Values.profileVariables | default dict) "
@@ -1065,8 +1065,9 @@ def tailored_profile_template(contents: list[Content], layer: str) -> str:
         "    Rule selection managed by the compliance-hardening Helm chart.",
         "  {{- $disabled := list -}}",
         "  {{- range $rule := $ruleList -}}",
-        '  {{- if hasKey $root.Values.rules $rule -}}',
-        "  {{- if not (index $root.Values.rules $rule) -}}",
+        '  {{- $overrides := $root.Values.rules | default dict -}}',
+        '  {{- if hasKey $overrides $rule -}}',
+        "  {{- if not (index $overrides $rule) -}}",
         "  {{- $disabled = append $disabled $rule -}}",
         "  {{- end -}}{{- end -}}{{- end -}}",
         "  {{- if $disabled }}",
@@ -1079,7 +1080,7 @@ def tailored_profile_template(contents: list[Content], layer: str) -> str:
         "  {{- if $varList }}",
         "  setValues:",
         "  {{- range $var := $varList }}",
-        "  {{- if hasKey $root.Values.variables $var }}",
+        "  {{- if hasKey ($root.Values.variables | default dict) $var }}",
         '    - name: {{ printf "%s-%s" $product ($var | replace "_" "-") | quote }}',
         "      value: {{ index $root.Values.variables $var | quote }}",
         '      rationale: "Set via compliance-hardening chart values"',
@@ -1333,11 +1334,22 @@ def values_schema(contents: list[Content], layer: str) -> str:
     inner = r"[^\n\t#'\"\\]"
     edge = r"[^\s#'\"\\]"
     var_pattern = rf"^{edge}({inner}*{edge})?$"
+    # A bare `~`, `null`, `no` or `y` passes the pattern and then changes the
+    # YAML *type* in the 18 fragments that interpolate a variable unquoted:
+    # `streamingConnectionIdleTimeout: null`, `memory.available: false`. Valid
+    # YAML, so neither the fromYaml guard nor the empty-merge guard notices,
+    # and the control is simply not implemented. Same list _yaml_scalar quotes
+    # against, plus the indicator characters that start a non-scalar node.
+    forbidden = sorted({*_YAML11_BOOL_NULL,
+                        *(w.upper() for w in _YAML11_BOOL_NULL),
+                        *(w.capitalize() for w in _YAML11_BOOL_NULL)})
+    unquoted = resolver.unquoted_scalar_variables(contents)
     numeric = resolver.numeric_variables(contents)
     var_props = {
         v: ({"type": ["string", "number"], "pattern": r"^\d+$"}
             if v in numeric
-            else {"type": ["string", "number"], "pattern": var_pattern})
+            else {"type": ["string", "number"], "pattern": var_pattern,
+                  **({"not": {"enum": forbidden}} if v in unquoted else {})})
         for v in var_names
     }
 
@@ -1393,10 +1405,25 @@ def values_schema(contents: list[Content], layer: str) -> str:
                 "additionalProperties": False,
             },
             # profileRules / profileVariables are generator-managed data maps.
+            # The generated data maps. Declared *and* required: Helm's
+            # `--set X=null` deletes a key, and every preflight reads its map
+            # with `| default dict`, so a deleted map turned the guard into a
+            # silent no-op. `required` makes that a schema error instead.
             "profileRules": {"type": "object"},
             "profileVariables": {"type": "object"},
+            "ruleApplicability": {"type": "object"},
+            "ruleDependencies": {"type": "object"},
+            "brokenRules": {"type": "object"},
+            # Helm injects `global` into a subchart's values.
+            "global": {"type": "object"},
         },
-        "additionalProperties": True,
+        "required": ["profiles", "rules", "variables", "profileRules",
+                     "profileVariables", "ruleApplicability",
+                     "ruleDependencies", "brokenRules"],
+        # Closed, like every nested block: an umbrella-shaped values file
+        # applied to a subchart was silently discarded, arch stayed x86_64 and
+        # rules upstream marks notapplicable shipped with no error.
+        "additionalProperties": False,
     }
     if layer == "node":
         schema["properties"]["node"] = {

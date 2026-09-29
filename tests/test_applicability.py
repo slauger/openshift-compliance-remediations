@@ -682,6 +682,41 @@ class TestValuesContract(unittest.TestCase):
         for v in ("x.y", "", "4"):
             self.assertNotRegex(v, pattern, v)
 
+    def test_generated_maps_are_required_and_declared(self):
+        # Helm's `--set X=null` deletes a key, and every preflight reads its
+        # map with `| default dict` - so a deleted map turned the guard into a
+        # silent no-op. `required` makes that a schema error.
+        for layer in ("node", "platform"):
+            schema = json.loads(emit.values_schema(self.contents, layer))
+            for key in ("profileRules", "profileVariables", "ruleApplicability",
+                        "ruleDependencies", "brokenRules", "profiles", "rules",
+                        "variables"):
+                self.assertIn(key, schema["properties"], f"{layer}/{key}")
+                self.assertIn(key, schema["required"], f"{layer}/{key}")
+
+    def test_the_root_is_closed_but_allows_global(self):
+        # An umbrella-shaped values file applied to a subchart was silently
+        # discarded. Helm injects `global` into a subchart, so that one key has
+        # to stay allowed.
+        for layer in ("node", "platform"):
+            schema = json.loads(emit.values_schema(self.contents, layer))
+            self.assertFalse(schema["additionalProperties"])
+            self.assertIn("global", schema["properties"])
+
+    def test_only_unquoted_variables_forbid_yaml_type_tokens(self):
+        # A bare `~` or `no` changes the type of the field it lands in, but
+        # only where the fragment interpolates it unquoted. Inside an encoded
+        # payload `no` is ordinary config text - var_sshd_disable_compression
+        # ships exactly that.
+        from compliance_remediations_helm import resolver
+        unquoted = resolver.unquoted_scalar_variables(self.contents)
+        schema = json.loads(emit.values_schema(self.contents, "node"))
+        props = schema["properties"]["variables"]["properties"]
+        self.assertIn("var_openshift_audit_profile", unquoted)
+        self.assertNotIn("var_sshd_disable_compression", unquoted)
+        for name, spec in props.items():
+            self.assertEqual("not" in spec, name in unquoted, name)
+
     def test_profile_variables_cover_encoded_references(self):
         # Matching only the plain form missed 22 of the 40 variables, so a node
         # TailoredProfile set none of them.

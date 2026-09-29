@@ -139,7 +139,13 @@ FACTS: dict[str, Fact] = {
         why="RHCOS ships OpenSSH 8 or newer",
         const=False),
     "system_boot_mode_is_non_uefi": Fact(
-        why="UEFI boot is assumed; enable the rule explicitly for BIOS nodes",
+        # The earlier wording said "enable the rule explicitly for BIOS nodes",
+        # which the preflight makes impossible - there is no boot-mode fact to
+        # declare. Say what is true instead: under this assumption the rule is
+        # refused, and a BIOS fleet needs the assumption changed here.
+        why="UEFI boot is assumed, so this rule is refused; a BIOS or "
+            "legacy-boot fleet needs this assumption revisited in "
+            "applicability.FACTS",
         const=False),
 }
 

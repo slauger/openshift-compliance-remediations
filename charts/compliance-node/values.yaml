@@ -74,7 +74,7 @@ rules:
   ocp4-kubelet_enable_protect_kernel_defaults: false  # opt-in: kubelet refuses to start if the kernel parameters it expects are not already set; nodes go NotReady pool by pool
   rhcos4-coreos_nousb_kernel_argument: false  # opt-in: boots with nousb; on bare metal that disables USB keyboards, so the console stops being a way back in
   rhcos4-coreos_page_poison_kernel_argument: false  # opt-in: page_poison=1 carries a measurable runtime cost - a deliberate trade-off rather than something to inherit from a profile
-  rhcos4-kernel_module_vfat_disabled: false  # UEFI boot is assumed; enable the rule explicitly for BIOS nodes
+  rhcos4-kernel_module_vfat_disabled: false  # UEFI boot is assumed, so this rule is refused; a BIOS or legacy-boot fleet needs this assumption revisited in applicability.FACTS
   rhcos4-service_sshd_disabled: false  # opt-in: masks sshd.service and sshd.socket, removing the recovery path into a node when the API is not enough
   rhcos4-sshd_allow_only_protocol2: false  # RHCOS ships OpenSSH 8 or newer
   rhcos4-sshd_use_priv_separation: false  # RHCOS ships OpenSSH 8 or newer
@@ -2408,7 +2408,7 @@ ruleApplicability:
   rhcos4-configure_usbguard_auditbackend:
     arch: [aarch64, ppc64le, x86_64]
   rhcos4-kernel_module_vfat_disabled:
-    never: UEFI boot is assumed; enable the rule explicitly for BIOS nodes
+    never: "UEFI boot is assumed, so this rule is refused; a BIOS or legacy-boot fleet needs this assumption revisited in applicability.FACTS"
   rhcos4-package_usbguard_installed:
     arch: [aarch64, ppc64le, x86_64]
   rhcos4-service_usbguard_enabled:
