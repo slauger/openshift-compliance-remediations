@@ -57,7 +57,10 @@ validate-payloads: venv
 
 ## Build umbrella dependencies (pulls subcharts).
 deps:
-	helm dependency build $(CHARTS)/compliance-hardening
+	# `update`, not `build`: Chart.lock is gitignored, so CI writes it at the
+	# old version and a release bumps Chart.yaml past it - `build` then
+	# aborts with "lock file out of sync", after the tag is already pushed.
+	helm dependency update $(CHARTS)/compliance-hardening
 
 ## Render the platform chart with a sample profile.
 template:

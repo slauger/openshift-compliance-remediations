@@ -120,7 +120,7 @@ jobs:
           # exec plugin regenerated them from the VERSION file before tagging.
 
           # Umbrella needs its subchart dependencies built first.
-          helm dependency build charts/compliance-hardening
+          helm dependency update charts/compliance-hardening
 
           for chart in compliance-platform compliance-node compliance-hardening; do
             echo "== packaging $chart $VERSION =="

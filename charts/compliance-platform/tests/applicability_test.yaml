@@ -75,3 +75,26 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "change the cluster facts they depend on"
+
+  - it: refuses a rule whose upstream fix the API server would prune
+    # tlsSecurityProfile.Custom is not a field: the object applies cleanly and
+    # changes nothing. Validated against the genuine CRDs and kubeconform:
+    #   at '/spec/tlsSecurityProfile': additional properties 'Custom' not allowed
+    template: templates/preflight.yaml
+    set:
+      rules:
+        ocp4-api_server_tls_security_profile_custom_min_tls_version: true
+    asserts:
+      # helm-unittest matches the error body, which drops the leading count
+      # line, so assert on the per-rule detail.
+      - failedTemplate:
+          errorPattern: "tlsSecurityProfile.Custom, which is not a field"
+
+  - it: stays quiet for the non-broken alternative
+    template: templates/preflight.yaml
+    set:
+      rules:
+        ocp4-api_server_tls_security_profile_not_old: true
+    asserts:
+      - hasDocuments:
+          count: 0

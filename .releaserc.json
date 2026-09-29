@@ -1,26 +1,38 @@
 {
-  "branches": ["main"],
+  "branches": [
+    "main"
+  ],
   "tagFormat": "v${version}",
   "plugins": [
     [
       "@semantic-release/commit-analyzer",
       {
         "releaseRules": [
-          { "breaking": true, "release": "minor" }
-        ]
+          {
+            "breaking": true,
+            "release": "minor"
+          }
+        ],
+        "preset": "conventionalcommits"
       }
     ],
     "@semantic-release/release-notes-generator",
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "echo ${nextRelease.version} > VERSION && make generate && make docs"
+        "prepareCmd": "echo ${nextRelease.version} > VERSION && sed -i.bak -E 's/^version = \".*\"/version = \"${nextRelease.version}\"/' pyproject.toml && rm -f pyproject.toml.bak && make generate && make docs"
       }
     ],
     [
       "@semantic-release/git",
       {
-        "assets": ["VERSION", "charts", "RULES.md"],
+        "assets": [
+          "VERSION",
+          "RULES.md",
+          "pyproject.toml",
+          "charts/**/Chart.yaml",
+          "charts/**/README.md"
+        ],
         "message": "chore(release): ${nextRelease.version} [skip ci]"
       }
     ],

@@ -110,6 +110,24 @@
 {{- end -}}
 {{- end -}}
 
+{{/*
+  Refuse a rule whose upstream fix cannot work as written. These are already
+  shipped disabled and marked in RULES.md, but opting one in rendered an object
+  the API server accepts and then prunes - success reported, nothing changed.
+*/}}
+{{- define "cr.brokenPreflight" -}}
+{{- $root := . -}}
+{{- $bad := list -}}
+{{- range $rule, $why := ($root.Values.brokenRules | default dict) -}}
+{{-   if eq (include "cr.ruleActive" (dict "root" $root "rule" $rule)) "true" -}}
+{{-     $bad = append $bad (printf "  %s - %s" $rule $why) -}}
+{{-   end -}}
+{{- end -}}
+{{- if $bad -}}
+{{- fail (printf "%d active rule(s) reproduce an upstream fix that cannot work:\n%s\nPrefer the non-broken alternative in the same group; see RULES.md." (len $bad) (join "\n" (sortAlpha $bad))) -}}
+{{- end -}}
+{{- end -}}
+
 {{/* Count how many rules in the list are active (as an int). */}}
 {{- define "cr.countActive" -}}
 {{- $root := .root -}}

@@ -74,6 +74,12 @@ The collision detector works inside one object. Across objects the MCO decides: 
 - **Directional.** Only "rule active, dependency not" fails. The reverse is legitimate and must not - the operator would not complain either.
 - **Only dependencies this chart emits can be checked.** `cr.ruleActive` resolves through `profileRules` and the `rules` override, and both only carry fix-carrying rules; a dependency outside that set would read as inactive and fail every render. `unverifiable_dependencies()` reports any such case through the CLI, and a datastream test asserts the list is empty, so it is not just a line of output nobody reads.
 
+## Rules whose upstream fix cannot work
+
+`broken_rules()` detects a `tlsSecurityProfile` written with a capitalized `Custom:` and no sibling `type:`. The API server prunes the unknown field, so the remediation applies and does nothing - validated against the genuine CRDs, not inferred.
+
+They were already shipped disabled and marked in `RULES.md`, but that knowledge lived only in docs: opting one in rendered the broken object with no failure. `cr.brokenPreflight` refuses it now. The detection feeds both `RULES.md` and the generated `brokenRules` map, so the two cannot drift.
+
 ## Opt-in rules
 
 `emit.OPT_IN_RULES` ships a rule disabled even though a profile selects it. This is **our** judgement, not an upstream constraint - nothing in the content says not to apply these - so the bar is high: only rules whose failure mode is loss of the node or of the access needed to fix it. Each entry carries its reason, which lands in `values.yaml` next to the entry and as **⚠️ opt-in** in `RULES.md`.

@@ -74,6 +74,16 @@ One difference we cannot mirror: if a pool already has its own `KubeletConfig`, 
 
 Several rules target the **same** object (e.g. four rules edit `APIServer/cluster`). The generator merges disjoint contributions into one object, each rule individually togglable. Some rules are **mutually-exclusive alternatives**, e.g. two rules both write `spec.tlsSecurityProfile`. If more than one such rule is active, the chart **fails to render** with a clear message, forcing you to pick one. See [`RULES.md`](RULES.md) (rules marked ⚠️ alt).
 
+## Rules whose upstream fix cannot work
+
+Two rules reproduce an upstream fix that writes `tlsSecurityProfile.Custom` with a capital C and no sibling `type:`. `Custom` is not a field, so the API server prunes it against the structural schema: the object applies cleanly, reports success, and changes nothing. Validated against the CRDs from `openshift/api` and independently with kubeconform:
+
+```
+at '/spec/tlsSecurityProfile': additional properties 'Custom' not allowed
+```
+
+They ship disabled, are marked stop/broken in [`RULES.md`](RULES.md), and enabling one now **aborts the render** rather than producing an object that quietly does nothing. Prefer the non-broken alternative in the same group.
+
 ## Rules that need an explicit opt-in
 
 A few rules ship **disabled even when a profile selects them**, because applying them can take a node down and the chart has no way to check the precondition first. They are marked **⚠️ opt-in** in [`RULES.md`](RULES.md), the reason sits next to the entry in `values.yaml`, and turning one on is a single line.

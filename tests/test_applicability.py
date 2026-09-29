@@ -639,6 +639,31 @@ class TestRuleDependencies(unittest.TestCase):
         self.assertEqual(emit.unverifiable_dependencies(contents), [])
 
 
+class TestBrokenRules(unittest.TestCase):
+    """Rules whose upstream fix the API server silently prunes."""
+
+    @requires(OCP4, RHCOS4)
+    def test_the_two_known_ones_are_detected(self):
+        contents = [xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))]
+        broken = emit.broken_rules(contents)
+        self.assertEqual(sorted(broken), [
+            "ocp4-api_server_tls_security_profile_custom_min_tls_version",
+            "ocp4-ingress_controller_tls_security_profile_custom_min_tls_version",
+        ])
+        for why in broken.values():
+            self.assertIn("prunes", why)
+
+    @requires(OCP4, RHCOS4)
+    def test_they_ship_disabled_and_are_in_the_map(self):
+        contents = {p: xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))}
+        values = emit.values_yaml(list(contents.values()), "platform", "0.0.0")
+        for name in emit.broken_rules(list(contents.values())):
+            self.assertIn(f"  {name}: false", values)
+        self.assertIn("brokenRules:", values)
+
+
 class TestOptInRules(unittest.TestCase):
     """Rules that ship disabled because applying them can take a node down."""
 
