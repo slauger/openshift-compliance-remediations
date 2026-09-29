@@ -11,11 +11,15 @@ from compliance_remediations_helm import parser as xccdf
 
 
 class TestNameSynthesis(unittest.TestCase):
-    def test_kubeletconfig_prefix(self):
-        self.assertEqual(
-            classify.synthesize_name("KubeletConfig", "kubelet_configure_event_creation"),
-            "compliance-kubelet-configure-event-creation",
-        )
+    def test_kubeletconfig_name_is_per_pool_not_per_rule(self):
+        # The operator consolidates every kubelet remediation for a pool into
+        # one KubeletConfig named after the pool, so the name must not depend
+        # on the rule. The role suffix is appended at render time.
+        for rule_id in ("kubelet_configure_event_creation", "kubelet_enable_protect_kernel_defaults"):
+            self.assertEqual(
+                classify.synthesize_name("KubeletConfig", rule_id),
+                "compliance-operator-kubelet",
+            )
 
     def test_machineconfig_ordering_prefix(self):
         self.assertTrue(

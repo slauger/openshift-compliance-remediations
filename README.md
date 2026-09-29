@@ -62,6 +62,14 @@ Two standalone charts plus a thin umbrella wrapper:
 - `charts/compliance-node/`: `MachineConfig` / `KubeletConfig` remediations (ocp4 node + all rhcos4). Gated behind `node.enabled=false` because applying them triggers **MachineConfigPool rollouts (node reboots)**. Emitted per node role.
 - `charts/compliance-hardening/`: umbrella depending on both subcharts; values are prefixed per subchart (no `global`). Subcharts remain installable standalone.
 
+### KubeletConfig
+
+Kubelet remediations are consolidated the way the operator does it: **one `KubeletConfig` per MachineConfigPool**, named `compliance-operator-kubelet-<pool>`, that every active kubelet rule merges into — not one object per rule.
+
+That is not cosmetic. A `KubeletConfig` without `spec.machineConfigPoolSelector` matches **no** pool (the MCO treats a nil selector as "nothing, not everything") so it would be created and then do nothing. The selector uses `pools.operator.machineconfiguration.openshift.io/<pool>: ""`, which the MCO puts on the built-in `master` and `worker` pools. **If you point `node.roles` at a custom pool, label that pool yourself** — the operator has the same requirement.
+
+One difference we cannot mirror: if a pool already has its own `KubeletConfig`, the operator patches that object; a chart cannot inspect the cluster, so ours is an additional `KubeletConfig` for the pool. OpenShift supports several per pool, applying them in order.
+
 ## Conflicts and alternatives
 
 Several rules target the **same** object (e.g. four rules edit `APIServer/cluster`). The generator merges disjoint contributions into one object, each rule individually togglable. Some rules are **mutually-exclusive alternatives**, e.g. two rules both write `spec.tlsSecurityProfile`. If more than one such rule is active, the chart **fails to render** with a clear message, forcing you to pick one. See [`RULES.md`](RULES.md) (rules marked ⚠️ alt).

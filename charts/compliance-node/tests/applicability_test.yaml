@@ -120,7 +120,7 @@ tests:
   - it: does not gate an unconstrained rule on aarch64
     # Guards against over-gating: only rules with an upstream constraint may be
     # refused.
-    template: templates/kubeletconfig-compliance-kubelet-configure-event-creation.yaml
+    template: templates/kubeletconfig-compliance-operator-kubelet.yaml
     set:
       node:
         enabled: true
@@ -189,7 +189,7 @@ tests:
           count: 0
 
   - it: still renders an unrestricted node rule for every role
-    template: templates/kubeletconfig-compliance-kubelet-configure-event-creation.yaml
+    template: templates/kubeletconfig-compliance-operator-kubelet.yaml
     set:
       node:
         enabled: true
@@ -199,3 +199,40 @@ tests:
     asserts:
       - hasDocuments:
           count: 2
+
+  # --- KubeletConfig consolidation ---------------------------------------
+  - it: merges every active kubelet rule into one object per pool
+    template: templates/kubeletconfig-compliance-operator-kubelet.yaml
+    set:
+      node:
+        enabled: true
+        roles: [worker, master]
+      rules:
+        ocp4-kubelet_configure_event_creation: true
+        ocp4-kubelet_configure_tls_min_version: true
+    asserts:
+      - hasDocuments:
+          count: 2
+      - exists:
+          path: spec.kubeletConfig.eventRecordQPS
+      - exists:
+          path: spec.kubeletConfig.tlsMinVersion
+
+  - it: gives each pool its own selector
+    template: templates/kubeletconfig-compliance-operator-kubelet.yaml
+    documentIndex: 1
+    set:
+      node:
+        enabled: true
+        roles: [worker, master]
+      rules:
+        ocp4-kubelet_configure_event_creation: true
+    asserts:
+      - equal:
+          path: metadata.name
+          value: compliance-operator-kubelet-master
+      - equal:
+          path: spec.machineConfigPoolSelector.matchLabels["pools.operator.machineconfiguration.openshift.io/master"]
+          value: ""
+      - notExists:
+          path: spec.machineConfigPoolSelector.matchLabels["pools.operator.machineconfiguration.openshift.io/worker"]

@@ -53,6 +53,7 @@ XCCDF `<platform>` constraints are parsed and enforced. The leaves of those CPE 
 - **Assuming a fact holds is the safe direction.** `const=True` leaves today's behaviour. `const=False` disables a rule, so it is only allowed where the fact is verifiably impossible on the target - e.g. `package_openssh-server_le_7_5`, since RHCOS ships OpenSSH 8+. Note the counter-example: `package_usbguard` is assumed **true** even though a stock node lacks usbguard, because `rhcos4-package_usbguard_installed` in the same chart installs it.
 - **Group inheritance is not optional.** Rules inherit `<platform>` from ancestor `<Group>`s, and four profile-selected usbguard rules are arch-constrained purely that way. Rule-level parsing alone misses them.
 - **Reduction is by enumeration**, not symbolic simplification: the axis space is four architectures times two HyperShift states. A separability check refuses any expression a per-axis guard could only approximate.
+- **KubeletConfig is consolidated per pool, not per rule.** `classify.synthesize_name` returns a constant for that kind, so every kubelet fix lands in one merge group rendered per role - mirroring the operator's `verifyAndCompleteKC`, which names the object `compliance-operator-kubelet-<pool>` and sets `spec.machineConfigPoolSelector`. The selector is the load-bearing part: without it the MCO matches no pool and the object silently does nothing. It is merged per role (the label contains the pool name), so the render deep-copies `$merged` inside the role loop.
 - **A non-applicable active rule aborts the render**, centrally, listing every offender. Per-architecture overlays (`values-<arch>.yaml`) are generated so the remedy is one `-f`, not a hand-maintained list.
 
 ## Testing notes
@@ -66,6 +67,7 @@ Which layer covers what:
 | Determinism + drift | `make generate` + `git diff --exit-code charts/ RULES.md` in CI | byte-identical regeneration; every generator change surfaces as a reviewable diff of the committed output |
 | helm-unittest (`charts/*/tests/`) | `make test` | rendered object shape per kind, and the fail path when mutually-exclusive alternatives are enabled together |
 | Applicability (`scripts/validate_payloads.py arch`, `charts/*/tests/applicability_test.yaml`) | `make validate-payloads` | renders once per architecture with its overlay, proves the gate fires without it, and that the schema rejects a bad architecture |
+| Object-shape checks (`scripts/validate_payloads.py`) | `make validate-payloads` | every rendered document has a body, and every KubeletConfig a non-empty pool selector - a whole kind can otherwise be a no-op that passes every YAML-level check |
 | Payload validation (`scripts/validate_payloads.py`) | `make validate-payloads` | every profile renders on its own; every Ignition `data:,` payload is decoded and run through the parser that owns that file on the node (`sshd -t`, sysctl/auditd syntax, `ignition-validate`) |
 
 Conventions:

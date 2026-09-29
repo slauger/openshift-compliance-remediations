@@ -1,7 +1,7 @@
 suite: node activation and per-role emission
 tests:
   - it: renders nothing when node.enabled is false (default), even with rule set
-    template: templates/kubeletconfig-compliance-kubelet-configure-event-creation.yaml
+    template: templates/kubeletconfig-compliance-operator-kubelet.yaml
     set:
       rules:
         ocp4-kubelet_configure_event_creation: true
@@ -10,7 +10,7 @@ tests:
           count: 0
 
   - it: emits one object per node role when enabled
-    template: templates/kubeletconfig-compliance-kubelet-configure-event-creation.yaml
+    template: templates/kubeletconfig-compliance-operator-kubelet.yaml
     set:
       node:
         enabled: true
@@ -22,7 +22,7 @@ tests:
           count: 2
 
   - it: synthesizes per-role names and sets the MCP role label
-    template: templates/kubeletconfig-compliance-kubelet-configure-event-creation.yaml
+    template: templates/kubeletconfig-compliance-operator-kubelet.yaml
     documentIndex: 0
     set:
       node:
@@ -33,13 +33,19 @@ tests:
     asserts:
       - equal:
           path: metadata.name
-          value: compliance-kubelet-configure-event-creation-worker
+          value: compliance-operator-kubelet-worker
       - equal:
           path: metadata.labels["machineconfiguration.openshift.io/role"]
           value: worker
+      # A KubeletConfig without this selector matches no pool at all and the
+      # object does nothing. The label is the one the MCO puts on its built-in
+      # pools, and the one the operator sets.
+      - equal:
+          path: spec.machineConfigPoolSelector.matchLabels["pools.operator.machineconfiguration.openshift.io/worker"]
+          value: ""
 
   - it: resolves the kubelet event-record-qps variable default
-    template: templates/kubeletconfig-compliance-kubelet-configure-event-creation.yaml
+    template: templates/kubeletconfig-compliance-operator-kubelet.yaml
     documentIndex: 0
     set:
       node:
