@@ -68,6 +68,29 @@
 {{- end -}}
 {{- end -}}
 
+{{/*
+  Refuse to render a rule whose upstream dependency is switched off. Directional
+  on purpose: the operator will not apply a remediation with an unmet
+  dependency, but the reverse - the dependency applied without the rule that
+  needs it - is perfectly fine and must not fail.
+*/}}
+{{- define "cr.dependencyPreflight" -}}
+{{- $root := . -}}
+{{- $bad := list -}}
+{{- range $rule, $deps := ($root.Values.ruleDependencies | default dict) -}}
+{{-   if eq (include "cr.ruleActive" (dict "root" $root "rule" $rule)) "true" -}}
+{{-     range $dep := $deps -}}
+{{-       if ne (include "cr.ruleActive" (dict "root" $root "rule" $dep)) "true" -}}
+{{-         $bad = append $bad (printf "  %s requires %s, which is not active" $rule $dep) -}}
+{{-       end -}}
+{{-     end -}}
+{{-   end -}}
+{{- end -}}
+{{- if $bad -}}
+{{- fail (printf "%d active rule(s) have an unmet dependency:\n%s\nUpstream marks these with complianceascode.io/depends-on; enable the dependency, or disable the rule that needs it." (len $bad) (join "\n" (sortAlpha $bad))) -}}
+{{- end -}}
+{{- end -}}
+
 {{/* Count how many rules in the list are active (as an int). */}}
 {{- define "cr.countActive" -}}
 {{- $root := .root -}}

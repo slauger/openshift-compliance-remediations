@@ -1,7 +1,7 @@
 suite: applicability gate (HyperShift)
 tests:
   - it: refuses a hosted cluster when a rule upstream excludes it
-    template: templates/applicability.yaml
+    template: templates/preflight.yaml
     set:
       cluster:
         hypershift: true
@@ -12,7 +12,7 @@ tests:
           errorPattern: "ocp4-api_server_encryption_provider_cipher - not applicable when cluster.hypershift is true"
 
   - it: passes on a standalone cluster
-    template: templates/applicability.yaml
+    template: templates/preflight.yaml
     set:
       rules:
         ocp4-api_server_encryption_provider_cipher: true
