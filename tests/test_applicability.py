@@ -39,6 +39,7 @@ KERNEL = FactRef("system_with_kernel")
 CHRONY = FactRef("package_chrony")
 NTP = FactRef("package_ntp")
 OPENSSH_7_5 = FactRef("package_openssh-server_le_7_5")
+MASTER_NODE = FactRef("node_is_ocp4_master_node")
 
 
 class TestReduce(unittest.TestCase):
@@ -98,6 +99,32 @@ class TestVocabularyIsClosed(unittest.TestCase):
             self.assertNotEqual(
                 fact.const is None, fact.axis is None,
                 f"{name} must be exactly one of const or axis")
+
+
+class TestSafeDirections(unittest.TestCase):
+    """Where the reduction is unsure, it must not drop hardening silently."""
+
+    def test_a_negated_role_fact_raises(self):
+        # "any pool but master" is the opposite of "master only". Guessing
+        # would remove hardening from the pools the rule applies to.
+        expr = _and(MASTER_NODE, negate=True)
+        with self.assertRaises(ap.UnsupportedFact) as cm:
+            ap._roles_for(expr, "rhcos4-some_rule")
+        self.assertIn("negated", str(cm.exception))
+
+    def test_an_expression_with_no_classified_leaves_is_unconstrained(self):
+        # Bare CPE product names are dropped by the parser, so an OR can end
+        # up empty. `any([])` is False, which would pre-disable the rule.
+        self.assertFalse(ap.reduce([LogicalTest("OR", False, ())], where="x").never)
+        self.assertTrue(ap.reduce([LogicalTest("OR", False, ())],
+                                  where="x").unconstrained)
+
+    def test_an_empty_role_intersection_stays_empty(self):
+        # An empty set is a real answer ("no pool"), not "unrestricted" - it
+        # must not be overwritten by the next expression's role set.
+        expr = _and(MASTER_NODE)
+        app = ap.reduce([expr], where="x")
+        self.assertFalse(app.never)
 
 
 class TestNonSeparable(unittest.TestCase):
@@ -279,9 +306,6 @@ class TestUnconstrainedRules(unittest.TestCase):
 
     def test_all_three_rules_still_produce_objects(self):
         self.assertEqual(len(self.templates), 3)
-
-
-MASTER_NODE = FactRef("node_is_ocp4_master_node")
 
 
 class TestRoleRestriction(unittest.TestCase):

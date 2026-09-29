@@ -177,6 +177,20 @@ HELPERS_TPL = """\
 {{- if $any -}}true{{- else -}}false{{- end -}}
 {{- end -}}
 
+{{/*
+  Percent-encode a value substituted into an Ignition data URI. The operator
+  runs url.PathEscape over its own substituted output; the chart keeps the
+  payload encoded and injects the value, so the value has to be encoded here.
+  Without it a value containing a space and a # is read as a YAML comment and
+  the rest of the data: scalar - the rest of the config file - disappears with
+  no error. `%` goes first, or it would double-encode the escapes below.
+  Quotes and backslashes are not handled here: values.schema.json rejects them
+  outright, which is a clearer failure than an encoded surprise.
+*/}}
+{{- define "cr.enc" -}}
+{{- . | toString | replace "%" "%25" | replace " " "%20" | replace "#" "%23" | replace "&" "%26" | replace "?" "%3F" | replace "+" "%2B" -}}
+{{- end -}}
+
 {{/* Canonical `uname -m` architecture; the Kubernetes spellings are accepted. */}}
 {{- define "cr.arch" -}}
 {{- $a := .Values.cluster.architecture | toString -}}
@@ -1221,7 +1235,19 @@ def values_schema(contents: list[Content], layer: str) -> str:
 
     profile_props = {p: {"type": "boolean"} for p in profiles}
     rule_props = {r: {"type": "boolean"} for r in rule_names}
-    var_props = {v: {"type": ["string", "number"]} for v in var_names}
+    # A variable value is interpolated into YAML, and for the encoded payloads
+    # into a data URI. cr.enc handles the URI side; this forbids what would
+    # break the YAML side before it silently truncates a config file: a `#`
+    # starts a comment, quotes and backslashes break the scalar, and leading or
+    # trailing whitespace is never intended. Internal spaces are allowed - and
+    # encoded where they matter. Go's regexp has no lookaround, hence the
+    # character classes. Built with a raw string so the escapes survive into
+    # the JSON unchanged.
+    inner = r"[^\n\t#'\"\\]"
+    edge = r"[^\s#'\"\\]"
+    var_pattern = rf"^{edge}({inner}*{edge})?$"
+    var_props = {v: {"type": ["string", "number"], "pattern": var_pattern}
+                 for v in var_names}
 
     schema = {
         "$schema": "https://json-schema.org/draft-07/schema#",

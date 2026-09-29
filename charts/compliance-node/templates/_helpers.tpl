@@ -32,6 +32,20 @@
 {{- if $any -}}true{{- else -}}false{{- end -}}
 {{- end -}}
 
+{{/*
+  Percent-encode a value substituted into an Ignition data URI. The operator
+  runs url.PathEscape over its own substituted output; the chart keeps the
+  payload encoded and injects the value, so the value has to be encoded here.
+  Without it a value containing a space and a # is read as a YAML comment and
+  the rest of the data: scalar - the rest of the config file - disappears with
+  no error. `%` goes first, or it would double-encode the escapes below.
+  Quotes and backslashes are not handled here: values.schema.json rejects them
+  outright, which is a clearer failure than an encoded surprise.
+*/}}
+{{- define "cr.enc" -}}
+{{- . | toString | replace "%" "%25" | replace " " "%20" | replace "#" "%23" | replace "&" "%26" | replace "?" "%3F" | replace "+" "%2B" -}}
+{{- end -}}
+
 {{/* Canonical `uname -m` architecture; the Kubernetes spellings are accepted. */}}
 {{- define "cr.arch" -}}
 {{- $a := .Values.cluster.architecture | toString -}}

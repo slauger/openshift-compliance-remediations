@@ -95,7 +95,14 @@ def _resolve_value(value: Value, selector: str | None) -> str:
 def _find_value(content: Content, name: str) -> Value | None:
     # Value ids are stored without the "var_" prefix in some content, with it
     # in others. Try both.
-    return content.values.get(name) or content.values.get(name[len("var_"):])
+    direct = content.values.get(name)
+    if direct is not None:
+        return direct
+    # Only strip the prefix if it is actually there: not every variable carries
+    # it (sshd_idle_timeout_value), and slicing blindly looked up a mangled id.
+    if name.startswith("var_"):
+        return content.values.get(name[len("var_"):])
+    return None
 
 
 def resolve_defaults(content: Content, default_profile: str | None = None) -> dict[str, str]:
@@ -149,7 +156,16 @@ def resolve_defaults(content: Content, default_profile: str | None = None) -> di
     return resolved
 
 
-def _helm_ref(name: str) -> str:
+def _helm_ref(name: str, encode: bool = False) -> str:
+    """A Helm reference to a chart variable.
+
+    ``encode`` wraps it in cr.enc, for a reference sitting inside a
+    percent-encoded Ignition payload: the operator runs url.PathEscape over its
+    own substituted output, and a raw space or ``#`` in a ``data:,`` URI
+    truncates the file that lands on the node without any error.
+    """
+    if encode:
+        return f'{{{{ include "cr.enc" .Values.variables.{name} }}}}'
     return f"{{{{ .Values.variables.{name} }}}}"
 
 
@@ -168,6 +184,11 @@ def _translate_action(encoded: str) -> str:
     using one, `make generate` fails loudly and the translation gets extended.
     """
     body = urllib.parse.unquote(encoded).strip()
+    # The common shape by far: the whole action is one variable reference.
+    # Encode it, since it lands inside a percent-encoded payload.
+    plain = _PLAIN_INNER_RE.fullmatch(body)
+    if plain:
+        return _helm_ref(plain.group(1), encode=True)
     unsupported = sorted(set(_BARE_WORD_RE.findall(body)) - _SUPPORTED_WORDS)
     if unsupported:
         raise ValueError(

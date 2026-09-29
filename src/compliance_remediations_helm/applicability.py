@@ -183,7 +183,13 @@ def _evaluate(node, assignment: dict, where: str) -> bool:
             return fact.const
         return assignment[fact.axis] in fact.true_when
     results = [_evaluate(c, assignment, where) for c in node.children]
-    value = all(results) if node.operator == "AND" else any(results)
+    if not results:
+        # Every child was a bare CPE product name, which the parser drops by
+        # design. `any([])` is False, which would make the rule never
+        # applicable and pre-disable it; vacuous truth is the safe direction.
+        value = True
+    else:
+        value = all(results) if node.operator == "AND" else any(results)
     return not value if node.negate else value
 
 
@@ -246,6 +252,12 @@ def reduce(exprs, platform_ids=(), where="<unknown>") -> Applicability:
                          reasons=reasons)
 
 
+def _has_negation(node) -> bool:
+    if isinstance(node, FactRef):
+        return False
+    return node.negate or any(_has_negation(c) for c in node.children)
+
+
 def _roles_for(expr, where: str) -> frozenset:
     """Role restriction carried by one CPE expression, if any.
 
@@ -257,6 +269,14 @@ def _roles_for(expr, where: str) -> frozenset:
     role_names = [n for n in names if n in ROLE_FACTS]
     if not role_names:
         return frozenset()
+    if _has_negation(expr):
+        # A negated role fact means "any pool but this one", which is the
+        # opposite of what the unnegated form says. Guessing here would remove
+        # hardening from the pools it applies to.
+        raise UnsupportedFact(
+            f"role fact {role_names[0]!r} appears negated on {where}; teach "
+            f"_roles_for how to invert it rather than guessing"
+        )
     if len(names) > 1:
         raise UnsupportedFact(
             f"role fact {role_names[0]!r} appears in a compound expression on "
@@ -293,12 +313,15 @@ def build_map(contents) -> dict[str, Applicability]:
             if not exprs:
                 continue
             app = reduce(exprs, ids, where=rule.helm_name)
-            roles: frozenset = frozenset()
+            roles: frozenset | None = None
             for expr in exprs:
                 r = _roles_for(expr, rule.helm_name)
                 if r:
-                    roles = roles & r if roles else r
-            app.roles = roles
+                    # None means "not restricted yet"; an empty *set* is a real
+                    # answer ("applies to no pool") and must not be read as
+                    # "unrestricted" and then overwritten by the next set.
+                    roles = r if roles is None else roles & r
+            app.roles = roles if roles is not None else frozenset()
             if not app.unconstrained:
                 out[rule.helm_name] = app
     return out
