@@ -56,6 +56,17 @@ XCCDF `<platform>` constraints are parsed and enforced. The leaves of those CPE 
 - **KubeletConfig is consolidated per pool, not per rule.** `classify.synthesize_name` returns a constant for that kind, so every kubelet fix lands in one merge group rendered per role - mirroring the operator's `verifyAndCompleteKC`, which names the object `compliance-operator-kubelet-<pool>` and sets `spec.machineConfigPoolSelector`. The selector is the load-bearing part: without it the MCO matches no pool and the object silently does nothing. It is merged per role (the label contains the pool name), so the render deep-copies `$merged` inside the role loop.
 - **A non-applicable active rule aborts the render**, centrally, listing every offender. Per-architecture overlays (`values-<arch>.yaml`) are generated so the remedy is one `-f`, not a hand-maintained list.
 
+## Conflicts across objects
+
+The collision detector works inside one object. Across objects the MCO decides: `MergeMachineConfigs` sorts alphanumerically, takes the first Ignition config as the base and merges the rest, so for a duplicate file path the later MachineConfig silently wins.
+
+`cross_object_file_conflicts()` finds paths two different objects write differently and emits a `fail` guard per path into the generated `preflight.yaml`. Two things it gets right and a naive version would not:
+
+- **Conflicts are between content groups, not rules.** 31 rules write the same `/etc/ssh/sshd_config` and are fine together; only the one that differs makes it a conflict.
+- **Each guard carries its version window.** The drop-ins exist from 4.13, the whole-file variants only below it. Without `semverCompare` a guard would fire where the fragments do not even render - and break every profile.
+
+`RULES.md` marks only the genuinely pairwise cases ⚠️ alt; marking all 32 sshd rules would be noise, so the legend covers that case in prose.
+
 ## Rule dependencies
 
 `complianceascode.io/depends-on` is parsed onto `Rule.depends_on` and enforced by `cr.dependencyPreflight`, next to the applicability preflight in the same generated `preflight.yaml`.
@@ -80,12 +91,14 @@ Which layer covers what:
 | Determinism + drift | `make generate` + `git diff --exit-code charts/ RULES.md` in CI | byte-identical regeneration; every generator change surfaces as a reviewable diff of the committed output |
 | helm-unittest (`charts/*/tests/`) | `make test` | rendered object shape per kind, and the fail path when mutually-exclusive alternatives are enabled together |
 | Applicability (`scripts/validate_payloads.py arch`, `charts/*/tests/applicability_test.yaml`) | `make validate-payloads` | renders once per architecture with its overlay, proves the gate fires without it, and that the schema rejects a bad architecture |
+| Cross-object files (`scripts/validate_payloads.py`) | `make validate-payloads` | no two MachineConfigs for one pool write the same path with different content - the collision detector only sees inside one object, and across objects the MCO silently takes the alphanumerically later one |
 | Object-shape checks (`scripts/validate_payloads.py`) | `make validate-payloads` | every rendered document has a body, and every KubeletConfig a non-empty pool selector - a whole kind can otherwise be a no-op that passes every YAML-level check |
 | Payload validation (`scripts/validate_payloads.py`) | `make validate-payloads` | every profile renders on its own; every Ignition `data:,` payload is decoded and run through the parser that owns that file on the node (`sshd -t`, sysctl/auditd syntax, `ignition-validate`) |
 
 Conventions:
 
 - Assertions against the datastream are **invariants, never exact counts**. A content bump must not require editing a number in `tests/`; if it does, the assertion was a change detector and the real intent belongs in the test instead. Exact counts live in the committed `charts/` diff, which is reviewed on every regeneration.
+- **The generator is stdlib-only; the tests are not.** `dependencies = []` in `pyproject.toml` is about the shipped package - `src/` must import nothing outside the standard library. `tests/` and `scripts/` may use the `dev` extra, and `make test-py` installs it, because the tests that cover `scripts/validate_payloads.py` need the same PyYAML it does.
 - The datastream tests skip when `.cache/` is absent so a fresh clone can still run the offline half. `make test-py` depends on `fetch` and sets `REQUIRE_DATASTREAM=1`, which turns that skip into a failure - a green `make test-py` always means the gated tests actually ran.
 - A manifest can be valid YAML, a valid MachineConfig and still write a file the node rejects: the Ignition `data:,` payload is an opaque string to every YAML-level tool. That is what `validate_payloads.py` looks at, matrixed over `cluster.ocpVersion` because version-gated fix variants mean a payload can be correct at 4.18 and broken at 4.12. Checks whose tool is missing are reported as skipped, never silently passed.
 - The charts target OpenShift/OKD CRDs (APIServer, MachineConfig, KubeletConfig, etc.). They cannot be applied to a vanilla Kubernetes cluster; use `helm template`/`lint`/`unittest` locally and apply on a real OpenShift/OKD cluster.

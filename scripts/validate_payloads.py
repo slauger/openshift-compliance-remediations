@@ -248,6 +248,10 @@ def validate_payloads(fnd: Findings) -> None:
             fnd.error(where, f"render failed: {exc}")
             continue
         docs = [d for d in yaml.safe_load_all(rendered) if d]
+        # Everything enabled at this version: the widest set of objects the
+        # chart can produce, and where a cross-object file collision would
+        # show up first.
+        check_cross_object_files(where, docs, fnd)
         for mc, path, _mode, body in iter_files(docs):
             loc = f"{where}/{mc}"
             if not fnd.first_time(f"payload:{path}", body):
@@ -327,6 +331,40 @@ def check_pool_selectors(where: str, docs: list, fnd: Findings) -> None:
         fnd.ok("kubeletconfig-pool-selector")
 
 
+def check_cross_object_files(where: str, docs: list, fnd: Findings) -> None:
+    """No two MachineConfigs for one pool may write the same path differently.
+
+    The collision detector only sees inside one object. Across objects it is
+    the MCO that decides: MergeMachineConfigs sorts alphanumerically, uses the
+    first Ignition config as the base and merges the rest, so for a duplicate
+    file path the later MachineConfig silently wins. Identical content makes
+    that harmless - 32 rules write /etc/ssh/sshd_config and every rendered one
+    carries the same bytes - but nothing enforced it, and a content bump could
+    change that without a single check noticing.
+    """
+    seen: dict = {}
+    for doc in docs:
+        if not doc or doc.get("kind") != "MachineConfig":
+            continue
+        role = (doc.get("metadata", {}).get("labels") or {}).get(
+            "machineconfiguration.openshift.io/role", "")
+        name = doc.get("metadata", {}).get("name", "<unnamed>")
+        storage = (doc.get("spec", {}).get("config", {}) or {}).get("storage") or {}
+        for f in storage.get("files") or []:
+            source = (f.get("contents") or {}).get("source")
+            if not isinstance(source, str):
+                continue
+            key = (role, f.get("path"))
+            digest = hashlib.sha256(source.encode()).hexdigest()
+            if key in seen and seen[key][0] != digest:
+                fnd.error(where, f"{f.get('path')} is written differently by "
+                                 f"{seen[key][1]} and {name} for role {role!r}; "
+                                 f"the MCO would silently take one of them")
+                return
+            seen.setdefault(key, (digest, name))
+    fnd.ok("no-cross-object-file-collisions")
+
+
 def validate_renders(fnd: Findings) -> None:
     for chart, extra in ((PLATFORM, {}), (NODE, {"node.enabled": "true"})):
         for profile in profiles_of(chart):
@@ -355,6 +393,7 @@ def validate_renders(fnd: Findings) -> None:
                 seen[key] = where
             check_object_has_body(where, docs, fnd)
             check_pool_selectors(where, docs, fnd)
+            check_cross_object_files(where, docs, fnd)
             fnd.ok("render")
 
 
@@ -386,6 +425,7 @@ def validate_architectures(fnd: Findings) -> None:
         docs = [d for d in yaml.safe_load_all(rendered) if d]
         check_object_has_body(where, docs, fnd)
         check_pool_selectors(where, docs, fnd)
+        check_cross_object_files(where, docs, fnd)
         counts[arch] = len(docs)
         fnd.ok("arch-render")
 

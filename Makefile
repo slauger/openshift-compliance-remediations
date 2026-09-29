@@ -42,6 +42,7 @@ test:
 ## tests skip without .cache, and REQUIRE_DATASTREAM turns that skip into a
 ## failure so a green run never means "asserted nothing".
 test-py: fetch
+	$(VENV)/bin/pip install -q -e '.[dev]'
 	REQUIRE_DATASTREAM=1 $(PY) -m unittest discover -s tests -v
 
 ## Validate what the charts write to a node: render every profile, then decode

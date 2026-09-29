@@ -527,15 +527,109 @@ def _cluster_block(indent: str = "") -> list[str]:
     return [f"{indent}{line}" if line else line for line in lines]
 
 
-PREFLIGHT_TPL = """\
-{{- /*
-  Preflight. Renders nothing; aborts when an active rule is one the Compliance
-  Operator would refuse to apply - because it does not apply to this cluster,
-  or because a rule it depends on is switched off.
-*/ -}}
-{{- include "cr.applicabilityPreflight" . -}}
-{{- include "cr.dependencyPreflight" . -}}
-"""
+def _file_entries(doc_yaml: str) -> dict[str, str]:
+    """path -> contents.source, for every file an Ignition fix writes.
+
+    Regex rather than a YAML parse because the generator is stdlib-only, and
+    all this needs is to compare two sources for equality.
+    """
+    body = _fragment_body(doc_yaml)
+    m = re.search(r"(?m)^\s*files:\s*$", body)
+    if not m:
+        return {}
+    out: dict[str, str] = {}
+    for item in re.split(r"(?m)^\s+-\s", body[m.end():])[1:]:
+        path = re.search(r"(?m)^\s*path:\s*(\S+)", item)
+        source = re.search(r"(?m)^\s*source:\s*(.+)$", item)
+        if path and source:
+            out[path.group(1)] = source.group(1).strip()
+    return out
+
+
+def cross_object_file_conflicts(groups, layer: str) -> list[dict]:
+    """Paths that two different objects write with different content.
+
+    The collision detector works inside one object. Across objects the MCO
+    decides, and it merges alphanumerically, so the later MachineConfig wins
+    silently. Upstream's sshd drop-ins make this reachable: `enable` and
+    `disable` variants of the same setting are separate rules writing the same
+    file, which makes them mutually-exclusive alternatives that no per-object
+    check can see.
+
+    The conflict is between *content groups*, not between every rule touching
+    the path - 31 rules write the same /etc/ssh/sshd_config and are perfectly
+    fine together. Each group carries the version constraints of the fragments
+    in it, so a guard only fires in the window where they actually render.
+    """
+    by_path: dict[str, dict[str, dict[str, set]]] = {}
+    for g in groups:
+        if g.key.layer != layer:
+            continue
+        for doc in g.docs:
+            for path, source in _file_entries(doc.yaml).items():
+                group = by_path.setdefault(path, {}).setdefault(
+                    source, {"rules": set(), "versions": set()})
+                group["rules"].add(doc.rule_id)
+                group["versions"].add(doc.ocp_version)
+
+    out: list[dict] = []
+    for path, by_source in sorted(by_path.items()):
+        if len(by_source) < 2:
+            continue
+        groups_here = [
+            {"rules": sorted(v["rules"]), "versions": sorted(x for x in v["versions"] if x)}
+            for v in by_source.values()
+        ]
+        # A path only conflicts if two different rules disagree. One rule with
+        # two version variants of the same file is the version gate doing its
+        # job, not an alternative.
+        if len({r for grp in groups_here for r in grp["rules"]}) < 2:
+            continue
+        out.append({"path": path, "groups": sorted(
+            groups_here, key=lambda g: g["rules"])})
+    return out
+
+
+def preflight_template(conflicts: list[dict]) -> str:
+    """The preflight: applicability, dependencies, and cross-object files."""
+    lines = [
+        "{{- /*",
+        "  Preflight. Renders nothing; aborts when an active rule is one the",
+        "  Compliance Operator would refuse to apply - because it does not apply",
+        "  to this cluster, or because a rule it depends on is switched off - or",
+        "  when two active rules would write the same file differently.",
+        "*/ -}}",
+        '{{- include "cr.applicabilityPreflight" . -}}',
+        '{{- include "cr.dependencyPreflight" . -}}',
+    ]
+    for conflict in conflicts:
+        path = conflict["path"]
+        groups = conflict["groups"]
+        # Active in more than one content group == the MCO would have to pick.
+        active = []
+        for idx, grp in enumerate(groups):
+            rule_list = " ".join(_go_str(r) for r in grp["rules"])
+            lines.append(
+                f'{{{{- $g{idx} := int (include "cr.countActive" '
+                f'(dict "root" . "rules" (list {rule_list}))) -}}}}')
+            active.append(f"(gt $g{idx} 0)")
+        versions = sorted({v for grp in groups for v in grp["versions"]})
+        cond = " ".join(active)
+        cond = f"and {cond}" if len(active) == 2 else "and " + " ".join(active)
+        for v in versions:
+            cond = f"and ({cond}) ({_ocp_semver_expr(v)})"
+        names = " / ".join(", ".join(g["rules"]) for g in groups)
+        msg = (f"Conflicting compliance rules active: {names} write {path} with "
+               f"different content. They are separate objects, so nothing on the "
+               f"cluster would reject this - the MachineConfig Operator merges "
+               f"alphanumerically and the last one silently wins. Enable only "
+               f"one side.")
+        lines.append(f"{{{{- if {cond} -}}}}")
+        lines.append(f"{{{{- fail {_go_str(msg)} -}}}}")
+        lines.append("{{- end -}}")
+    return "\n".join(lines) + "\n"
+
+
 
 
 def _excluded_for_arch(appl: dict, layer_rules: set, arch: str) -> dict[str, str]:
@@ -989,7 +1083,9 @@ def _write_layer_chart(chart_dir: Path, name: str, description: str,
         values_schema(contents, layer), encoding="utf-8")
     (chart_dir / "README.md.gotmpl").write_text(README_GOTMPL, encoding="utf-8")
     (tpl / "_helpers.tpl").write_text(HELPERS_TPL, encoding="utf-8")
-    (tpl / "preflight.yaml").write_text(PREFLIGHT_TPL, encoding="utf-8")
+    (tpl / "preflight.yaml").write_text(
+        preflight_template(cross_object_file_conflicts(groups, layer)),
+        encoding="utf-8")
 
     # One ready-made overlay per architecture that has exclusions. Stale
     # overlays are removed so a content bump cannot leave one behind.
@@ -1131,6 +1227,16 @@ def rules_matrix(contents: dict[str, Content], version: str,
         for c in g.conflicts():
             conflicting.update(c.rules)
 
+    # Cross-object alternatives: two rules writing one file differently. Mark
+    # only the genuinely pairwise ones. /etc/ssh/sshd_config is written by 31
+    # rules with identical content plus one that differs, and marking all 32
+    # would be noise - the legend covers that case in prose instead.
+    for layer in ("platform", "node"):
+        for conflict in cross_object_file_conflicts(groups, layer):
+            if all(len(grp["rules"]) == 1 for grp in conflict["groups"]):
+                for grp in conflict["groups"]:
+                    conflicting.update(grp["rules"])
+
     # Detect upstream-broken fixes: a tlsSecurityProfile written with a
     # capitalized `Custom:` block but no sibling `type:` - the OpenShift API
     # ignores it, so selecting this alternative is a silent no-op.
@@ -1192,7 +1298,15 @@ def rules_matrix(contents: dict[str, Content], version: str,
         "",
         "One row per rule that carries a Kubernetes remediation. Rules marked "
         "**⚠️ alt** are mutually-exclusive alternatives: enabling more than one "
-        "that targets the same object makes the chart fail - pick one. Rules "
+        "that targets the same object makes the chart fail - pick one. The same "
+        "applies across objects: upstream's sshd drop-ins put the `enable` and "
+        "`disable` variant of a setting in separate rules writing the same "
+        "file, and since nothing on the cluster would reject that (the "
+        "MachineConfig Operator merges alphanumerically and the last one wins) "
+        "the chart refuses instead. Below OpenShift 4.13 the sshd rules write "
+        "the whole `sshd_config` rather than drop-ins, where "
+        "`rhcos4-disable_host_auth` conflicts with the rest of the family. "
+        "Rules "
         "marked **⛔ broken** reproduce an upstream fix that the OpenShift API "
         "ignores (e.g. a `Custom:` TLS block without `type: Custom`) - selecting "
         "them is a no-op; prefer the non-broken alternative in the same group. "
