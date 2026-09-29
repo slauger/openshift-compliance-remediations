@@ -56,6 +56,12 @@ XCCDF `<platform>` constraints are parsed and enforced. The leaves of those CPE 
 - **KubeletConfig is consolidated per pool, not per rule.** `classify.synthesize_name` returns a constant for that kind, so every kubelet fix lands in one merge group rendered per role - mirroring the operator's `verifyAndCompleteKC`, which names the object `compliance-operator-kubelet-<pool>` and sets `spec.machineConfigPoolSelector`. The selector is the load-bearing part: without it the MCO matches no pool and the object silently does nothing. It is merged per role (the label contains the pool name), so the render deep-copies `$merged` inside the role loop.
 - **A non-applicable active rule aborts the render**, centrally, listing every offender. Per-architecture overlays (`values-<arch>.yaml`) are generated so the remedy is one `-f`, not a hand-maintained list.
 
+## Opt-in rules
+
+`emit.OPT_IN_RULES` ships a rule disabled even though a profile selects it. This is **our** judgement, not an upstream constraint - nothing in the content says not to apply these - so the bar is high: only rules whose failure mode is loss of the node or of the access needed to fix it. Each entry carries its reason, which lands in `values.yaml` next to the entry and as **⚠️ opt-in** in `RULES.md`.
+
+Resist growing this list. Disabling a rule that a compliance profile selects is a deviation from that profile; the chart's job is to implement the profile, not to second-guess it. "This reboots nodes" is not a reason - the whole node chart does that, which is why it is gated behind `node.enabled`.
+
 ## Testing notes
 
 Which layer covers what:

@@ -74,6 +74,23 @@ One difference we cannot mirror: if a pool already has its own `KubeletConfig`, 
 
 Several rules target the **same** object (e.g. four rules edit `APIServer/cluster`). The generator merges disjoint contributions into one object, each rule individually togglable. Some rules are **mutually-exclusive alternatives**, e.g. two rules both write `spec.tlsSecurityProfile`. If more than one such rule is active, the chart **fails to render** with a clear message, forcing you to pick one. See [`RULES.md`](RULES.md) (rules marked ⚠️ alt).
 
+## Rules that need an explicit opt-in
+
+A few rules ship **disabled even when a profile selects them**, because applying them can take a node down and the chart has no way to check the precondition first. They are marked **⚠️ opt-in** in [`RULES.md`](RULES.md), the reason sits next to the entry in `values.yaml`, and turning one on is a single line.
+
+Currently four:
+
+| Rule | Why |
+| --- | --- |
+| `ocp4-kubelet_enable_protect_kernel_defaults` | the kubelet refuses to start unless the kernel parameters it expects are already set |
+| `rhcos4-service_sshd_disabled` | masks `sshd.service` and `sshd.socket`, removing the recovery path into a node |
+| `rhcos4-coreos_nousb_kernel_argument` | boots with `nousb`; on bare metal that disables USB keyboards, so the console stops being a way back in |
+| `rhcos4-coreos_page_poison_kernel_argument` | `page_poison=1` carries a measurable runtime cost |
+
+The first one deserves a word on ordering. `protectKernelDefaults: true` makes the kubelet refuse to start unless the kernel parameters it expects are already set — nodes go NotReady pool by pool as the rollout proceeds. The companion rule that sets those parameters (`ocp4-kubelet_enable_protect_kernel_sysctl`) is a MachineConfig and stays enabled, so the safe order is: let the sysctl remediation roll out, confirm the nodes are healthy, then enable this one.
+
+The bar for this list is deliberately high — only rules whose failure mode is losing the node, or losing the access needed to fix it. A chart that quietly waters down the profile it claims to implement would be worse than one that reboots a node.
+
 ## Applicability
 
 Upstream rules carry XCCDF `<platform>` constraints. The Compliance Operator evaluates them at scan time and reports a rule that does not apply as `notapplicable`, generating no remediation for it. The charts mirror that: rather than shipping a remediation the operator would never produce, they **refuse to render** and name every offending rule at once.
@@ -148,6 +165,25 @@ node:
   roles:                      # MachineConfigPool roles; combined master+worker nodes
     - worker                  # (SNO/OKD) land in the master pool, so include master
     - master
+```
+
+## Time synchronisation
+
+Five chrony rules ship the **whole** `/etc/chrony.conf`, not just their own setting, and upstream makes them byte-identical — so they are consolidated into one MachineConfig (`75-ocp4-chrony`) instead of five writing the same three files. Enabling any one of them still renders the full configuration.
+
+The default NTP servers are the public pool, which plenty of clusters cannot reach. Since these rules overwrite chrony's configuration wholesale, **check this before enabling any of them** — a node that cannot sync time will eventually break etcd and certificate validation. Point them at your own servers with the existing variables:
+
+```yaml
+variables:
+  var_multiple_time_servers: "ntp1.intern.example.com,ntp2.intern.example.com"
+  var_time_service_set_maxpoll: "10"
+```
+
+which renders:
+
+```
+server ntp1.intern.example.com minpoll 4 maxpoll 10
+server ntp2.intern.example.com minpoll 4 maxpoll 10
 ```
 
 ## Tunable variables
