@@ -61,11 +61,14 @@ node:
 
 # -- Per-rule override / blacklist. Explicit value wins over profiles.
 # Key is the product-namespaced rule name, e.g. ocp4-audit_profile_set: false
-# Pre-populated below with two kinds of entry: for each group of
+# Pre-populated below with three kinds of entry: for each group of
 # mutually-exclusive alternatives the losers are disabled so whitelisting a
 # whole profile renders out of the box (flip these to choose a different
-# alternative), and rules upstream marks as never applicable to this target.
+# alternative), rules upstream marks as never applicable to this target,
+# and rules that need an explicit opt-in because applying them can take a
+# node down. See RULES.md for which is which.
 rules:
+  ocp4-kubelet_enable_protect_kernel_defaults: false  # opt-in: kubelet refuses to start if the kernel parameters it expects are not already set; nodes go NotReady pool by pool
   rhcos4-kernel_module_vfat_disabled: false  # UEFI boot is assumed; enable the rule explicitly for BIOS nodes
   rhcos4-sshd_allow_only_protocol2: false  # RHCOS ships OpenSSH 8 or newer
   rhcos4-sshd_use_priv_separation: false  # RHCOS ships OpenSSH 8 or newer

@@ -402,6 +402,23 @@ def _rule_applicability_block(appl: dict, layer_rules: set) -> str:
     return "\n".join(lines)
 
 
+# Rules that ship disabled and need an explicit opt-in, because applying them
+# by whitelisting a profile can take a node or a cluster down. This is our
+# judgement, not an upstream constraint - unlike applicability, nothing in the
+# content says these should not be applied. Each entry carries the reason, it
+# appears in RULES.md, and flipping it to true is one line.
+#
+# The bar is deliberately high: only rules whose failure mode is loss of the
+# node or of the access needed to fix it. Everything else stays on, because a
+# chart that silently waters down the profile it claims to implement is worse
+# than one that reboots a node.
+OPT_IN_RULES: dict[str, str] = {
+    "ocp4-kubelet_enable_protect_kernel_defaults":
+        "kubelet refuses to start if the kernel parameters it expects are not "
+        "already set; nodes go NotReady pool by pool",
+}
+
+
 def _cluster_block(indent: str = "") -> list[str]:
     """Facts about the target cluster, used to evaluate rule applicability.
 
@@ -510,13 +527,16 @@ def values_yaml(contents: list[Content], layer: str, content_version: str,
         "",
         "# -- Per-rule override / blacklist. Explicit value wins over profiles.",
         "# Key is the product-namespaced rule name, e.g. ocp4-audit_profile_set: false",
-        "# Pre-populated below with two kinds of entry: for each group of",
+        "# Pre-populated below with three kinds of entry: for each group of",
         "# mutually-exclusive alternatives the losers are disabled so whitelisting a",
         "# whole profile renders out of the box (flip these to choose a different",
-        "# alternative), and rules upstream marks as never applicable to this target.",
+        "# alternative), rules upstream marks as never applicable to this target,",
+        "# and rules that need an explicit opt-in because applying them can take a",
+        "# node down. See RULES.md for which is which.",
     ]
     disabled = dict(default_disabled_rules(contents))
     disabled.update(applicability.never_applicable_rules(appl))
+    disabled.update({r: f"opt-in: {why}" for r, why in OPT_IN_RULES.items()})
     layer_rules = {r.helm_name for c in contents for r in rules_with_fixes(c).values()
                    if _rule_layer(r) == layer}
     layer_disabled = {r: why for r, why in disabled.items() if r in layer_rules}
@@ -1053,6 +1073,8 @@ def rules_matrix(contents: dict[str, Content], version: str,
             app = appl.get(hn)
             if app is not None and app.never:
                 marks.append("⛔ n/a")
+            if hn in OPT_IN_RULES:
+                marks.append("⚠️ opt-in")
             mark = (" " + " ".join(marks)) if marks else ""
             applies = applicability.describe(app) if app is not None else "-"
             rows.append(
@@ -1071,7 +1093,10 @@ def rules_matrix(contents: dict[str, Content], version: str,
         "that targets the same object makes the chart fail - pick one. Rules "
         "marked **⛔ broken** reproduce an upstream fix that the OpenShift API "
         "ignores (e.g. a `Custom:` TLS block without `type: Custom`) - selecting "
-        "them is a no-op; prefer the non-broken alternative in the same group.",
+        "them is a no-op; prefer the non-broken alternative in the same group. "
+        "Rules marked **⚠️ opt-in** ship disabled even though a profile selects "
+        "them, because applying them can take a node down - the reason is in "
+        "`values.yaml` next to the entry, and enabling one is a single line.",
         "",
         "The **Applicability** column carries the upstream `<platform>` constraint. "
         "The Compliance Operator evaluates these at scan time and reports a "

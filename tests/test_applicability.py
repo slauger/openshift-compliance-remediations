@@ -420,6 +420,32 @@ class TestKubeletConfigConsolidation(unittest.TestCase):
                          "compliance-operator-kubelet")
 
 
+class TestOptInRules(unittest.TestCase):
+    """Rules that ship disabled because applying them can take a node down."""
+
+    def test_every_entry_has_a_reason(self):
+        for name, why in emit.OPT_IN_RULES.items():
+            self.assertTrue(why.strip(), f"{name} ships disabled without a reason")
+
+    @requires(OCP4, RHCOS4)
+    def test_entries_name_real_fix_carrying_rules(self):
+        # A typo here would silently disable nothing at all.
+        known = set()
+        for product, path in (("ocp4", OCP4), ("rhcos4", RHCOS4)):
+            content = xccdf.parse(path, product=product)
+            known |= {r.helm_name for r in xccdf.rules_with_fixes(content).values()}
+        for name in emit.OPT_IN_RULES:
+            self.assertIn(name, known)
+
+    @requires(OCP4, RHCOS4)
+    def test_they_ship_disabled_even_though_profiles_select_them(self):
+        contents = {p: xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))}
+        values = emit.values_yaml(list(contents.values()), "node", "0.0.0")
+        for name in emit.OPT_IN_RULES:
+            self.assertIn(f"  {name}: false", values)
+
+
 class TestDanglingPlatformReference(unittest.TestCase):
     def test_reference_to_an_undefined_platform_raises(self):
         # A ref the datastream does not define means the parse lost something;
