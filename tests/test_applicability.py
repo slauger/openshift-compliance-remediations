@@ -479,6 +479,52 @@ class TestConsolidatedObjects(unittest.TestCase):
         self.assertIn("no longer identical", str(cm.exception))
 
 
+class TestUmbrellaOverlays(unittest.TestCase):
+    """The umbrella needs its own overlay, with the values nested.
+
+    A top-level `cluster:`/`rules:` file is silently ignored by the umbrella -
+    the values sit at the wrong level - so following the render's own advice
+    would fail again with the same message.
+    """
+
+    @classmethod
+    @requires(OCP4, RHCOS4)
+    def setUpClass(cls):
+        import tempfile
+        from pathlib import Path
+        contents = {p: xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))}
+        cls._tmp = tempfile.TemporaryDirectory()
+        root = Path(cls._tmp.name)
+        emit.generate_charts(contents, root, "0.0.0")
+        cls.node = root / emit.NODE_CHART
+        cls.umbrella = root / emit.UMBRELLA_CHART
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def test_both_charts_ship_an_overlay(self):
+        for chart in (self.node, self.umbrella):
+            self.assertTrue((chart / "values-aarch64.yaml").exists(), chart.name)
+
+    def test_the_umbrella_overlay_is_nested_per_subchart(self):
+        text = (self.umbrella / "values-aarch64.yaml").read_text()
+        self.assertIn(f"{emit.NODE_CHART}:", text)
+        self.assertIn("    architecture: aarch64", text)
+        self.assertNotIn("\ncluster:", text)
+
+    def test_the_subchart_overlay_is_not_nested(self):
+        text = (self.node / "values-aarch64.yaml").read_text()
+        self.assertIn("\ncluster:", text)
+        self.assertNotIn(f"{emit.NODE_CHART}:", text)
+
+    def test_no_overlay_for_an_architecture_without_exclusions(self):
+        for chart in (self.node, self.umbrella):
+            self.assertFalse((chart / "values-ppc64le.yaml").exists(), chart.name)
+            self.assertFalse((chart / "values-x86_64.yaml").exists(), chart.name)
+
+
 class TestRuleDependencies(unittest.TestCase):
     """Upstream says some rules must not be applied without another."""
 

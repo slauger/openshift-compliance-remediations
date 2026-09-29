@@ -33,6 +33,7 @@ NODE_CHART = "compliance-node"
 UMBRELLA_CHART = "compliance-hardening"
 
 DEFAULT_OCP_VERSION = "4.20"
+DEFAULT_ARCHITECTURE = "x86_64"
 
 
 # --------------------------------------------------------------------------- #
@@ -207,7 +208,7 @@ HELPERS_TPL = """\
 {{-   end -}}
 {{- end -}}
 {{- if $bad -}}
-{{- $hint := printf "Disable them in .Values.rules, or apply the generated overlay for this architecture (-f values-%s.yaml). See RULES.md for the applicability of every rule." $arch -}}
+{{- $hint := printf "Disable them in .Values.rules, or apply the generated overlay for this architecture: -f values-%s.yaml from the chart you are installing (the umbrella ships its own, with the values nested per subchart). See RULES.md for the applicability of every rule." $arch -}}
 {{- fail (printf "%d active rule(s) are not applicable to this cluster:\\n%s\\n%s" (len $bad) (join "\\n" (sortAlpha $bad)) $hint) -}}
 {{- end -}}
 {{- end -}}
@@ -520,7 +521,7 @@ def _cluster_block(indent: str = "") -> list[str]:
         "  # -- Node architecture of the MachineConfigPools listed in node.roles.",
         "  # x86_64 | aarch64 | ppc64le | s390x (amd64 and arm64 are accepted too).",
         "  # Find yours: make show-node-arch",
-        "  architecture: x86_64",
+        f"  architecture: {DEFAULT_ARCHITECTURE}",
         "  # -- Set true on a HyperShift hosted cluster (hosted control plane).",
         "  hypershift: false",
     ]
@@ -647,26 +648,40 @@ def _excluded_for_arch(appl: dict, layer_rules: set, arch: str) -> dict[str, str
     return out
 
 
-def _arch_overlay(arch: str, excluded: dict[str, str], content_version: str) -> str:
+def _arch_overlay(arch: str, per_chart: dict, content_version: str,
+                 nested: bool = False) -> str:
     """A ready-made values file for a non-default architecture.
 
     The preflight refuses non-applicable rules rather than skipping them, so a
     profile that selects any of them needs them switched off. Hand-maintaining
     that list would go stale on every content bump; generating it does not.
+
+    ``nested`` produces the umbrella form, with every key under its subchart
+    prefix. Without it the umbrella silently ignores the file - the values sit
+    at the wrong level - and the render fails again with the same message that
+    told you to apply it.
     """
     lines = [
-        f"# Overlay for {arch} nodes.",
+        f"# Overlay for {arch} nodes"
+        + (" (umbrella chart)." if nested else "."),
         f"# Generated from ComplianceAsCode/content v{content_version}.",
         "#",
         f"# Upstream marks these rules as not applicable on {arch}, so the chart",
         "# refuses to render them. Apply this file to switch them off in one go:",
         f"#   helm install <release> <chart> -f values-{arch}.yaml",
-        "cluster:",
-        f"  architecture: {arch}",
-        "rules:",
     ]
-    for name, why in excluded.items():
-        lines.append(f"  {name}: false  # {why}")
+    indent = "  " if nested else ""
+    for chart_name, excluded in sorted(per_chart.items()):
+        if nested:
+            lines.append(f"{chart_name}:")
+        lines.append(f"{indent}cluster:")
+        lines.append(f"{indent}  architecture: {arch}")
+        if excluded:
+            lines.append(f"{indent}rules:")
+            for name, why in excluded.items():
+                lines.append(f"{indent}  {name}: false  # {why}")
+        if not nested:
+            break
     return "\n".join(lines) + "\n"
 
 
@@ -1001,7 +1016,24 @@ def generate_charts(contents: dict[str, Content], charts_dir: Path, version: str
                        "OpenShift node compliance remediations (MachineConfig/KubeletConfig; reboots).",
                        content_list, groups, "node", version, stats, appl,
                        chart_version)
-    _write_umbrella_chart(charts_dir / UMBRELLA_CHART, version, chart_version)
+    # Umbrella overlays: the same exclusions, nested per subchart. Without
+    # these the documented `-f values-<arch>.yaml` is a no-op for umbrella
+    # users, and the render fails again with the message that pointed at it.
+    umbrella_overlays: dict[str, dict] = {}
+    for layer, chart_name in (("platform", PLATFORM_CHART), ("node", NODE_CHART)):
+        layer_rules = {r.helm_name for c in content_list
+                       for r in rules_with_fixes(c).values()
+                       if _rule_layer(r) == layer}
+        for arch in applicability.ARCHITECTURES:
+            excluded = _excluded_for_arch(appl, layer_rules, arch)
+            if excluded or arch != DEFAULT_ARCHITECTURE:
+                umbrella_overlays.setdefault(arch, {})[chart_name] = excluded
+    umbrella_overlays = {
+        arch: per_chart for arch, per_chart in umbrella_overlays.items()
+        if any(per_chart.values())
+    }
+    _write_umbrella_chart(charts_dir / UMBRELLA_CHART, version, chart_version,
+                          umbrella_overlays)
 
     for g in groups:
         for c in g.conflicts():
@@ -1010,7 +1042,8 @@ def generate_charts(contents: dict[str, Content], charts_dir: Path, version: str
 
 
 def _write_umbrella_chart(chart_dir: Path, version: str,
-                          chart_version: str = "0.0.0") -> None:
+                          chart_version: str = "0.0.0",
+                          overlays: dict | None = None) -> None:
     """Umbrella wrapper depending on both subcharts. No `global`: values are
     prefixed per subchart. Subcharts remain standalone-installable."""
     chart_dir.mkdir(parents=True, exist_ok=True)
@@ -1064,6 +1097,15 @@ dependencies:
 """
     (chart_dir / "values.yaml").write_text(values, encoding="utf-8")
 
+    for arch in applicability.ARCHITECTURES:
+        overlay = chart_dir / f"values-{arch}.yaml"
+        per_chart = (overlays or {}).get(arch)
+        if per_chart:
+            overlay.write_text(_arch_overlay(arch, per_chart, version, nested=True),
+                               encoding="utf-8")
+        elif overlay.exists():
+            overlay.unlink()
+
 
 def _write_layer_chart(chart_dir: Path, name: str, description: str,
                        contents: list[Content], groups, layer: str,
@@ -1095,7 +1137,8 @@ def _write_layer_chart(chart_dir: Path, name: str, description: str,
         overlay = chart_dir / f"values-{arch}.yaml"
         excluded = _excluded_for_arch(appl, layer_rules, arch)
         if excluded:
-            overlay.write_text(_arch_overlay(arch, excluded, version), encoding="utf-8")
+            overlay.write_text(_arch_overlay(arch, {name: excluded}, version),
+                               encoding="utf-8")
         elif overlay.exists():
             overlay.unlink()
 

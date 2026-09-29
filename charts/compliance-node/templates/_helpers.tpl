@@ -63,7 +63,7 @@
 {{-   end -}}
 {{- end -}}
 {{- if $bad -}}
-{{- $hint := printf "Disable them in .Values.rules, or apply the generated overlay for this architecture (-f values-%s.yaml). See RULES.md for the applicability of every rule." $arch -}}
+{{- $hint := printf "Disable them in .Values.rules, or apply the generated overlay for this architecture: -f values-%s.yaml from the chart you are installing (the umbrella ships its own, with the values nested per subchart). See RULES.md for the applicability of every rule." $arch -}}
 {{- fail (printf "%d active rule(s) are not applicable to this cluster:\n%s\n%s" (len $bad) (join "\n" (sortAlpha $bad)) $hint) -}}
 {{- end -}}
 {{- end -}}

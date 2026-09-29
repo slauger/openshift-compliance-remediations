@@ -135,7 +135,11 @@ cluster:
 For a non-default architecture the generator ships a ready-made overlay listing exactly the rules that architecture cannot use:
 
 ```sh
+# standalone subchart
 helm install compliance ./charts/compliance-node -f charts/compliance-node/values-aarch64.yaml
+
+# umbrella - its own overlay, with the values nested per subchart
+helm install compliance ./charts/compliance-hardening -f charts/compliance-hardening/values-aarch64.yaml
 ```
 
 On aarch64 that is 21 rules (audit rules for syscalls ARM64 does not have), on s390x 5. Without the overlay the render aborts and tells you which rules and why.
