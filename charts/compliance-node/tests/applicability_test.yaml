@@ -320,3 +320,59 @@ tests:
     asserts:
       - hasDocuments:
           count: 0
+
+  # --- cross-object file conflicts ---------------------------------------
+  - it: refuses two rules that write the same sshd drop-in differently
+    # Separate objects, so no per-object check sees this. The MCO would merge
+    # alphanumerically and silently take X11Forwarding yes.
+    template: templates/preflight.yaml
+    set:
+      node:
+        enabled: true
+      rules:
+        rhcos4-sshd_disable_x11_forwarding: true
+        rhcos4-sshd_enable_x11_forwarding: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "00-complianceascode-X11Forwarding.conf with different content"
+
+  - it: allows one side of the pair
+    template: templates/preflight.yaml
+    set:
+      node:
+        enabled: true
+      rules:
+        rhcos4-sshd_disable_x11_forwarding: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: does not fire for the whole-file variants above 4.13
+    # Below 4.13 the sshd rules write all of sshd_config and disable_host_auth
+    # differs from the rest; from 4.13 they use drop-ins and never meet.
+    template: templates/preflight.yaml
+    set:
+      node:
+        enabled: true
+      cluster:
+        ocpVersion: "4.18"
+      rules:
+        rhcos4-disable_host_auth: true
+        rhcos4-sshd_disable_rhosts: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: fires for them below 4.13
+    template: templates/preflight.yaml
+    set:
+      node:
+        enabled: true
+      cluster:
+        ocpVersion: "4.12"
+      rules:
+        rhcos4-disable_host_auth: true
+        rhcos4-sshd_disable_rhosts: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "/etc/ssh/sshd_config with different content"

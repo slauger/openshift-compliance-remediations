@@ -2,7 +2,7 @@
 
 Generated from ComplianceAsCode/content v0.1.82. Do not edit by hand; regenerate with `make generate` (or `compliance-remediations-gen`).
 
-One row per rule that carries a Kubernetes remediation. Rules marked **⚠️ alt** are mutually-exclusive alternatives: enabling more than one that targets the same object makes the chart fail - pick one. Rules marked **⛔ broken** reproduce an upstream fix that the OpenShift API ignores (e.g. a `Custom:` TLS block without `type: Custom`) - selecting them is a no-op; prefer the non-broken alternative in the same group. A rule that **requires** another is one upstream marks with `complianceascode.io/depends-on`: the operator will not apply it while the dependency is unmet, and neither will the chart - disabling the dependency while the rule stays active aborts the render. Rules marked **⚠️ opt-in** ship disabled even though a profile selects them, because applying them can take a node down - the reason is in `values.yaml` next to the entry, and enabling one is a single line.
+One row per rule that carries a Kubernetes remediation. Rules marked **⚠️ alt** are mutually-exclusive alternatives: enabling more than one that targets the same object makes the chart fail - pick one. The same applies across objects: upstream's sshd drop-ins put the `enable` and `disable` variant of a setting in separate rules writing the same file, and since nothing on the cluster would reject that (the MachineConfig Operator merges alphanumerically and the last one wins) the chart refuses instead. Below OpenShift 4.13 the sshd rules write the whole `sshd_config` rather than drop-ins, where `rhcos4-disable_host_auth` conflicts with the rest of the family. Rules marked **⛔ broken** reproduce an upstream fix that the OpenShift API ignores (e.g. a `Custom:` TLS block without `type: Custom`) - selecting them is a no-op; prefer the non-broken alternative in the same group. A rule that **requires** another is one upstream marks with `complianceascode.io/depends-on`: the operator will not apply it while the dependency is unmet, and neither will the chart - disabling the dependency while the rule stays active aborts the render. Rules marked **⚠️ opt-in** ship disabled even though a profile selects them, because applying them can take a node down - the reason is in `values.yaml` next to the entry, and enabling one is a single line.
 
 The **Applicability** column carries the upstream `<platform>` constraint. The Compliance Operator evaluates these at scan time and reports a non-applicable rule as `notapplicable`, generating no remediation; the charts refuse to render one instead of shipping it. Architecture and HyperShift are declared via `cluster.architecture` and `cluster.hypershift`; for a non-default architecture apply the generated `values-<arch>.yaml` overlay. A rule restricted to one MachineConfigPool ("master pool only") is simply not rendered for the other roles in `node.roles`, mirroring the operator: it scans per pool and takes the MachineConfig role from the scan's node selector, so such a remediation never reaches a worker there. Rules marked **⛔ n/a** are never applicable to RHCOS/OKD at all and ship disabled - enable one explicitly only if you know the assumption behind it does not hold for you.
 
@@ -281,30 +281,30 @@ The **Applicability** column carries the upstream `<platform>` constraint. The C
 | `rhcos4-sshd_allow_only_protocol2` ⛔ n/a | `MachineConfig/75-ocp4-sshd-allow-only-protocol2` | high | node | rhcos4 | never applicable (RHCOS ships OpenSSH 8 or newer) |  |
 | `rhcos4-sshd_disable_compression` | `MachineConfig/75-ocp4-sshd-disable-compression` | medium | node | rhcos4 | - |  |
 | `rhcos4-sshd_disable_empty_passwords` | `MachineConfig/75-ocp4-sshd-disable-empty-passwords` | high | node | rhcos4 | - | rhcos4-bsi, rhcos4-bsi-2022, rhcos4-e8 |
-| `rhcos4-sshd_disable_gssapi_auth` | `MachineConfig/75-ocp4-sshd-disable-gssapi-auth` | medium | node | rhcos4 | - | rhcos4-e8 |
+| `rhcos4-sshd_disable_gssapi_auth` ⚠️ alt | `MachineConfig/75-ocp4-sshd-disable-gssapi-auth` | medium | node | rhcos4 | - | rhcos4-e8 |
 | `rhcos4-sshd_disable_kerb_auth` | `MachineConfig/75-ocp4-sshd-disable-kerb-auth` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_disable_pubkey_auth` | `MachineConfig/75-ocp4-sshd-disable-pubkey-auth` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_disable_pubkey_auth` ⚠️ alt | `MachineConfig/75-ocp4-sshd-disable-pubkey-auth` | medium | node | rhcos4 | - |  |
 | `rhcos4-sshd_disable_rhosts` | `MachineConfig/75-ocp4-sshd-disable-rhosts` | medium | node | rhcos4 | - | rhcos4-e8, rhcos4-high, rhcos4-high-rev-4, rhcos4-moderate, rhcos4-moderate-rev-4, rhcos4-nerc-cip |
 | `rhcos4-sshd_disable_rhosts_rsa` | `MachineConfig/75-ocp4-sshd-disable-rhosts-rsa` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_disable_root_login` | `MachineConfig/75-ocp4-sshd-disable-root-login` | medium | node | rhcos4 | - | rhcos4-anssi_bp28_enhanced, rhcos4-anssi_bp28_high, rhcos4-anssi_bp28_intermediary, rhcos4-bsi, rhcos4-bsi-2022, rhcos4-e8, rhcos4-stig, rhcos4-stig-v2r2, rhcos4-stig-v2r3 |
-| `rhcos4-sshd_disable_root_password_login` | `MachineConfig/75-ocp4-sshd-disable-root-password-login` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_disable_root_login` ⚠️ alt | `MachineConfig/75-ocp4-sshd-disable-root-login` | medium | node | rhcos4 | - | rhcos4-anssi_bp28_enhanced, rhcos4-anssi_bp28_high, rhcos4-anssi_bp28_intermediary, rhcos4-bsi, rhcos4-bsi-2022, rhcos4-e8, rhcos4-stig, rhcos4-stig-v2r2, rhcos4-stig-v2r3 |
+| `rhcos4-sshd_disable_root_password_login` ⚠️ alt | `MachineConfig/75-ocp4-sshd-disable-root-password-login` | medium | node | rhcos4 | - |  |
 | `rhcos4-sshd_disable_tcp_forwarding` | `MachineConfig/75-ocp4-sshd-disable-tcp-forwarding` | medium | node | rhcos4 | - |  |
 | `rhcos4-sshd_disable_user_known_hosts` | `MachineConfig/75-ocp4-sshd-disable-user-known-hosts` | medium | node | rhcos4 | - | rhcos4-e8 |
-| `rhcos4-sshd_disable_x11_forwarding` | `MachineConfig/75-ocp4-sshd-disable-x11-forwarding` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_disable_x11_forwarding` ⚠️ alt | `MachineConfig/75-ocp4-sshd-disable-x11-forwarding` | medium | node | rhcos4 | - |  |
 | `rhcos4-sshd_do_not_permit_user_env` | `MachineConfig/75-ocp4-sshd-do-not-permit-user-env` | medium | node | rhcos4 | - | rhcos4-e8 |
-| `rhcos4-sshd_enable_gssapi_auth` | `MachineConfig/75-ocp4-sshd-enable-gssapi-auth` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_enable_gssapi_auth` ⚠️ alt | `MachineConfig/75-ocp4-sshd-enable-gssapi-auth` | medium | node | rhcos4 | - |  |
 | `rhcos4-sshd_enable_pam` | `MachineConfig/75-ocp4-sshd-enable-pam` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_enable_pubkey_auth` | `MachineConfig/75-ocp4-sshd-enable-pubkey-auth` | medium | node | rhcos4 | - | rhcos4-bsi, rhcos4-bsi-2022 |
+| `rhcos4-sshd_enable_pubkey_auth` ⚠️ alt | `MachineConfig/75-ocp4-sshd-enable-pubkey-auth` | medium | node | rhcos4 | - | rhcos4-bsi, rhcos4-bsi-2022 |
 | `rhcos4-sshd_enable_strictmodes` | `MachineConfig/75-ocp4-sshd-enable-strictmodes` | medium | node | rhcos4 | - | rhcos4-e8 |
-| `rhcos4-sshd_enable_warning_banner` | `MachineConfig/75-ocp4-sshd-enable-warning-banner` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_enable_warning_banner_net` | `MachineConfig/75-ocp4-sshd-enable-warning-banner-net` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_enable_x11_forwarding` | `MachineConfig/75-ocp4-sshd-enable-x11-forwarding` | high | node | rhcos4 | - |  |
+| `rhcos4-sshd_enable_warning_banner` ⚠️ alt | `MachineConfig/75-ocp4-sshd-enable-warning-banner` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_enable_warning_banner_net` ⚠️ alt | `MachineConfig/75-ocp4-sshd-enable-warning-banner-net` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_enable_x11_forwarding` ⚠️ alt | `MachineConfig/75-ocp4-sshd-enable-x11-forwarding` | high | node | rhcos4 | - |  |
 | `rhcos4-sshd_print_last_log` | `MachineConfig/75-ocp4-sshd-print-last-log` | medium | node | rhcos4 | - | rhcos4-e8 |
 | `rhcos4-sshd_set_idle_timeout` | `MachineConfig/75-ocp4-sshd-set-idle-timeout` | medium | node | rhcos4 | - | rhcos4-high, rhcos4-high-rev-4, rhcos4-moderate, rhcos4-moderate-rev-4, rhcos4-nerc-cip |
 | `rhcos4-sshd_set_keepalive` | `MachineConfig/75-ocp4-sshd-set-keepalive` | medium | node | rhcos4 | - | rhcos4-high, rhcos4-high-rev-4, rhcos4-moderate, rhcos4-moderate-rev-4, rhcos4-nerc-cip |
 | `rhcos4-sshd_set_login_grace_time` | `MachineConfig/75-ocp4-sshd-set-login-grace-time` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_set_loglevel_info` | `MachineConfig/75-ocp4-sshd-set-loglevel-info` | low | node | rhcos4 | - | rhcos4-e8 |
-| `rhcos4-sshd_set_loglevel_verbose` | `MachineConfig/75-ocp4-sshd-set-loglevel-verbose` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_set_loglevel_info` ⚠️ alt | `MachineConfig/75-ocp4-sshd-set-loglevel-info` | low | node | rhcos4 | - | rhcos4-e8 |
+| `rhcos4-sshd_set_loglevel_verbose` ⚠️ alt | `MachineConfig/75-ocp4-sshd-set-loglevel-verbose` | medium | node | rhcos4 | - |  |
 | `rhcos4-sshd_set_max_auth_tries` | `MachineConfig/75-ocp4-sshd-set-max-auth-tries` | medium | node | rhcos4 | - |  |
 | `rhcos4-sshd_set_max_sessions` | `MachineConfig/75-ocp4-sshd-set-max-sessions` | medium | node | rhcos4 | - |  |
 | `rhcos4-sshd_set_maxstartups` | `MachineConfig/75-ocp4-sshd-set-maxstartups` | medium | node | rhcos4 | - |  |

@@ -56,6 +56,17 @@ XCCDF `<platform>` constraints are parsed and enforced. The leaves of those CPE 
 - **KubeletConfig is consolidated per pool, not per rule.** `classify.synthesize_name` returns a constant for that kind, so every kubelet fix lands in one merge group rendered per role - mirroring the operator's `verifyAndCompleteKC`, which names the object `compliance-operator-kubelet-<pool>` and sets `spec.machineConfigPoolSelector`. The selector is the load-bearing part: without it the MCO matches no pool and the object silently does nothing. It is merged per role (the label contains the pool name), so the render deep-copies `$merged` inside the role loop.
 - **A non-applicable active rule aborts the render**, centrally, listing every offender. Per-architecture overlays (`values-<arch>.yaml`) are generated so the remedy is one `-f`, not a hand-maintained list.
 
+## Conflicts across objects
+
+The collision detector works inside one object. Across objects the MCO decides: `MergeMachineConfigs` sorts alphanumerically, takes the first Ignition config as the base and merges the rest, so for a duplicate file path the later MachineConfig silently wins.
+
+`cross_object_file_conflicts()` finds paths two different objects write differently and emits a `fail` guard per path into the generated `preflight.yaml`. Two things it gets right and a naive version would not:
+
+- **Conflicts are between content groups, not rules.** 31 rules write the same `/etc/ssh/sshd_config` and are fine together; only the one that differs makes it a conflict.
+- **Each guard carries its version window.** The drop-ins exist from 4.13, the whole-file variants only below it. Without `semverCompare` a guard would fire where the fragments do not even render - and break every profile.
+
+`RULES.md` marks only the genuinely pairwise cases ⚠️ alt; marking all 32 sshd rules would be noise, so the legend covers that case in prose.
+
 ## Rule dependencies
 
 `complianceascode.io/depends-on` is parsed onto `Rule.depends_on` and enforced by `cr.dependencyPreflight`, next to the applicability preflight in the same generated `preflight.yaml`.

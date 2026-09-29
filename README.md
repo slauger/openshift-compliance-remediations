@@ -91,6 +91,19 @@ The first one deserves a word on ordering. `protectKernelDefaults: true` makes t
 
 The bar for this list is deliberately high — only rules whose failure mode is losing the node, or losing the access needed to fix it. A chart that quietly waters down the profile it claims to implement would be worse than one that reboots a node.
 
+### Conflicts across objects
+
+Upstream solves per-setting sshd configuration with drop-ins from OpenShift 4.13 — one small file per setting in `/etc/ssh/sshd_config.d/`, instead of rewriting the whole `sshd_config` as the pre-4.13 variants do. That is the right shape, and it creates a conflict the per-object check cannot see: the `enable` and `disable` variant of a setting are **separate rules writing the same drop-in**.
+
+```
+75-ocp4-sshd-disable-x11-forwarding   X11Forwarding no
+75-ocp4-sshd-enable-x11-forwarding    X11Forwarding yes
+```
+
+Two MachineConfigs, one file. Nothing on the cluster rejects this — the MachineConfig Operator merges alphanumerically and the later one silently wins, which for three of the six affected settings is the *less* hardened value. So the chart refuses instead, the same way it does for alternatives inside one object. Both are marked ⚠️ alt in [`RULES.md`](RULES.md).
+
+Below 4.13 the same applies to the whole-file variants, where `rhcos4-disable_host_auth` differs from the other 31 rules writing `sshd_config`. The guards carry the version window they belong to, so nothing fires where the fragments do not even render.
+
 ## Rule dependencies
 
 Some rules must not be applied without another — upstream marks them `complianceascode.io/depends-on`, and the Compliance Operator refuses to apply a remediation whose dependency is unmet. The charts do the same: if a rule is active and a rule it requires is not, the render aborts and names both.

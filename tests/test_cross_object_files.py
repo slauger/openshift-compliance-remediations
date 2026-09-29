@@ -59,3 +59,56 @@ class TestCrossObjectFiles(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestGeneratorSideDetection(unittest.TestCase):
+    """The generator's own view: which rules write one path differently."""
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+        from _datastream import OCP4, RHCOS4
+        if not (OCP4.exists() and RHCOS4.exists()):
+            raise unittest.SkipTest("run `make fetch` first")
+        from compliance_remediations_helm import emit
+        from compliance_remediations_helm import parser as xccdf
+        from compliance_remediations_helm.collisions import build_groups
+        contents = [xccdf.parse(OCP4, product="ocp4"),
+                    xccdf.parse(RHCOS4, product="rhcos4")]
+        groups, _ = build_groups(*contents)
+        cls.conflicts = emit.cross_object_file_conflicts(groups, "node")
+        cls.emit = emit
+
+    def test_the_sshd_dropin_pairs_are_found(self):
+        # enable/disable variants of one setting, in separate rules writing the
+        # same drop-in. Nothing on the cluster rejects this - the MCO merges
+        # alphanumerically and the later MachineConfig silently wins.
+        pairs = {c["path"].split("/")[-1] for c in self.conflicts
+                 if all(len(g["rules"]) == 1 for g in c["groups"])}
+        self.assertIn("00-complianceascode-X11Forwarding.conf", pairs)
+        self.assertIn("00-complianceascode-GSSAPIAuthentication.conf", pairs)
+        self.assertEqual(len(pairs), 6)
+
+    def test_identical_writers_are_not_a_conflict(self):
+        # 31 rules write the same /etc/ssh/sshd_config; only the one that
+        # differs makes it a conflict, and they must not all be lumped in.
+        sshd = [c for c in self.conflicts if c["path"] == "/etc/ssh/sshd_config"]
+        self.assertEqual(len(sshd), 1)
+        sizes = sorted(len(g["rules"]) for g in sshd[0]["groups"])
+        self.assertEqual(sizes[0], 1)
+        self.assertGreater(sizes[1], 20)
+
+    def test_every_conflict_carries_its_version_window(self):
+        # The drop-ins only exist from 4.13; the whole-file variants only
+        # below it. A guard without the window would fire where the fragments
+        # do not even render.
+        for c in self.conflicts:
+            for grp in c["groups"]:
+                self.assertTrue(grp["versions"], c["path"])
+
+    def test_guards_are_emitted_into_the_preflight(self):
+        tpl = self.emit.preflight_template(self.conflicts)
+        self.assertIn('include "cr.applicabilityPreflight"', tpl)
+        self.assertIn("cr.countActive", tpl)
+        self.assertIn("semverCompare", tpl)
+        self.assertEqual(tpl.count("fail"), len(self.conflicts))
