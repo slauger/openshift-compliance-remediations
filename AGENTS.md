@@ -43,6 +43,11 @@ Bump `version` and `sha512` in `config/content.yaml` (the sha512 is published al
 
 ## Releasing
 
+`Chart.lock` is gitignored, so CI writes it at the old version before semantic-release bumps `Chart.yaml` past it. Use `helm dependency update`, never `build` - `build` aborts with "lock file out of sync", and by then the tag and the GitHub release exist while nothing has reached GHCR, and a re-run finds no new releasable commits. The git plugin's assets are narrow for the same reason: it stages with `git add --force`, so a broad `charts` asset committed that stale lock and the subchart tarballs onto main.
+
+Breaking changes map to a minor bump while the chart is pre-1.0, and the preset is `conventionalcommits`: the angular default has no breaking-header pattern, so `feat!:` alone parsed to no release at all.
+
+
 Releases are cut manually (`workflow_dispatch` on the release workflow), never on push: `charts/` must be generated and committed first, and the workflow enforces that with a drift check. semantic-release computes the version from conventional commits (`fix:` -> patch, `feat:` -> minor), writes it to `VERSION`, regenerates the charts so every `Chart.yaml` carries it, commits + tags, then packages, pushes, signs (cosign) and attests (SBOM) the OCI charts. The `VERSION` file is the single source of truth for the chart version - never edit it or `Chart.yaml` versions by hand. `0.0.0` means "unreleased working tree".
 
 ## Applicability
@@ -74,6 +79,14 @@ The collision detector works inside one object. Across objects the MCO decides: 
 - **Directional.** Only "rule active, dependency not" fails. The reverse is legitimate and must not - the operator would not complain either.
 - **Only dependencies this chart emits can be checked.** `cr.ruleActive` resolves through `profileRules` and the `rules` override, and both only carry fix-carrying rules; a dependency outside that set would read as inactive and fail every render. `unverifiable_dependencies()` reports any such case through the CLI, and a datastream test asserts the list is empty, so it is not just a line of output nobody reads.
 
+## The values contract
+
+`values.yaml`, `values.schema.json` and what the templates read are one contract, and the schema is load-bearing rather than decorative.
+
+- **The root is closed and the generated maps are required.** Every preflight reads its data map with `| default dict`, and Helm's `--set X=null` deletes a key - so a deleted map turned the guard into a silent no-op, and `--set profileRules=null` rendered nothing at all at exit 0. `required` makes both a schema error. The root is `additionalProperties: false` so an umbrella-shaped values file applied to a subchart is refused rather than discarded; `global` is declared because Helm injects it.
+- **Variable constraints are derived, not assumed.** Numeric constraints apply only where XCCDF declares the value a number *and* every selector and the default is digits. The YAML boolean/null tokens are forbidden only for variables some fragment interpolates *unquoted* - inside an encoded payload `no` is ordinary config text, and `var_sshd_disable_compression` ships exactly that. Applying either constraint everywhere rejects shipped defaults; it was tried.
+- **`cr.enc` percent-encodes a reference inside an encoded Ignition payload.** The operator runs `url.PathEscape` over its substituted output; the chart keeps the payload encoded and injects the value, so the value has to be encoded at render time. Without it a space plus `#` truncates the file on the node with no error at all.
+
 ## Rules whose upstream fix cannot work
 
 `broken_rules()` detects a `tlsSecurityProfile` written with a capitalized `Custom:` and no sibling `type:`. The API server prunes the unknown field, so the remediation applies and does nothing - validated against the genuine CRDs, not inferred.
@@ -104,6 +117,7 @@ Which layer covers what:
 Conventions:
 
 - Assertions against the datastream are **invariants, never exact counts**. A content bump must not require editing a number in `tests/`; if it does, the assertion was a change detector and the real intent belongs in the test instead. Exact counts live in the committed `charts/` diff, which is reviewed on every regeneration.
+- **`REQUIRE_TOOLS=1`** (set in CI, where the tools are installed) turns a skipped payload check into a failure. `auditctl -R` stays an accepted skip: it loads rules into the runner's kernel. Alongside it, each mode has a floor, because every counter is a plain incrementer - with the templates truncated the checks silently vanished from the report and the run passed.
 - **The generator is stdlib-only; the tests are not.** `dependencies = []` in `pyproject.toml` is about the shipped package - `src/` must import nothing outside the standard library. `tests/` and `scripts/` may use the `dev` extra, and `make test-py` installs it, because the tests that cover `scripts/validate_payloads.py` need the same PyYAML it does.
 - The datastream tests skip when `.cache/` is absent so a fresh clone can still run the offline half. `make test-py` depends on `fetch` and sets `REQUIRE_DATASTREAM=1`, which turns that skip into a failure - a green `make test-py` always means the gated tests actually ran.
 - A manifest can be valid YAML, a valid MachineConfig and still write a file the node rejects: the Ignition `data:,` payload is an opaque string to every YAML-level tool. That is what `validate_payloads.py` looks at, matrixed over `cluster.ocpVersion` because version-gated fix variants mean a payload can be correct at 4.18 and broken at 4.12. Checks whose tool is missing are reported as skipped, never silently passed.
