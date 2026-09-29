@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -53,6 +54,39 @@ ARCHITECTURES = ("x86_64", "aarch64", "ppc64le", "s390x")
 VERSIONS = ("4.12", "4.14", "4.16", "4.18", "4.20")
 
 _DATA_URI_RE = re.compile(r"^data:([^,]*),(.*)$", re.DOTALL)
+
+
+# Minimum work each mode must actually have done. Every counter here is a
+# plain incrementer, so without a floor the whole script reports "all payload
+# checks passed" after examining nothing at all - truncate the templates and
+# the checks simply vanish from the report. Floors, not exact counts: a content
+# bump may add payloads, and only a collapse should fail.
+FLOORS: dict[str, dict[str, int]] = {
+    "render": {
+        "render": 40,
+        "object-has-body": 40,
+        "kubeletconfig-pool-selector": 20,
+        "no-cross-object-file-collisions": 40,
+    },
+    "payloads": {
+        "no-template-syntax": 150,
+        "audit-rule-shape": 100,
+        "sysctl-syntax": 20,
+        "keyvalue-conf": 1,
+        "sshd -t": 10,
+        "no-cross-object-file-collisions": len(VERSIONS),
+    },
+    "arch": {
+        "arch-render": len(ARCHITECTURES),
+        "arch-gate-fires": 2,
+        "arch-excludes-objects": 2,
+        "schema-rejects-bad-arch": 1,
+    },
+}
+
+# Skips that stay acceptable with every tool installed: auditctl -R loads rules
+# into the running kernel, which is not something a CI job should do.
+OPTIONAL_CHECKS = frozenset({"auditctl -R"})
 
 
 class Findings:
@@ -118,12 +152,19 @@ def decode_data_uri(source: str) -> str | None:
 
 
 def iter_files(docs: list[dict]):
-    """Yield (machineconfig_name, path, mode, decoded_contents)."""
+    """Yield (machineconfig_name, path, mode, decoded_contents).
+
+    Covers both places Ignition carries content: storage.files, and
+    systemd.units - whose `contents` and dropins are plain text rather than a
+    data URI. Leaving the units out meant a whole kind of payload was checked
+    by nothing at all.
+    """
     for doc in docs:
         if not doc or doc.get("kind") != "MachineConfig":
             continue
         name = doc.get("metadata", {}).get("name", "<unnamed>")
-        storage = doc.get("spec", {}).get("config", {}).get("storage", {})
+        config = doc.get("spec", {}).get("config", {}) or {}
+        storage = config.get("storage") or {}
         for f in storage.get("files") or []:
             source = (f.get("contents") or {}).get("source")
             if not isinstance(source, str):
@@ -132,6 +173,16 @@ def iter_files(docs: list[dict]):
             if decoded is None:
                 continue
             yield name, f.get("path", "<nopath>"), f.get("mode"), decoded
+        for unit in (config.get("systemd") or {}).get("units") or []:
+            unit_name = unit.get("name", "<nounit>")
+            if isinstance(unit.get("contents"), str):
+                yield name, f"/etc/systemd/system/{unit_name}", None, unit["contents"]
+            for dropin in unit.get("dropins") or []:
+                if isinstance(dropin.get("contents"), str):
+                    yield (name,
+                           f"/etc/systemd/system/{unit_name}.d/"
+                           f"{dropin.get('name', '<nodropin>')}",
+                           None, dropin["contents"])
 
 
 # --------------------------------------------------------------------------
@@ -475,6 +526,18 @@ def main() -> int:
     if args.mode in ("arch", "all"):
         validate_architectures(fnd)
         validate_schema_rejects_typos(fnd)
+
+    modes = ("render", "payloads", "arch") if args.mode == "all" else (args.mode,)
+    for mode in modes:
+        for check, floor in sorted(FLOORS[mode].items()):
+            actual = fnd.checked.get(check, 0)
+            if actual < floor:
+                fnd.error("floor", f"{check} ran {actual} time(s), expected at "
+                                   f"least {floor} - did it examine anything?")
+    if os.environ.get("REQUIRE_TOOLS") == "1":
+        for check in sorted(set(fnd.skipped) - OPTIONAL_CHECKS):
+            fnd.error("tools", f"{check} was skipped but REQUIRE_TOOLS=1 - "
+                               f"install the tool or the check is not running")
 
     for check, n in sorted(fnd.checked.items()):
         print(f"  ok       {check}: {n}")

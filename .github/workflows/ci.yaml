@@ -45,6 +45,12 @@ jobs:
           helm plugin install https://github.com/helm-unittest/helm-unittest \
             --version "$HELM_UNITTEST_VERSION" --verify=false
 
+      - name: Install helm-docs
+        run: |
+          curl -sSLo /tmp/helm-docs.tar.gz \
+            https://github.com/norwoodj/helm-docs/releases/download/v1.14.2/helm-docs_1.14.2_Linux_x86_64.tar.gz
+          sudo tar -xzf /tmp/helm-docs.tar.gz -C /usr/local/bin helm-docs
+
       - name: Cache upstream content tarball
         uses: actions/cache@v6
         with:
@@ -54,11 +60,17 @@ jobs:
       - name: Generate charts
         run: |
           make generate
-          # Fail if generation produced an uncommitted diff (charts drifted).
-          git diff --exit-code charts/ RULES.md || {
+          make docs
+          # Fail if generation changed anything under charts/ or RULES.md.
+          # `git diff` ignores untracked paths, so a file the generator newly
+          # ADDS - an overlay for a new architecture, an object for a new rule -
+          # would pass as "no drift". Compare the porcelain status instead.
+          drift="$(git status --porcelain -- charts/ RULES.md)"
+          if [ -n "$drift" ]; then
             echo "::error::Generated charts/RULES.md are out of date. Run 'make generate' and commit.";
+            echo "$drift";
             exit 1;
-          }
+          fi
 
       - name: Helm lint
         run: make lint
@@ -80,4 +92,8 @@ jobs:
         run: make test-py
 
       - name: Validate rendered payloads
+        env:
+          # The tools are installed above, so a skipped check means the install
+          # broke - not that the check is optional.
+          REQUIRE_TOOLS: "1"
         run: make validate-payloads

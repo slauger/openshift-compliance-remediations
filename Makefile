@@ -30,8 +30,10 @@ generate: venv
 docs:
 	helm-docs --chart-search-root=$(CHARTS)
 
-## helm lint all charts.
-lint:
+## helm lint all charts. Depends on deps: without the subchart archives the
+## umbrella is an empty shell and `helm lint` passes it with a warning, so CI
+## was linting nothing at all for that chart.
+lint: deps
 	@for c in $(ALL_CHARTS); do echo "== lint $$c =="; helm lint $$c || exit 1; done
 
 ## helm unittest every chart. Depends on deps: the umbrella can only render

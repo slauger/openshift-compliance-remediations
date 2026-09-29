@@ -13,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
+from _datastream import OCP4, RHCOS4, requires  # noqa: E402
 from validate_payloads import Findings, check_cross_object_files  # noqa: E402
 
 
@@ -57,19 +58,17 @@ class TestCrossObjectFiles(unittest.TestCase):
         self.assertEqual(self._run([kc]).errors, [])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
+@requires(OCP4, RHCOS4)
 class TestGeneratorSideDetection(unittest.TestCase):
-    """The generator's own view: which rules write one path differently."""
+    """The generator's own view: which rules write one path differently.
+
+    Gated through `requires()` rather than a hand-rolled SkipTest, so
+    REQUIRE_DATASTREAM=1 turns the skip into a failure here too - the promise
+    `_datastream` makes is that it covers every path.
+    """
 
     @classmethod
     def setUpClass(cls):
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-        from _datastream import OCP4, RHCOS4
-        if not (OCP4.exists() and RHCOS4.exists()):
-            raise unittest.SkipTest("run `make fetch` first")
         from compliance_remediations_helm import emit
         from compliance_remediations_helm import parser as xccdf
         from compliance_remediations_helm.collisions import build_groups
@@ -112,3 +111,7 @@ class TestGeneratorSideDetection(unittest.TestCase):
         self.assertIn("cr.countActive", tpl)
         self.assertIn("semverCompare", tpl)
         self.assertEqual(tpl.count("fail"), len(self.conflicts))
+
+
+if __name__ == "__main__":
+    unittest.main()
