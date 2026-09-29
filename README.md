@@ -64,9 +64,9 @@ Two standalone charts plus a thin umbrella wrapper:
 
 ### KubeletConfig
 
-Kubelet remediations are consolidated the way the operator does it: **one `KubeletConfig` per MachineConfigPool**, named `compliance-operator-kubelet-<pool>`, that every active kubelet rule merges into — not one object per rule.
+Kubelet remediations are consolidated the way the operator does it: **one `KubeletConfig` per MachineConfigPool**, named `compliance-operator-kubelet-<pool>`, that every active kubelet rule merges into - not one object per rule.
 
-That is not cosmetic. A `KubeletConfig` without `spec.machineConfigPoolSelector` matches **no** pool (the MCO treats a nil selector as "nothing, not everything") so it would be created and then do nothing. The selector uses `pools.operator.machineconfiguration.openshift.io/<pool>: ""`, which the MCO puts on the built-in `master` and `worker` pools. **If you point `node.roles` at a custom pool, label that pool yourself** — the operator has the same requirement.
+That is not cosmetic. A `KubeletConfig` without `spec.machineConfigPoolSelector` matches **no** pool (the MCO treats a nil selector as "nothing, not everything") so it would be created and then do nothing. The selector uses `pools.operator.machineconfiguration.openshift.io/<pool>: ""`, which the MCO puts on the built-in `master` and `worker` pools. **If you point `node.roles` at a custom pool, label that pool yourself** - the operator has the same requirement.
 
 One difference we cannot mirror: if a pool already has its own `KubeletConfig`, the operator patches that object; a chart cannot inspect the cluster, so ours is an additional `KubeletConfig` for the pool. OpenShift supports several per pool, applying them in order.
 
@@ -87,26 +87,26 @@ Currently four:
 | `rhcos4-coreos_nousb_kernel_argument` | boots with `nousb`; on bare metal that disables USB keyboards, so the console stops being a way back in |
 | `rhcos4-coreos_page_poison_kernel_argument` | `page_poison=1` carries a measurable runtime cost |
 
-The first one deserves a word on ordering. `protectKernelDefaults: true` makes the kubelet refuse to start unless the kernel parameters it expects are already set — nodes go NotReady pool by pool as the rollout proceeds. The companion rule that sets those parameters (`ocp4-kubelet_enable_protect_kernel_sysctl`) is a MachineConfig and stays enabled, so the safe order is: let the sysctl remediation roll out, confirm the nodes are healthy, then enable this one.
+The first one deserves a word on ordering. `protectKernelDefaults: true` makes the kubelet refuse to start unless the kernel parameters it expects are already set - nodes go NotReady pool by pool as the rollout proceeds. The companion rule that sets those parameters (`ocp4-kubelet_enable_protect_kernel_sysctl`) is a MachineConfig and stays enabled, so the safe order is: let the sysctl remediation roll out, confirm the nodes are healthy, then enable this one.
 
-The bar for this list is deliberately high — only rules whose failure mode is losing the node, or losing the access needed to fix it. A chart that quietly waters down the profile it claims to implement would be worse than one that reboots a node.
+The bar for this list is deliberately high - only rules whose failure mode is losing the node, or losing the access needed to fix it. A chart that quietly waters down the profile it claims to implement would be worse than one that reboots a node.
 
 ### Conflicts across objects
 
-Upstream solves per-setting sshd configuration with drop-ins from OpenShift 4.13 — one small file per setting in `/etc/ssh/sshd_config.d/`, instead of rewriting the whole `sshd_config` as the pre-4.13 variants do. That is the right shape, and it creates a conflict the per-object check cannot see: the `enable` and `disable` variant of a setting are **separate rules writing the same drop-in**.
+Upstream solves per-setting sshd configuration with drop-ins from OpenShift 4.13 - one small file per setting in `/etc/ssh/sshd_config.d/`, instead of rewriting the whole `sshd_config` as the pre-4.13 variants do. That is the right shape, and it creates a conflict the per-object check cannot see: the `enable` and `disable` variant of a setting are **separate rules writing the same drop-in**.
 
 ```
 75-ocp4-sshd-disable-x11-forwarding   X11Forwarding no
 75-ocp4-sshd-enable-x11-forwarding    X11Forwarding yes
 ```
 
-Two MachineConfigs, one file. Nothing on the cluster rejects this — the MachineConfig Operator merges alphanumerically and the later one silently wins, which for three of the six affected settings is the *less* hardened value. So the chart refuses instead, the same way it does for alternatives inside one object. Both are marked ⚠️ alt in [`RULES.md`](RULES.md).
+Two MachineConfigs, one file. Nothing on the cluster rejects this - the MachineConfig Operator merges alphanumerically and the later one silently wins, which for three of the six affected settings is the *less* hardened value. So the chart refuses instead, the same way it does for alternatives inside one object. Both are marked ⚠️ alt in [`RULES.md`](RULES.md).
 
 Below 4.13 the same applies to the whole-file variants, where `rhcos4-disable_host_auth` differs from the other 31 rules writing `sshd_config`. The guards carry the version window they belong to, so nothing fires where the fragments do not even render.
 
 ## Rule dependencies
 
-Some rules must not be applied without another — upstream marks them `complianceascode.io/depends-on`, and the Compliance Operator refuses to apply a remediation whose dependency is unmet. The charts do the same: if a rule is active and a rule it requires is not, the render aborts and names both.
+Some rules must not be applied without another - upstream marks them `complianceascode.io/depends-on`, and the Compliance Operator refuses to apply a remediation whose dependency is unmet. The charts do the same: if a rule is active and a rule it requires is not, the render aborts and names both.
 
 ```
 Error: 3 active rule(s) have an unmet dependency:
@@ -114,7 +114,7 @@ Error: 3 active rule(s) have an unmet dependency:
   ...
 ```
 
-This is **directional**. The dependency applied without the rule that needs it is fine and does not fail — only the other way round. The `requires` entries in [`RULES.md`](RULES.md) show which rules have one.
+This is **directional**. The dependency applied without the rule that needs it is fine and does not fail - only the other way round. The `requires` entries in [`RULES.md`](RULES.md) show which rules have one.
 
 Every profile that selects a dependent rule also selects its dependency, so this only fires if you switch one off yourself through `rules:`. That is worth guarding: `ocp4-kubelet_enable_protect_kernel_defaults` needs `ocp4-kubelet_enable_protect_kernel_sysctl` to have set the kernel parameters first, and without them the kubelet refuses to start.
 
@@ -130,7 +130,7 @@ cluster:
   hypershift: false
 ```
 
-`make show-node-arch` reads the architecture off a live cluster. `amd64` and `arm64` are accepted and normalized, so `oc get nodes` output can be pasted straight in.
+`make show-node-arch` lists the distinct architectures of a live cluster's nodes. `amd64` and `arm64` are accepted and normalized to the spellings the compliance content uses, so either form works here.
 
 For a non-default architecture the generator ships a ready-made overlay listing exactly the rules that architecture cannot use:
 
@@ -144,7 +144,7 @@ helm install compliance ./charts/compliance-hardening -f charts/compliance-harde
 
 On aarch64 that is 21 rules (audit rules for syscalls ARM64 does not have), on s390x 5. Without the overlay the render aborts and tells you which rules and why.
 
-**Mixed-architecture clusters**: `cluster.architecture` describes the pools named in `node.roles`, and MachineConfigs target pools. Install the node chart once per architecture with the matching `node.roles` and `cluster.architecture` — object names are role-suffixed, so the releases do not collide. Leaving the default on a mixed cluster keeps today's behaviour (the operator reports the ARM nodes' rules as `notapplicable`); setting `aarch64` would remove those rules from your x86 pools too.
+**Mixed-architecture clusters**: `cluster.architecture` describes the pools named in `node.roles`, and MachineConfigs target pools. Install the node chart once per architecture with the matching `node.roles` and `cluster.architecture` - object names are role-suffixed, so the releases do not collide. Leaving the default on a mixed cluster keeps today's behaviour (the operator reports the ARM nodes' rules as `notapplicable`); setting `aarch64` would remove those rules from your x86 pools too.
 
 Every other constraint is an assumption about RHCOS/OKD, documented per fact in [`applicability.py`](src/compliance_remediations_helm/applicability.py) with the reasoning. Three rules are never applicable at all and ship disabled. The **Applicability** column in [`RULES.md`](RULES.md) carries the constraint for every rule.
 
@@ -200,15 +200,17 @@ node:
 
 ## Time synchronisation
 
-Five chrony rules ship the **whole** `/etc/chrony.conf`, not just their own setting, and upstream makes them byte-identical — so they are consolidated into one MachineConfig (`75-ocp4-chrony`) instead of five writing the same three files. Enabling any one of them still renders the full configuration.
+Five chrony rules ship the **whole** `/etc/chrony.conf`, not just their own setting, and upstream makes them byte-identical - so they are consolidated into one MachineConfig (`75-ocp4-chrony`) instead of five writing the same three files. Enabling any one of them still renders the full configuration.
 
-The default NTP servers are the public pool, which plenty of clusters cannot reach. Since these rules overwrite chrony's configuration wholesale, **check this before enabling any of them** — a node that cannot sync time will eventually break etcd and certificate validation. Point them at your own servers with the existing variables:
+The default NTP servers are the public pool, which plenty of clusters cannot reach. Since these rules overwrite chrony's configuration wholesale, **check this before enabling any of them** - a node that cannot sync time will eventually break etcd and certificate validation. Point them at your own servers with the existing variables:
 
 ```yaml
 variables:
   var_multiple_time_servers: "ntp1.intern.example.com,ntp2.intern.example.com"
   var_time_service_set_maxpoll: "10"
 ```
+
+Through the umbrella the same keys carry the subchart prefix, e.g. `compliance-node.variables.var_multiple_time_servers`.
 
 which renders:
 

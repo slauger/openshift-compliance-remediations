@@ -71,8 +71,8 @@ show-ocp-version:
 
 ## Suggest the live cluster's node architecture for cluster.architecture.
 show-node-arch:
-	@oc get nodes -o jsonpath='{range .items[*]}{.status.nodeInfo.architecture}{"\\n"}{end}' 2>/dev/null \
-		| sort -u \
+	@oc get nodes -o jsonpath='{.items[*].status.nodeInfo.architecture}' 2>/dev/null \
+		| tr ' ' '\n' | sort -u \
 		|| echo "not an OpenShift cluster or no access (set cluster.architecture manually)"
 
 ## Ruff lint the generator + tests (installs ruff via the dev extra).

@@ -136,7 +136,7 @@ README_GOTMPL = """\
 
 ## Rules
 
-See [`RULES.md`](../../RULES.md) for the full rule → profile matrix.
+See [`RULES.md`](../../RULES.md) for the full rule-to-profile matrix.
 
 {{ template "helm-docs.versionFooter" . }}
 """
@@ -524,10 +524,13 @@ def _cluster_block(indent: str = "") -> list[str]:
         "  # Find yours: oc get clusterversion version -o jsonpath='{.status.desired.version}'",
         f'  ocpVersion: "{DEFAULT_OCP_VERSION}"',
         "  # -- Node architecture of the MachineConfigPools listed in node.roles.",
+        "  # Only the node chart has arch-constrained rules; it is declared here",
+        "  # too so one values file validates against either chart.",
         "  # x86_64 | aarch64 | ppc64le | s390x (amd64 and arm64 are accepted too).",
         "  # Find yours: make show-node-arch",
         f"  architecture: {DEFAULT_ARCHITECTURE}",
         "  # -- Set true on a HyperShift hosted cluster (hosted control plane).",
+        "  # Only the platform chart has a hypershift-constrained rule.",
         "  hypershift: false",
     ]
     return [f"{indent}{line}" if line else line for line in lines]
@@ -1093,22 +1096,42 @@ dependencies:
 # -- Platform remediations (safe cluster config, no reboot).
 {PLATFORM_CHART}:
 {_indent_block(_cluster_block(), 2)}
+  # -- Whitelist whole compliance profiles; see the subchart's own values for
+  # the full list of keys.
   profiles: {{}}
+  # -- Per-rule override / blacklist. The subchart's defaults still apply, so
+  # its pre-disabled alternatives and opt-in rules stay disabled.
   rules: {{}}
+  # -- Tunable XCCDF variables, same keys as the subchart's values.
+  variables: {{}}
+  # -- Namespace the Compliance Operator watches for TailoredProfiles.
+  complianceNamespace: openshift-compliance
   tailoredProfile:
+    # -- Render a matching TailoredProfile per enabled profile.
     enabled: false
 
 # -- Node remediations (MachineConfig/KubeletConfig; trigger reboots).
 {NODE_CHART}:
 {_indent_block(_cluster_block(), 2)}
   node:
+    # -- Master enable switch for node remediations (triggers reboots).
     enabled: false
+    # -- MachineConfigPool roles to target.
     roles:
       - worker
       - master
+  # -- Whitelist whole compliance profiles; see the subchart's own values for
+  # the full list of keys.
   profiles: {{}}
+  # -- Per-rule override / blacklist. The subchart's defaults still apply, so
+  # its pre-disabled alternatives and opt-in rules stay disabled.
   rules: {{}}
+  # -- Tunable XCCDF variables, same keys as the subchart's values.
+  variables: {{}}
+  # -- Namespace the Compliance Operator watches for TailoredProfiles.
+  complianceNamespace: openshift-compliance
   tailoredProfile:
+    # -- Render a matching TailoredProfile per enabled profile.
     enabled: false
 """
     (chart_dir / "values.yaml").write_text(values, encoding="utf-8")
@@ -1342,6 +1365,10 @@ def rules_matrix(contents: dict[str, Content], version: str,
             if hn in OPT_IN_RULES:
                 marks.append("⚠️ opt-in")
             mark = (" " + " ".join(marks)) if marks else ""
+            # Node objects are rendered once per role with the role appended,
+            # so the bare name is not what you would look up on a cluster.
+            if layer == "node":
+                target = f"{target}-<role>"
             applies = applicability.describe(app) if app is not None else "-"
             deps = sorted(f"{content.product}-{d}" for d in rule.depends_on)
             if deps:
