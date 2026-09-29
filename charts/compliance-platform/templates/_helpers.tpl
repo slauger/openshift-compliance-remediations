@@ -11,10 +11,11 @@
 {{-   if index $overrides $rule -}}true{{- else -}}false{{- end -}}
 {{- else -}}
 {{-   $active := false -}}
-{{-   $profileMap := index $root.Values "profileRules" -}}
+{{-   $profileMap := (index $root.Values "profileRules") | default dict -}}
 {{-   range $profile, $enabled := $root.Values.profiles -}}
 {{-     if $enabled -}}
-{{-       $ruleList := index $profileMap $profile | default (list) -}}
+{{-       $ruleList := (index $profileMap $profile) | default (list) -}}
+{{-       if not (kindIs "slice" $ruleList) -}}{{- $ruleList = list -}}{{- end -}}
 {{-       if has $rule $ruleList -}}{{- $active = true -}}{{- end -}}
 {{-     end -}}
 {{-   end -}}

@@ -4,8 +4,8 @@
 {{- $root := . -}}
 {{- range $profile := $profiles -}}
 {{- if index $root.Values.profiles $profile -}}
-{{- $ruleList := index $root.Values.profileRules $profile | default (list) -}}
-{{- $varList := index $root.Values.profileVariables $profile | default (list) -}}
+{{- $ruleList := (index ($root.Values.profileRules | default dict) $profile) | default (list) -}}
+{{- $varList := (index ($root.Values.profileVariables | default dict) $profile) | default (list) -}}
 {{- $product := (splitList "-" $profile | first) -}}
 {{- $name := printf "hardening-%s" ($profile | replace "_" "-") }}
 ---

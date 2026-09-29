@@ -117,8 +117,6 @@ profileRules:
     - ocp4-project_config_and_template_network_policy
     - ocp4-project_config_and_template_resource_quota
     - ocp4-project_template_resource_quota
-  ocp4-bsi-node: []
-  ocp4-bsi-node-2022: []
   ocp4-cis:
     - ocp4-api_server_encryption_provider_cipher
     - ocp4-api_server_tls_security_profile_custom_min_tls_version
@@ -137,10 +135,6 @@ profileRules:
     - ocp4-api_server_tls_security_profile_not_old
     - ocp4-audit_profile_set
     - ocp4-ingress_controller_tls_cipher_suites
-  ocp4-cis-node: []
-  ocp4-cis-node-1-7: []
-  ocp4-cis-node-1-9: []
-  ocp4-cis-vm-extension-node: []
   ocp4-e8:
     - ocp4-api_server_encryption_provider_cipher
   ocp4-high:
@@ -152,8 +146,6 @@ profileRules:
     - ocp4-ingress_controller_tls_cipher_suites
     - ocp4-oauth_or_oauthclient_inactivity_timeout
     - ocp4-oauth_or_oauthclient_token_maxage
-  ocp4-high-node: []
-  ocp4-high-node-rev-4: []
   ocp4-high-rev-4:
     - ocp4-api_server_encryption_provider_cipher
     - ocp4-api_server_tls_security_profile_custom_min_tls_version
@@ -172,8 +164,6 @@ profileRules:
     - ocp4-ingress_controller_tls_cipher_suites
     - ocp4-oauth_or_oauthclient_inactivity_timeout
     - ocp4-oauth_or_oauthclient_token_maxage
-  ocp4-moderate-node: []
-  ocp4-moderate-node-rev-4: []
   ocp4-moderate-rev-4:
     - ocp4-api_server_encryption_provider_cipher
     - ocp4-api_server_tls_security_profile_custom_min_tls_version
@@ -192,7 +182,6 @@ profileRules:
     - ocp4-ingress_controller_tls_cipher_suites
     - ocp4-oauth_or_oauthclient_inactivity_timeout
     - ocp4-oauth_or_oauthclient_token_maxage
-  ocp4-nerc-cip-node: []
   ocp4-pci-dss:
     - ocp4-api_server_encryption_provider_cipher
     - ocp4-api_server_tls_security_profile_custom_min_tls_version
@@ -215,9 +204,6 @@ profileRules:
     - ocp4-audit_profile_set
     - ocp4-ingress_controller_tls_cipher_suites
     - ocp4-oauth_or_oauthclient_inactivity_timeout
-  ocp4-pci-dss-node: []
-  ocp4-pci-dss-node-3-2: []
-  ocp4-pci-dss-node-4-0: []
   ocp4-stig:
     - ocp4-api_server_encryption_provider_cipher
     - ocp4-audit_error_alert_exists
@@ -226,9 +212,6 @@ profileRules:
     - ocp4-oauth_or_oauthclient_token_maxage
     - ocp4-project_config_and_template_network_policy
     - ocp4-project_config_and_template_resource_quota
-  ocp4-stig-node: []
-  ocp4-stig-node-v2r2: []
-  ocp4-stig-node-v2r3: []
   ocp4-stig-v2r2:
     - ocp4-api_server_encryption_provider_cipher
     - ocp4-audit_error_alert_exists
@@ -245,21 +228,6 @@ profileRules:
     - ocp4-oauth_or_oauthclient_token_maxage
     - ocp4-project_config_and_template_network_policy
     - ocp4-project_config_and_template_resource_quota
-  rhcos4-anssi_bp28_enhanced: []
-  rhcos4-anssi_bp28_high: []
-  rhcos4-anssi_bp28_intermediary: []
-  rhcos4-anssi_bp28_minimal: []
-  rhcos4-bsi: []
-  rhcos4-bsi-2022: []
-  rhcos4-e8: []
-  rhcos4-high: []
-  rhcos4-high-rev-4: []
-  rhcos4-moderate: []
-  rhcos4-moderate-rev-4: []
-  rhcos4-nerc-cip: []
-  rhcos4-stig: []
-  rhcos4-stig-v2r2: []
-  rhcos4-stig-v2r3: []
 
 # profileVariables maps each profile to the XCCDF variables its rules use
 # (auto-generated; scopes TailoredProfile setValues).

@@ -639,6 +639,59 @@ class TestRuleDependencies(unittest.TestCase):
         self.assertEqual(emit.unverifiable_dependencies(contents), [])
 
 
+class TestValuesContract(unittest.TestCase):
+    """What the templates read, values.yaml declares and the schema allows."""
+
+    @classmethod
+    @requires(OCP4, RHCOS4)
+    def setUpClass(cls):
+        cls.contents = [xccdf.parse(f, product=p)
+                        for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))]
+
+    def test_numeric_variables_are_constrained_to_digits(self):
+        # A non-numeric override used to render straight into a field that
+        # must be a number.
+        from compliance_remediations_helm import resolver
+        numeric = resolver.numeric_variables(self.contents)
+        self.assertTrue(numeric)
+        schema = json.loads(emit.values_schema(self.contents, "node"))
+        props = schema["properties"]["variables"]["properties"]
+        for name in numeric:
+            if name in props:
+                self.assertEqual(props[name]["pattern"], r"^\d+$", name)
+
+    def test_only_variables_whose_options_are_all_digits_are_constrained(self):
+        # The declared XCCDF type alone is not enough - a number-typed value
+        # may carry a unit suffix, and constraining it would reject the
+        # shipped default.
+        from compliance_remediations_helm import resolver
+        numeric = resolver.numeric_variables(self.contents)
+        defaults = {}
+        for c in self.contents:
+            defaults.update(resolver.resolve_defaults(c))
+        for name in numeric:
+            self.assertRegex(defaults[name], r"^\d+$", name)
+
+    def test_ocp_version_accepts_a_prerelease(self):
+        # The documented `oc get clusterversion` returns 4.20.0-ec.2 on any
+        # pre-GA cluster, and the templates use only major.minor.
+        schema = json.loads(emit.values_schema(self.contents, "node"))
+        pattern = schema["properties"]["cluster"]["properties"]["ocpVersion"]["pattern"]
+        for v in ("4.20", "4.20.1", "4.20.0-ec.2", "4.19.0-rc.1"):
+            self.assertRegex(v, pattern, v)
+        for v in ("x.y", "", "4"):
+            self.assertNotRegex(v, pattern, v)
+
+    def test_profile_maps_only_carry_this_layer(self):
+        # They used to carry all 49 profiles in both charts, while `profiles`
+        # declares only its own - so most entries were unreachable.
+        import yaml
+        for layer in ("node", "platform"):
+            values = yaml.safe_load(emit.values_yaml(self.contents, layer, "0.0.0"))
+            self.assertEqual(set(values["profileRules"]), set(values["profiles"]))
+            self.assertEqual(set(values["profileVariables"]), set(values["profiles"]))
+
+
 class TestBrokenRules(unittest.TestCase):
     """Rules whose upstream fix the API server silently prunes."""
 

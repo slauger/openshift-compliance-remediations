@@ -216,6 +216,26 @@ def _rewrite_block(block: str) -> str:
     return _ENC_ACTION_RE.sub(lambda m: _translate_action(m.group(1)), inner)
 
 
+def numeric_variables(contents) -> set[str]:
+    """Variables XCCDF declares as numbers, and whose options really are.
+
+    The declared type alone is not enough: some number-typed values carry unit
+    suffixes. Require every selector and the resolved default to be digits, so
+    a constraint is only applied where it cannot reject a legitimate value.
+    """
+    out: set[str] = set()
+    for content in contents:
+        defaults = resolve_defaults(content)
+        for name in referenced_variables(content):
+            value = _find_value(content, name)
+            if value is None or value.value_type != "number":
+                continue
+            options = set(value.selectors.values()) | {defaults.get(name, "")}
+            if options and all(re.fullmatch(r"\d+", o) for o in options if o):
+                out.add(name)
+    return out
+
+
 def rewrite_placeholders(fix_yaml: str) -> str:
     """Prepare fix YAML for Helm templating.
 

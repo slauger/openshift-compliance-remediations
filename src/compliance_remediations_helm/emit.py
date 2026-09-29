@@ -20,10 +20,11 @@ Activation logic (see _helpers.tpl):
 """
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
-from . import applicability, classify
+from . import applicability, classify, resolver
 from .collisions import MergeGroup, build_groups
 from .parser import Content, rules_with_fixes
 from .resolver import resolve_defaults, rewrite_placeholders
@@ -156,10 +157,11 @@ HELPERS_TPL = """\
 {{-   if index $overrides $rule -}}true{{- else -}}false{{- end -}}
 {{- else -}}
 {{-   $active := false -}}
-{{-   $profileMap := index $root.Values "profileRules" -}}
+{{-   $profileMap := (index $root.Values "profileRules") | default dict -}}
 {{-   range $profile, $enabled := $root.Values.profiles -}}
 {{-     if $enabled -}}
-{{-       $ruleList := index $profileMap $profile | default (list) -}}
+{{-       $ruleList := (index $profileMap $profile) | default (list) -}}
+{{-       if not (kindIs "slice" $ruleList) -}}{{- $ruleList = list -}}{{- end -}}
 {{-       if has $rule $ruleList -}}{{- $active = true -}}{{- end -}}
 {{-     end -}}
 {{-   end -}}
@@ -295,9 +297,10 @@ def _profile_rules_block(contents: list[Content], layer: str) -> str:
         "# @ignored",
         "profileRules:",
     ]
+    layer_profiles = set(_profiles_with_layer(contents, layer))
     for content in contents:
         fixset = set(rules_with_fixes(content))
-        for pid in sorted(content.profiles):
+        for pid in sorted(p for p in content.profiles if p in layer_profiles):
             prof = content.profiles[pid]
             selected = sorted({
                 f"{content.product}-{r}"
@@ -1030,8 +1033,10 @@ def tailored_profile_template(contents: list[Content], layer: str) -> str:
         "{{- $root := . -}}",
         "{{- range $profile := $profiles -}}",
         '{{- if index $root.Values.profiles $profile -}}',
-        "{{- $ruleList := index $root.Values.profileRules $profile | default (list) -}}",
-        "{{- $varList := index $root.Values.profileVariables $profile | default (list) -}}",
+        "{{- $ruleList := (index ($root.Values.profileRules | default dict) "
+        "$profile) | default (list) -}}",
+        "{{- $varList := (index ($root.Values.profileVariables | default dict) "
+        "$profile) | default (list) -}}",
         '{{- $product := (splitList "-" $profile | first) -}}',
         # No right-trim on the line before "---": it would swallow the newline
         # and glue this document onto the previous one, so any two enabled
@@ -1211,6 +1216,21 @@ dependencies:
 """
     (chart_dir / "values.yaml").write_text(values, encoding="utf-8")
 
+    # Without a schema here a misspelled subchart prefix is silently dropped:
+    # the release installs, reports success, and has nothing enabled. Helm
+    # still validates each subchart's own values against its own schema, so
+    # this only needs to police the top level.
+    (chart_dir / "values.schema.json").write_text(json.dumps({
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+            PLATFORM_CHART: {"type": "object"},
+            NODE_CHART: {"type": "object"},
+            "global": {"type": "object"},
+        },
+        "additionalProperties": False,
+    }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
     for arch in applicability.ARCHITECTURES:
         overlay = chart_dir / f"values-{arch}.yaml"
         per_chart = (overlays or {}).get(arch)
@@ -1307,8 +1327,13 @@ def values_schema(contents: list[Content], layer: str) -> str:
     inner = r"[^\n\t#'\"\\]"
     edge = r"[^\s#'\"\\]"
     var_pattern = rf"^{edge}({inner}*{edge})?$"
-    var_props = {v: {"type": ["string", "number"], "pattern": var_pattern}
-                 for v in var_names}
+    numeric = resolver.numeric_variables(contents)
+    var_props = {
+        v: ({"type": ["string", "number"], "pattern": r"^\d+$"}
+            if v in numeric
+            else {"type": ["string", "number"], "pattern": var_pattern})
+        for v in var_names
+    }
 
     schema = {
         "$schema": "https://json-schema.org/draft-07/schema#",
@@ -1320,7 +1345,11 @@ def values_schema(contents: list[Content], layer: str) -> str:
                 "properties": {
                     "ocpVersion": {
                         "type": "string",
-                        "pattern": r"^[0-9]+\.[0-9]+(\.[0-9]+)?$",
+                        # The documented `oc get clusterversion` returns
+                        # 4.20.0-ec.2 on any pre-GA cluster, and the templates
+                        # only ever use major.minor - so rejecting the suffix
+                        # blocked an install over something we discard anyway.
+                        "pattern": r"^[0-9]+\.[0-9]+(\.[0-9]+)?([-+].*)?$",
                     },
                     "architecture": {
                         "type": "string",

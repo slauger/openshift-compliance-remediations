@@ -64,3 +64,14 @@ tests:
           count: 2
       - exists:
           path: spec.config.storage.files
+
+  - it: rejects a misspelled subchart prefix
+    # Without a schema at this level the key is silently dropped: the release
+    # installs, reports success, and has nothing enabled.
+    template: charts/compliance-node/templates/preflight.yaml
+    set:
+      compliance_node:
+        node:
+          enabled: true
+    asserts:
+      - failedTemplate: {}

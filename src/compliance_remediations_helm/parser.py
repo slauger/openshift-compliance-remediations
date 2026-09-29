@@ -88,6 +88,9 @@ class Value:
     value_id: str
     default: str | None
     selectors: dict[str, str] = field(default_factory=dict)
+    # XCCDF declares the type; "number" is the one we can act on, by keeping a
+    # non-numeric override out of a field that must be a number.
+    value_type: str = "string"
 
 
 @dataclass
@@ -244,7 +247,9 @@ def parse(datastream_path: Path, product: str = "ocp4") -> Content:
                         selectors[sel] = (c.text or "").strip()
                     else:
                         default = (c.text or "").strip()
-            values[value_id] = Value(value_id=value_id, default=default, selectors=selectors)
+            values[value_id] = Value(value_id=value_id, default=default,
+                                     selectors=selectors,
+                                     value_type=el.get("type", "string"))
 
         elif tag == "Profile":
             short_id = el.get("id", "").split(_PROFILE_PREFIX)[-1]

@@ -20,7 +20,7 @@
           "type": "boolean"
         },
         "ocpVersion": {
-          "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+          "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?([-+].*)?$",
           "type": "string"
         }
       },
@@ -1134,14 +1134,14 @@
       "additionalProperties": false,
       "properties": {
         "sshd_idle_timeout_value": {
-          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
+          "pattern": "^\\d+$",
           "type": [
             "string",
             "number"
           ]
         },
         "sshd_max_auth_tries_value": {
-          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
+          "pattern": "^\\d+$",
           "type": [
             "string",
             "number"
@@ -1183,7 +1183,7 @@
           ]
         },
         "var_auditd_max_log_file": {
-          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
+          "pattern": "^\\d+$",
           "type": [
             "string",
             "number"
@@ -1197,14 +1197,14 @@
           ]
         },
         "var_auditd_num_logs": {
-          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
+          "pattern": "^\\d+$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_auditd_space_left": {
-          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
+          "pattern": "^\\d+$",
           "type": [
             "string",
             "number"
@@ -1358,7 +1358,7 @@
           ]
         },
         "var_sshd_max_sessions": {
-          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
+          "pattern": "^\\d+$",
           "type": [
             "string",
             "number"
@@ -1372,14 +1372,14 @@
           ]
         },
         "var_sshd_set_keepalive": {
-          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
+          "pattern": "^\\d+$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_sshd_set_login_grace_time": {
-          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
+          "pattern": "^\\d+$",
           "type": [
             "string",
             "number"
@@ -1407,7 +1407,7 @@
           ]
         },
         "var_time_service_set_maxpoll": {
-          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
+          "pattern": "^\\d+$",
           "type": [
             "string",
             "number"
