@@ -19,6 +19,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_privileged_commands_sudo")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-privileged-commands-sudo.rhcos4-audit-rules-privileged-commands-sudo.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-audit_rules_privileged_commands_sudo for MachineConfig/75-ocp4-audit-rules-privileged-commands-sudo produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

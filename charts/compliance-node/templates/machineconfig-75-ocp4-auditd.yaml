@@ -241,70 +241,121 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_disk_error_action")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-disk-error-action.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-auditd_data_disk_error_action for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_disk_error_action_stig")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-disk-error-action-stig.1" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-auditd_data_disk_error_action_stig for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_disk_full_action")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-disk-full-action.2" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-auditd_data_disk_full_action for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_disk_full_action_stig")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-disk-full-action-stig.3" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-auditd_data_disk_full_action_stig for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_retention_admin_space_left_action")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-retention-admin-space-left-action.4" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-auditd_data_retention_admin_space_left_action for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_retention_flush")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-retention-flush.5" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-auditd_data_retention_flush for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_retention_max_log_file")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-retention-max-log-file.6" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-auditd_data_retention_max_log_file for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_retention_max_log_file_action")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-retention-max-log-file-action.7" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-auditd_data_retention_max_log_file_action for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_retention_max_log_file_action_stig")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-retention-max-log-file-action-stig.8" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-auditd_data_retention_max_log_file_action_stig for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_retention_num_logs")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-retention-num-logs.9" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-auditd_data_retention_num_logs for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_retention_space_left")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-retention-space-left.10" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-auditd_data_retention_space_left for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_retention_space_left_action")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-retention-space-left-action.11" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-auditd_data_retention_space_left_action for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_freq")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-freq.12" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-auditd_freq for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_local_events")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-local-events.13" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-auditd_local_events for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_log_format")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-log-format.14" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-auditd_log_format for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_name_format")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-name-format.15" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-auditd_name_format for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_write_logs")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-write-logs.16" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-auditd_write_logs for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

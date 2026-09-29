@@ -47,3 +47,31 @@ tests:
           path: spec.audit
       - notExists:
           path: spec.encryption
+
+  - it: fails instead of merging a fromYaml error into the object
+    # sprig's fromYaml returns {"Error": "..."} rather than failing, and
+    # merging that replaced spec with an Error field while the render exited
+    # 0 - the remediation silently gone. This fragment interpolates the
+    # variable unquoted, which is what makes it reachable.
+    template: templates/apiserver-cluster.yaml
+    set:
+      rules:
+        ocp4-audit_profile_set: true
+      variables:
+        var_openshift_audit_profile: "Default: x"
+    asserts:
+      - failedTemplate:
+          errorPattern: "produced invalid YAML"
+
+  - it: does not advertise an architecture overlay for a hypershift refusal
+    # The hint was built from $arch unconditionally and pointed at a
+    # values-x86_64.yaml that is never generated.
+    template: templates/preflight.yaml
+    set:
+      cluster:
+        hypershift: true
+      rules:
+        ocp4-api_server_encryption_provider_cipher: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "change the cluster facts they depend on"

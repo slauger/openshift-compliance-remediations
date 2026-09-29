@@ -12,6 +12,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-kubevirt-vcpu-metrics-enabled")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-kubevirt-vcpu-metrics-enabled.ocp4-kubevirt-vcpu-metrics-enabled.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering ocp4-kubevirt-vcpu-metrics-enabled for MachineConfig/75-ocp4-kubevirt-vcpu-metrics-enabled produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

@@ -22,6 +22,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-audit_error_alert_exists")) "true" -}}
 {{- $frag := include "cr.frag.openshift-kube-apiserver-prometheusrule-audit-errors.ocp4-audit-error-alert-exists.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering ocp4-audit_error_alert_exists for PrometheusRule/audit-errors produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

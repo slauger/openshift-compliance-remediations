@@ -31,10 +31,16 @@ spec:
 {{- $merged := dict -}}
 {{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sshd_set_maxstartups")) "true") (semverCompare "<4.13.0" (printf "%s.%s.0" (.Values.cluster.ocpVersion | toString | splitList "." | first) (index (.Values.cluster.ocpVersion | toString | splitList ".") 1))) -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-sshd-set-maxstartups.rhcos4-sshd-set-maxstartups.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-sshd_set_maxstartups for MachineConfig/75-ocp4-sshd-set-maxstartups produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sshd_set_maxstartups")) "true") (semverCompare ">=4.13.0" (printf "%s.%s.0" (.Values.cluster.ocpVersion | toString | splitList "." | first) (index (.Values.cluster.ocpVersion | toString | splitList ".") 1))) -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-sshd-set-maxstartups.rhcos4-sshd-set-maxstartups.1" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-sshd_set_maxstartups for MachineConfig/75-ocp4-sshd-set-maxstartups produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

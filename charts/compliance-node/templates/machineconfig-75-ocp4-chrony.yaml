@@ -123,22 +123,37 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-chronyd_client_only")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-chrony.rhcos4-chronyd-client-only.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-chronyd_client_only for MachineConfig/75-ocp4-chrony produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-chronyd_no_chronyc_network")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-chrony.rhcos4-chronyd-no-chronyc-network.1" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-chronyd_no_chronyc_network for MachineConfig/75-ocp4-chrony produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-chronyd_or_ntpd_set_maxpoll")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-chrony.rhcos4-chronyd-or-ntpd-set-maxpoll.2" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-chronyd_or_ntpd_set_maxpoll for MachineConfig/75-ocp4-chrony produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-chronyd_or_ntpd_specify_multiple_servers")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-chrony.rhcos4-chronyd-or-ntpd-specify-multiple-servers.3" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-chronyd_or_ntpd_specify_multiple_servers for MachineConfig/75-ocp4-chrony produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-chronyd_or_ntpd_specify_remote_server")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-chrony.rhcos4-chronyd-or-ntpd-specify-remote-server.4" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-chronyd_or_ntpd_specify_remote_server for MachineConfig/75-ocp4-chrony produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

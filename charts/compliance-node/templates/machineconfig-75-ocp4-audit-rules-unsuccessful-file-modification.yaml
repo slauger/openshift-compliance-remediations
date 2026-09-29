@@ -171,50 +171,86 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_creat")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-creat.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_creat for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_ftruncate")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-ftruncate.1" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_ftruncate for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_open")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-open.2" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_open for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-open-by-handle-at.3" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at_o_creat")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-open-by-handle-at-o-creat.4" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at_o_creat for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at_o_trunc_write")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-open-by-handle-at-o-trunc-write.5" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at_o_trunc_write for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_open_o_creat")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-open-o-creat.6" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_open_o_creat for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_open_o_trunc_write")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-open-o-trunc-write.7" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_open_o_trunc_write for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_openat")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-openat.8" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_openat for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_openat_o_creat")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-openat-o-creat.9" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_openat_o_creat for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_openat_o_trunc_write")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-openat-o-trunc-write.10" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_openat_o_trunc_write for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_truncate")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-truncate.11" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_truncate for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

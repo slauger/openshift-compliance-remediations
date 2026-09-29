@@ -192,6 +192,7 @@ HELPERS_TPL = """\
 {{- $root := . -}}
 {{- $arch := include "cr.arch" $root -}}
 {{- $bad := list -}}
+{{- $archBad := false -}}
 {{- range $rule, $req := ($root.Values.ruleApplicability | default dict) -}}
 {{-   if eq (include "cr.ruleActive" (dict "root" $root "rule" $rule)) "true" -}}
 {{-     $reason := "" -}}
@@ -199,6 +200,7 @@ HELPERS_TPL = """\
 {{-       $reason = printf "never applicable (%s)" $req.never -}}
 {{-     else if and (hasKey $req "arch") (not (has $arch $req.arch)) -}}
 {{-       $reason = printf "not applicable on %s" $arch -}}
+{{-       $archBad = true -}}
 {{-     else if and (hasKey $req "hypershift") (not (has $root.Values.cluster.hypershift $req.hypershift)) -}}
 {{-       $reason = printf "not applicable when cluster.hypershift is %v" $root.Values.cluster.hypershift -}}
 {{-     end -}}
@@ -208,7 +210,10 @@ HELPERS_TPL = """\
 {{-   end -}}
 {{- end -}}
 {{- if $bad -}}
-{{- $hint := printf "Disable them in .Values.rules, or apply the generated overlay for this architecture: -f values-%s.yaml from the chart you are installing (the umbrella ships its own, with the values nested per subchart). See RULES.md for the applicability of every rule." $arch -}}
+{{- $hint := "Disable them in .Values.rules, or change the cluster facts they depend on. See RULES.md for the applicability of every rule." -}}
+{{- if $archBad -}}
+{{- $hint = printf "Disable them in .Values.rules, or apply the generated overlay for this architecture: -f values-%s.yaml from the chart you are installing (the umbrella ships its own, with the values nested per subchart). See RULES.md for the applicability of every rule." $arch -}}
+{{- end -}}
 {{- fail (printf "%d active rule(s) are not applicable to this cluster:\\n%s\\n%s" (len $bad) (join "\\n" (sortAlpha $bad)) $hint) -}}
 {{- end -}}
 {{- end -}}
@@ -817,6 +822,13 @@ def object_template(group: MergeGroup, appl: dict | None = None) -> str:
             cond = f'and ({cond}) ({_ocp_semver_expr(doc.ocp_version)})'
         lines.append(f"{{{{- if {cond} -}}}}")
         lines.append(f'{{{{- $frag := include "{name}" . | fromYaml -}}}}')
+        # sprig's fromYaml returns {"Error": "..."} instead of failing, and
+        # merging that replaces the object's spec with an Error field while the
+        # render exits 0 - the remediation silently gone. A variable value
+        # containing YAML punctuation is enough to trigger it.
+        lines.append('{{- if hasKey $frag "Error" -}}')
+        lines.append(f'{{{{- fail (printf {_go_str("Rendering " + doc.rule_id + " for " + key.kind + "/" + key.name + " produced invalid YAML: %s. Check the variables it interpolates.")} $frag.Error) -}}}}')
+        lines.append("{{- end -}}")
         lines.append("{{- $merged = mustMergeOverwrite $merged $frag -}}")
         lines.append("{{- end -}}")
 
@@ -943,18 +955,22 @@ def tailored_profile_template(contents: list[Content], layer: str) -> str:
         "{{- $ruleList := index $root.Values.profileRules $profile | default (list) -}}",
         "{{- $varList := index $root.Values.profileVariables $profile | default (list) -}}",
         '{{- $product := (splitList "-" $profile | first) -}}',
+        # No right-trim on the line before "---": it would swallow the newline
+        # and glue this document onto the previous one, so any two enabled
+        # profiles of a layer produced invalid YAML.
+        '{{- $name := printf "hardening-%s" ($profile | replace "_" "-") }}',
         "---",
         "apiVersion: compliance.openshift.io/v1alpha1",
         "kind: TailoredProfile",
         "metadata:",
-        '  name: {{ printf "hardening-%s" $profile }}',
+        '  name: {{ $name }}',
         "  namespace: {{ $root.Values.complianceNamespace | quote }}",
         "  labels:",
         '    app.kubernetes.io/managed-by: {{ $root.Release.Service | quote }}',
         "  annotations:",
         f'    compliance.openshift.io/product-type: "{product_type}"',
         "spec:",
-        '  extends: {{ $profile | quote }}',
+        '  extends: {{ $profile | replace "_" "-" | quote }}',
         '  title: {{ printf "Hardening-managed selection of %s" $profile | quote }}',
         '  description: >-',
         "    Rule selection managed by the compliance-hardening Helm chart.",
@@ -1242,7 +1258,10 @@ def values_schema(contents: list[Content], layer: str) -> str:
             "type": "object",
             "properties": {
                 "enabled": {"type": "boolean"},
-                "roles": {"type": "array", "items": {"type": "string"}},
+                # Without minItems an empty list renders zero manifests and
+                # exits 0 - every node remediation silently dropped.
+                "roles": {"type": "array", "items": {"type": "string"},
+                          "minItems": 1},
             },
             "additionalProperties": False,
         }

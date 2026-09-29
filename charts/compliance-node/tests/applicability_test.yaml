@@ -376,3 +376,40 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "/etc/ssh/sshd_config with different content"
+
+  # --- regressions found by review ---------------------------------------
+  - it: renders one TailoredProfile per enabled profile, not glued together
+    # A right-trim on the line before `---` swallowed the newline, so any two
+    # enabled profiles of a layer produced invalid YAML. One profile worked,
+    # which is why lint and the per-profile cases never saw it.
+    template: templates/tailoredprofile.yaml
+    set:
+      node:
+        enabled: true
+      tailoredProfile:
+        enabled: true
+      profiles:
+        rhcos4-stig: true
+        rhcos4-e8: true
+    asserts:
+      - hasDocuments:
+          count: 2
+
+  - it: gives the TailoredProfile an RFC1123 name
+    # Profile ids carry underscores; a Kubernetes object name may not, and
+    # `extends` has to match the operator's dash-spelled Profile CR.
+    template: templates/tailoredprofile.yaml
+    set:
+      node:
+        enabled: true
+      tailoredProfile:
+        enabled: true
+      profiles:
+        rhcos4-anssi_bp28_high: true
+    asserts:
+      - equal:
+          path: metadata.name
+          value: hardening-rhcos4-anssi-bp28-high
+      - equal:
+          path: spec.extends
+          value: rhcos4-anssi-bp28-high

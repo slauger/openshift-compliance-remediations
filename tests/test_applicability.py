@@ -525,6 +525,20 @@ class TestUmbrellaOverlays(unittest.TestCase):
             self.assertFalse((chart / "values-x86_64.yaml").exists(), chart.name)
 
 
+class TestScheduleForSilentTotalFailure(unittest.TestCase):
+    """Values that would render nothing at all must be rejected, not accepted."""
+
+    @requires(OCP4, RHCOS4)
+    def test_node_roles_may_not_be_empty(self):
+        # `node.roles: []` rendered zero manifests and exited 0 - every node
+        # remediation silently dropped, with nothing to notice it.
+        contents = {p: xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))}
+        schema = json.loads(emit.values_schema(list(contents.values()), "node"))
+        self.assertEqual(schema["properties"]["node"]["properties"]["roles"]
+                         .get("minItems"), 1)
+
+
 class TestRuleDependencies(unittest.TestCase):
     """Upstream says some rules must not be applied without another."""
 

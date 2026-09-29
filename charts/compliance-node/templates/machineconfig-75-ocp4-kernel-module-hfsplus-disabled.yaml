@@ -17,6 +17,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-kernel_module_hfsplus_disabled")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-kernel-module-hfsplus-disabled.rhcos4-kernel-module-hfsplus-disabled.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-kernel_module_hfsplus_disabled for MachineConfig/75-ocp4-kernel-module-hfsplus-disabled produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

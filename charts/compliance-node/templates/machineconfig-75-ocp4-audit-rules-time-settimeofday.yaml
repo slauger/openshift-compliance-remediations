@@ -17,6 +17,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_time_settimeofday")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-time-settimeofday.rhcos4-audit-rules-time-settimeofday.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-audit_rules_time_settimeofday for MachineConfig/75-ocp4-audit-rules-time-settimeofday produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

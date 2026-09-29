@@ -7,18 +7,19 @@
 {{- $ruleList := index $root.Values.profileRules $profile | default (list) -}}
 {{- $varList := index $root.Values.profileVariables $profile | default (list) -}}
 {{- $product := (splitList "-" $profile | first) -}}
+{{- $name := printf "hardening-%s" ($profile | replace "_" "-") }}
 ---
 apiVersion: compliance.openshift.io/v1alpha1
 kind: TailoredProfile
 metadata:
-  name: {{ printf "hardening-%s" $profile }}
+  name: {{ $name }}
   namespace: {{ $root.Values.complianceNamespace | quote }}
   labels:
     app.kubernetes.io/managed-by: {{ $root.Release.Service | quote }}
   annotations:
     compliance.openshift.io/product-type: "Node"
 spec:
-  extends: {{ $profile | quote }}
+  extends: {{ $profile | replace "_" "-" | quote }}
   title: {{ printf "Hardening-managed selection of %s" $profile | quote }}
   description: >-
     Rule selection managed by the compliance-hardening Helm chart.

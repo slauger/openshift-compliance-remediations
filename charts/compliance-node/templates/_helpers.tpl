@@ -47,6 +47,7 @@
 {{- $root := . -}}
 {{- $arch := include "cr.arch" $root -}}
 {{- $bad := list -}}
+{{- $archBad := false -}}
 {{- range $rule, $req := ($root.Values.ruleApplicability | default dict) -}}
 {{-   if eq (include "cr.ruleActive" (dict "root" $root "rule" $rule)) "true" -}}
 {{-     $reason := "" -}}
@@ -54,6 +55,7 @@
 {{-       $reason = printf "never applicable (%s)" $req.never -}}
 {{-     else if and (hasKey $req "arch") (not (has $arch $req.arch)) -}}
 {{-       $reason = printf "not applicable on %s" $arch -}}
+{{-       $archBad = true -}}
 {{-     else if and (hasKey $req "hypershift") (not (has $root.Values.cluster.hypershift $req.hypershift)) -}}
 {{-       $reason = printf "not applicable when cluster.hypershift is %v" $root.Values.cluster.hypershift -}}
 {{-     end -}}
@@ -63,7 +65,10 @@
 {{-   end -}}
 {{- end -}}
 {{- if $bad -}}
-{{- $hint := printf "Disable them in .Values.rules, or apply the generated overlay for this architecture: -f values-%s.yaml from the chart you are installing (the umbrella ships its own, with the values nested per subchart). See RULES.md for the applicability of every rule." $arch -}}
+{{- $hint := "Disable them in .Values.rules, or change the cluster facts they depend on. See RULES.md for the applicability of every rule." -}}
+{{- if $archBad -}}
+{{- $hint = printf "Disable them in .Values.rules, or apply the generated overlay for this architecture: -f values-%s.yaml from the chart you are installing (the umbrella ships its own, with the values nested per subchart). See RULES.md for the applicability of every rule." $arch -}}
+{{- end -}}
 {{- fail (printf "%d active rule(s) are not applicable to this cluster:\n%s\n%s" (len $bad) (join "\n" (sortAlpha $bad)) $hint) -}}
 {{- end -}}
 {{- end -}}

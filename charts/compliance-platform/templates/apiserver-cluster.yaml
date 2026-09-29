@@ -38,22 +38,37 @@ spec:
 {{- $merged := dict -}}
 {{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-api_server_encryption_provider_cipher")) "true") (semverCompare "<4.13.0" (printf "%s.%s.0" (.Values.cluster.ocpVersion | toString | splitList "." | first) (index (.Values.cluster.ocpVersion | toString | splitList ".") 1))) -}}
 {{- $frag := include "cr.frag.apiserver-cluster.ocp4-api-server-encryption-provider-cipher.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering ocp4-api_server_encryption_provider_cipher for APIServer/cluster produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if and (eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-api_server_encryption_provider_cipher")) "true") (semverCompare ">=4.13.0" (printf "%s.%s.0" (.Values.cluster.ocpVersion | toString | splitList "." | first) (index (.Values.cluster.ocpVersion | toString | splitList ".") 1))) -}}
 {{- $frag := include "cr.frag.apiserver-cluster.ocp4-api-server-encryption-provider-cipher.1" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering ocp4-api_server_encryption_provider_cipher for APIServer/cluster produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-api_server_tls_security_profile_custom_min_tls_version")) "true" -}}
 {{- $frag := include "cr.frag.apiserver-cluster.ocp4-api-server-tls-security-profile-custom-min-tls-version.2" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering ocp4-api_server_tls_security_profile_custom_min_tls_version for APIServer/cluster produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-api_server_tls_security_profile_not_old")) "true" -}}
 {{- $frag := include "cr.frag.apiserver-cluster.ocp4-api-server-tls-security-profile-not-old.3" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering ocp4-api_server_tls_security_profile_not_old for APIServer/cluster produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-audit_profile_set")) "true" -}}
 {{- $frag := include "cr.frag.apiserver-cluster.ocp4-audit-profile-set.4" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering ocp4-audit_profile_set for APIServer/cluster produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}
