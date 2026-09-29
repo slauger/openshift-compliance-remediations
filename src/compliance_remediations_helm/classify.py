@@ -27,6 +27,28 @@ def layer_for_kind(kind: str) -> str:
 # and -master - the same objects the operator would create.
 KUBELET_CONFIG_NAME = "compliance-operator-kubelet"
 
+# Rule families whose upstream fixes are byte-identical because each rule ships
+# the whole configuration file rather than just its own setting. The operator
+# emits one remediation per rule and therefore N MachineConfigs writing the
+# same paths with the same bytes; we emit one. Enabling any single rule of the
+# family still renders the full configuration, exactly as before - the object
+# is gated on any of them being active.
+#
+# This is the one place we knowingly diverge from the operator's per-check
+# naming, and object_template asserts the fragments really are identical, so a
+# content release that makes them differ fails the build instead of silently
+# picking one.
+CONSOLIDATED_NAMES: dict[str, str] = {
+    rule: "75-ocp4-chrony"
+    for rule in (
+        "chronyd_client_only",
+        "chronyd_no_chronyc_network",
+        "chronyd_or_ntpd_set_maxpoll",
+        "chronyd_or_ntpd_specify_multiple_servers",
+        "chronyd_or_ntpd_specify_remote_server",
+    )
+}
+
 
 def synthesize_name(kind: str, rule_id: str) -> str:
     """Match the operator's naming convention for node objects that omit a name.
@@ -38,6 +60,8 @@ def synthesize_name(kind: str, rule_id: str) -> str:
     """
     if kind == "KubeletConfig":
         return KUBELET_CONFIG_NAME
+    if rule_id in CONSOLIDATED_NAMES:
+        return CONSOLIDATED_NAMES[rule_id]
     slug = rule_id.replace("_", "-")
     # MachineConfig files are ordered; 75- keeps them late in the merge.
     return f"75-ocp4-{slug}"

@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from . import applicability
+from . import applicability, classify
 from .collisions import MergeGroup, build_groups
 from .parser import Content, rules_with_fixes
 from .resolver import resolve_defaults, rewrite_placeholders
@@ -416,6 +416,15 @@ OPT_IN_RULES: dict[str, str] = {
     "ocp4-kubelet_enable_protect_kernel_defaults":
         "kubelet refuses to start if the kernel parameters it expects are not "
         "already set; nodes go NotReady pool by pool",
+    "rhcos4-service_sshd_disabled":
+        "masks sshd.service and sshd.socket, removing the recovery path into "
+        "a node when the API is not enough",
+    "rhcos4-coreos_nousb_kernel_argument":
+        "boots with nousb; on bare metal that disables USB keyboards, so the "
+        "console stops being a way back in",
+    "rhcos4-coreos_page_poison_kernel_argument":
+        "page_poison=1 carries a measurable runtime cost - a deliberate "
+        "trade-off rather than something to inherit from a profile",
 }
 
 
@@ -640,6 +649,19 @@ def object_template(group: MergeGroup, appl: dict | None = None) -> str:
     lines.append(f'{{{{- fail (printf {_go_str(msg)} '
                  '(.Values.cluster.ocpVersion | toString)) -}}')
     lines.append("{{- end -}}")
+
+    # A consolidated object only holds together while the fixes it merges stay
+    # identical. Check it here rather than letting the conflict detector report
+    # it as "mutually-exclusive alternatives", which it is not.
+    if key.name in set(classify.CONSOLIDATED_NAMES.values()):
+        bodies = {_fragment_body(d.yaml) for d in group.docs if _fragment_body(d.yaml)}
+        if len(bodies) > 1:
+            raise ValueError(
+                f"{key.kind}/{key.name} consolidates rules whose fixes are no "
+                f"longer identical ({', '.join(sorted(group.rule_ids))}). Drop "
+                f"them from classify.CONSOLIDATED_NAMES so each gets its own "
+                f"object again."
+            )
 
     # Node roles this object applies to, if upstream restricts it. Mirrors the
     # operator: it scans per pool and derives the MachineConfig role from the

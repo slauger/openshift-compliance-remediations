@@ -236,3 +236,45 @@ tests:
           value: ""
       - notExists:
           path: spec.machineConfigPoolSelector.matchLabels["pools.operator.machineconfiguration.openshift.io/worker"]
+
+  # --- consolidated chrony object ----------------------------------------
+  - it: still emits one chrony MachineConfig per pool, not one in total
+    # Consolidation is across rules, not across pools: the role loop is
+    # untouched, so each MachineConfigPool keeps its own object and label.
+    template: templates/machineconfig-75-ocp4-chrony.yaml
+    set:
+      node:
+        enabled: true
+        roles: [worker, master]
+      rules:
+        rhcos4-chronyd_client_only: true
+        rhcos4-chronyd_or_ntpd_set_maxpoll: true
+    asserts:
+      - hasDocuments:
+          count: 2
+      - equal:
+          path: metadata.name
+          value: 75-ocp4-chrony-worker
+        documentIndex: 0
+      - equal:
+          path: metadata.labels["machineconfiguration.openshift.io/role"]
+          value: master
+        documentIndex: 1
+
+  - it: renders the full chrony configuration from a single rule
+    # Each upstream fix ships the whole file, so one rule is enough - that is
+    # what makes consolidating them sound.
+    template: templates/machineconfig-75-ocp4-chrony.yaml
+    documentIndex: 0
+    set:
+      node:
+        enabled: true
+        roles: [worker]
+      rules:
+        rhcos4-chronyd_client_only: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - lengthEqual:
+          path: spec.config.storage.files
+          count: 3

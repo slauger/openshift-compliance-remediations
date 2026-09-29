@@ -420,6 +420,54 @@ class TestKubeletConfigConsolidation(unittest.TestCase):
                          "compliance-operator-kubelet")
 
 
+class TestConsolidatedObjects(unittest.TestCase):
+    """Rule families whose fixes are byte-identical share one object."""
+
+    @requires(OCP4, RHCOS4)
+    def test_the_chrony_family_really_is_identical(self):
+        # The consolidation is only sound while the fixes agree. If a content
+        # release makes them differ, this fails here and generate_charts
+        # raises - rather than one rule's config silently winning.
+        content = xccdf.parse(RHCOS4, product="rhcos4")
+        from compliance_remediations_helm import classify
+        bodies = set()
+        for rule_id in classify.CONSOLIDATED_NAMES:
+            rule = content.rules.get(rule_id)
+            self.assertIsNotNone(rule, f"{rule_id} no longer exists upstream")
+            bodies.add(rule.fixes[0].yaml)
+        self.assertEqual(len(bodies), 1, "consolidated fixes have diverged")
+
+    @requires(OCP4, RHCOS4)
+    def test_one_object_for_the_whole_family(self):
+        import tempfile
+        from pathlib import Path
+
+        from compliance_remediations_helm import classify
+        contents = {p: xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))}
+        with tempfile.TemporaryDirectory() as d:
+            emit.generate_charts(contents, Path(d), "0.0.0")
+            tpl = Path(d) / emit.NODE_CHART / "templates"
+            for rule_id, name in classify.CONSOLIDATED_NAMES.items():
+                self.assertTrue((tpl / f"machineconfig-{name}.yaml").exists())
+                slug = rule_id.replace("_", "-")
+                self.assertFalse((tpl / f"machineconfig-75-ocp4-{slug}.yaml").exists(),
+                                 f"{rule_id} still has its own object")
+
+    def test_divergent_fixes_raise(self):
+        from compliance_remediations_helm import classify
+        from compliance_remediations_helm.collisions import FixDoc, MergeGroup, ObjectKey
+        name = next(iter(classify.CONSOLIDATED_NAMES.values()))
+        key = ObjectKey("machineconfiguration.openshift.io/v1", "MachineConfig", "", name)
+        a = "kind: MachineConfig\nspec:\n  config:\n    ignition:\n      version: 3.1.0\n"
+        b = "kind: MachineConfig\nspec:\n  config:\n    ignition:\n      version: 3.2.0\n"
+        group = MergeGroup(key=key, docs=[FixDoc("rhcos4-a", key, a),
+                                          FixDoc("rhcos4-b", key, b)])
+        with self.assertRaises(ValueError) as cm:
+            emit.object_template(group)
+        self.assertIn("no longer identical", str(cm.exception))
+
+
 class TestOptInRules(unittest.TestCase):
     """Rules that ship disabled because applying them can take a node down."""
 
