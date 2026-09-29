@@ -424,18 +424,29 @@ class TestConsolidatedObjects(unittest.TestCase):
     """Rule families whose fixes are byte-identical share one object."""
 
     @requires(OCP4, RHCOS4)
-    def test_the_chrony_family_really_is_identical(self):
-        # The consolidation is only sound while the fixes agree. If a content
-        # release makes them differ, this fails here and generate_charts
-        # raises - rather than one rule's config silently winning.
+    def test_each_family_really_is_identical(self):
+        # A family is only sound while its fixes agree. If a content release
+        # makes one differ, this fails here and generate_charts raises -
+        # rather than one rule's configuration silently winning on the node.
         content = xccdf.parse(RHCOS4, product="rhcos4")
         from compliance_remediations_helm import classify
-        bodies = set()
-        for rule_id in classify.CONSOLIDATED_NAMES:
-            rule = content.rules.get(rule_id)
-            self.assertIsNotNone(rule, f"{rule_id} no longer exists upstream")
-            bodies.add(rule.fixes[0].yaml)
-        self.assertEqual(len(bodies), 1, "consolidated fixes have diverged")
+        for name, rule_ids in classify.CONSOLIDATED_FAMILIES.items():
+            bodies = set()
+            for rule_id in rule_ids:
+                rule = content.rules.get(rule_id)
+                self.assertIsNotNone(rule, f"{rule_id} no longer exists upstream")
+                bodies.add("\n---\n".join(fx.yaml for fx in rule.fixes))
+            self.assertEqual(len(bodies), 1, f"{name}: fixes have diverged")
+
+    @requires(OCP4, RHCOS4)
+    def test_families_do_not_overlap(self):
+        from compliance_remediations_helm import classify
+        seen: dict = {}
+        for name, rule_ids in classify.CONSOLIDATED_FAMILIES.items():
+            for rule_id in rule_ids:
+                self.assertNotIn(rule_id, seen,
+                                 f"{rule_id} is in {name} and {seen.get(rule_id)}")
+                seen[rule_id] = name
 
     @requires(OCP4, RHCOS4)
     def test_one_object_for_the_whole_family(self):
