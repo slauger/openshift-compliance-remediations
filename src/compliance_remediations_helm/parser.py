@@ -116,7 +116,14 @@ class Content:
 _DEPENDS_ON_RE = re.compile(
     r"(?m)^\s*complianceascode\.io/depends-on:\s*(.+)$")
 
-_OCP_VERSION_RE = re.compile(r"complianceascode\.io/ocp-version:\s*'([^']+)'")
+# Accept any quoting style. Matching only single quotes meant a re-quoted
+# annotation upstream dropped the version gate silently: both variants of a
+# rule then render unconditionally and the merge keeps the last one, so a
+# hardening control lands in the wrong file and stops applying - with the
+# generator, helm lint and the payload checks all reporting success.
+_OCP_VERSION_RE = re.compile(
+    r"""complianceascode\.io/ocp-version:\s*(?:'([^']+)'|"([^"]+)"|([^\s'"][^\n]*?))\s*$""",
+    re.MULTILINE)
 
 
 def _split_fix_by_ocp_version(text: str) -> list[FixVariant]:
@@ -135,7 +142,8 @@ def _split_fix_by_ocp_version(text: str) -> list[FixVariant]:
         if not doc.strip():
             continue
         m = _OCP_VERSION_RE.search(doc)
-        variants.append(FixVariant(yaml=doc, ocp_version=m.group(1) if m else None))
+        version = next((g for g in m.groups() if g), None) if m else None
+        variants.append(FixVariant(yaml=doc, ocp_version=version))
     if not variants:
         variants.append(FixVariant(yaml=text, ocp_version=None))
     return variants

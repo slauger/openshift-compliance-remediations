@@ -205,7 +205,14 @@ def _translate_action(encoded: str) -> str:
         )
     body = _DOT_REF_RE.sub(r".Values.variables.\1", body)
     body = _TO_ARRAY_RE.sub(' | splitList ","', body)
-    return "{{ " + " ".join(body.split()) + " }}"
+    body = " ".join(body.split())
+    # An action that is a bare `$var` *emits* its value into the encoded
+    # payload, so it needs the same encoding a bare `.var` reference gets. An
+    # assignment or a range/end does not emit anything, so it must be left
+    # alone - wrapping it would produce invalid template syntax.
+    if re.fullmatch(r"\$\w+", body):
+        return f'{{{{ include "cr.enc" {body} }}}}'
+    return "{{ " + body + " }}"
 
 
 def _rewrite_block(block: str) -> str:
@@ -221,6 +228,20 @@ def _rewrite_block(block: str) -> str:
     plain = _PLAIN_INNER_RE.fullmatch(inner)
     if plain:
         return _helm_ref(plain.group(1))
+    # Anything that is not a bare reference must be a percent-encoded payload,
+    # and upstream encodes the spaces in those - all 140 blocks in the pinned
+    # content hold to that. A literal space means this is template source we do
+    # not understand, and substituting nothing while dropping the markers
+    # emitted it as literal text into the object
+    # (`eventRecordQPS: printf "%d" .var_event_record_qps`) with the whole
+    # pipeline reporting success - the no-template-syntax check looks for the
+    # very markers that were stripped.
+    if " " in inner:
+        raise ValueError(
+            f"unsupported remediation-templating block: {inner[:120]!r}. It is "
+            f"not a percent-encoded payload, so it carries template source we "
+            f"would emit as literal text; teach _rewrite_block to translate it."
+        )
     return _ENC_ACTION_RE.sub(lambda m: _translate_action(m.group(1)), inner)
 
 
@@ -244,6 +265,21 @@ def unquoted_scalar_variables(contents) -> set[str]:
                         rewrite_placeholders(fix.yaml)):
                     if before not in ('"', "'"):
                         out.add(name)
+    return out
+
+
+def missing_values(contents) -> list[str]:
+    """Variables a fix references but the datastream no longer defines.
+
+    resolve_defaults falls back to an empty string and carries on, which used
+    to surface only by accident, downstream, as a schema-pattern failure that
+    said nothing about the cause.
+    """
+    out: list[str] = []
+    for content in contents:
+        for name in sorted(referenced_variables(content)):
+            if _find_value(content, name) is None:
+                out.append(f"{content.product}: {name}")
     return out
 
 
