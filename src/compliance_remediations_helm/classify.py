@@ -38,15 +38,55 @@ KUBELET_CONFIG_NAME = "compliance-operator-kubelet"
 # naming, and object_template asserts the fragments really are identical, so a
 # content release that makes them differ fails the build instead of silently
 # picking one.
-CONSOLIDATED_NAMES: dict[str, str] = {
-    rule: "75-ocp4-chrony"
-    for rule in (
+CONSOLIDATED_FAMILIES: dict[str, tuple] = {
+    "75-ocp4-chrony": (
         "chronyd_client_only",
         "chronyd_no_chronyc_network",
         "chronyd_or_ntpd_set_maxpoll",
         "chronyd_or_ntpd_specify_multiple_servers",
         "chronyd_or_ntpd_specify_remote_server",
-    )
+    ),
+    "75-ocp4-auditd": (
+        "auditd_data_disk_error_action",
+        "auditd_data_disk_error_action_stig",
+        "auditd_data_disk_full_action",
+        "auditd_data_disk_full_action_stig",
+        "auditd_data_retention_admin_space_left_action",
+        "auditd_data_retention_flush",
+        "auditd_data_retention_max_log_file",
+        "auditd_data_retention_max_log_file_action",
+        "auditd_data_retention_max_log_file_action_stig",
+        "auditd_data_retention_num_logs",
+        "auditd_data_retention_space_left",
+        "auditd_data_retention_space_left_action",
+        "auditd_freq",
+        "auditd_local_events",
+        "auditd_log_format",
+        "auditd_name_format",
+        "auditd_write_logs",
+    ),
+    "75-ocp4-audit-rules-unsuccessful-file-modification": (
+        "audit_rules_unsuccessful_file_modification_creat",
+        "audit_rules_unsuccessful_file_modification_ftruncate",
+        "audit_rules_unsuccessful_file_modification_open",
+        "audit_rules_unsuccessful_file_modification_open_by_handle_at",
+        "audit_rules_unsuccessful_file_modification_open_by_handle_at_o_creat",
+        "audit_rules_unsuccessful_file_modification_open_by_handle_at_o_trunc_write",
+        "audit_rules_unsuccessful_file_modification_open_o_creat",
+        "audit_rules_unsuccessful_file_modification_open_o_trunc_write",
+        "audit_rules_unsuccessful_file_modification_openat",
+        "audit_rules_unsuccessful_file_modification_openat_o_creat",
+        "audit_rules_unsuccessful_file_modification_openat_o_trunc_write",
+        "audit_rules_unsuccessful_file_modification_truncate",
+    ),
+    "75-ocp4-coredump": (
+        "coredump_disable_backtraces",
+        "coredump_disable_storage",
+    ),
+}
+
+CONSOLIDATED_NAMES: dict[str, str] = {
+    rule: name for name, rules in CONSOLIDATED_FAMILIES.items() for rule in rules
 }
 
 
