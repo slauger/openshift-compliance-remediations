@@ -20,10 +20,11 @@ Activation logic (see _helpers.tpl):
 """
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
-from . import applicability, classify
+from . import applicability, classify, resolver
 from .collisions import MergeGroup, build_groups
 from .parser import Content, rules_with_fixes
 from .resolver import resolve_defaults, rewrite_placeholders
@@ -33,6 +34,7 @@ NODE_CHART = "compliance-node"
 UMBRELLA_CHART = "compliance-hardening"
 
 DEFAULT_OCP_VERSION = "4.20"
+DEFAULT_ARCHITECTURE = "x86_64"
 
 
 # --------------------------------------------------------------------------- #
@@ -135,7 +137,7 @@ README_GOTMPL = """\
 
 ## Rules
 
-See [`RULES.md`](../../RULES.md) for the full rule → profile matrix.
+See [`RULES.md`](../../RULES.md) for the full rule-to-profile matrix.
 
 {{ template "helm-docs.versionFooter" . }}
 """
@@ -155,10 +157,11 @@ HELPERS_TPL = """\
 {{-   if index $overrides $rule -}}true{{- else -}}false{{- end -}}
 {{- else -}}
 {{-   $active := false -}}
-{{-   $profileMap := index $root.Values "profileRules" -}}
+{{-   $profileMap := (index $root.Values "profileRules") | default dict -}}
 {{-   range $profile, $enabled := $root.Values.profiles -}}
 {{-     if $enabled -}}
-{{-       $ruleList := index $profileMap $profile | default (list) -}}
+{{-       $ruleList := (index $profileMap $profile) | default (list) -}}
+{{-       if not (kindIs "slice" $ruleList) -}}{{- $ruleList = list -}}{{- end -}}
 {{-       if has $rule $ruleList -}}{{- $active = true -}}{{- end -}}
 {{-     end -}}
 {{-   end -}}
@@ -176,6 +179,20 @@ HELPERS_TPL = """\
 {{- if $any -}}true{{- else -}}false{{- end -}}
 {{- end -}}
 
+{{/*
+  Percent-encode a value substituted into an Ignition data URI. The operator
+  runs url.PathEscape over its own substituted output; the chart keeps the
+  payload encoded and injects the value, so the value has to be encoded here.
+  Without it a value containing a space and a # is read as a YAML comment and
+  the rest of the data: scalar - the rest of the config file - disappears with
+  no error. `%` goes first, or it would double-encode the escapes below.
+  Quotes and backslashes are not handled here: values.schema.json rejects them
+  outright, which is a clearer failure than an encoded surprise.
+*/}}
+{{- define "cr.enc" -}}
+{{- . | toString | replace "%" "%25" | replace " " "%20" | replace "#" "%23" | replace "&" "%26" | replace "?" "%3F" | replace "+" "%2B" -}}
+{{- end -}}
+
 {{/* Canonical `uname -m` architecture; the Kubernetes spellings are accepted. */}}
 {{- define "cr.arch" -}}
 {{- $a := .Values.cluster.architecture | toString -}}
@@ -191,6 +208,7 @@ HELPERS_TPL = """\
 {{- $root := . -}}
 {{- $arch := include "cr.arch" $root -}}
 {{- $bad := list -}}
+{{- $archBad := false -}}
 {{- range $rule, $req := ($root.Values.ruleApplicability | default dict) -}}
 {{-   if eq (include "cr.ruleActive" (dict "root" $root "rule" $rule)) "true" -}}
 {{-     $reason := "" -}}
@@ -198,6 +216,7 @@ HELPERS_TPL = """\
 {{-       $reason = printf "never applicable (%s)" $req.never -}}
 {{-     else if and (hasKey $req "arch") (not (has $arch $req.arch)) -}}
 {{-       $reason = printf "not applicable on %s" $arch -}}
+{{-       $archBad = true -}}
 {{-     else if and (hasKey $req "hypershift") (not (has $root.Values.cluster.hypershift $req.hypershift)) -}}
 {{-       $reason = printf "not applicable when cluster.hypershift is %v" $root.Values.cluster.hypershift -}}
 {{-     end -}}
@@ -207,7 +226,10 @@ HELPERS_TPL = """\
 {{-   end -}}
 {{- end -}}
 {{- if $bad -}}
-{{- $hint := printf "Disable them in .Values.rules, or apply the generated overlay for this architecture (-f values-%s.yaml). See RULES.md for the applicability of every rule." $arch -}}
+{{- $hint := "Disable them in .Values.rules, or change the cluster facts they depend on. See RULES.md for the applicability of every rule." -}}
+{{- if $archBad -}}
+{{- $hint = printf "Disable them in .Values.rules, or apply the generated overlay for this architecture: -f values-%s.yaml from the chart you are installing (the umbrella ships its own, with the values nested per subchart). See RULES.md for the applicability of every rule." $arch -}}
+{{- end -}}
 {{- fail (printf "%d active rule(s) are not applicable to this cluster:\\n%s\\n%s" (len $bad) (join "\\n" (sortAlpha $bad)) $hint) -}}
 {{- end -}}
 {{- end -}}
@@ -235,6 +257,24 @@ HELPERS_TPL = """\
 {{- end -}}
 {{- end -}}
 
+{{/*
+  Refuse a rule whose upstream fix cannot work as written. These are already
+  shipped disabled and marked in RULES.md, but opting one in rendered an object
+  the API server accepts and then prunes - success reported, nothing changed.
+*/}}
+{{- define "cr.brokenPreflight" -}}
+{{- $root := . -}}
+{{- $bad := list -}}
+{{- range $rule, $why := ($root.Values.brokenRules | default dict) -}}
+{{-   if eq (include "cr.ruleActive" (dict "root" $root "rule" $rule)) "true" -}}
+{{-     $bad = append $bad (printf "  %s - %s" $rule $why) -}}
+{{-   end -}}
+{{- end -}}
+{{- if $bad -}}
+{{- fail (printf "%d active rule(s) reproduce an upstream fix that cannot work:\\n%s\\nPrefer the non-broken alternative in the same group; see RULES.md." (len $bad) (join "\\n" (sortAlpha $bad))) -}}
+{{- end -}}
+{{- end -}}
+
 {{/* Count how many rules in the list are active (as an int). */}}
 {{- define "cr.countActive" -}}
 {{- $root := .root -}}
@@ -257,9 +297,10 @@ def _profile_rules_block(contents: list[Content], layer: str) -> str:
         "# @ignored",
         "profileRules:",
     ]
+    layer_profiles = set(_profiles_with_layer(contents, layer))
     for content in contents:
         fixset = set(rules_with_fixes(content))
-        for pid in sorted(content.profiles):
+        for pid in sorted(p for p in content.profiles if p in layer_profiles):
             prof = content.profiles[pid]
             selected = sorted({
                 f"{content.product}-{r}"
@@ -336,24 +377,30 @@ def default_disabled_rules(contents: list[Content]) -> dict[str, str]:
 
 
 def _profile_variables_block(contents: list[Content], layer: str) -> str:
-    """Map each profile to the variables its fix-rules reference (scopes TP setValues)."""
-    from .resolver import _VAR_RE
+    """Map each profile to the variables its fix-rules reference (scopes TP setValues).
+
+    Uses the same extraction as the rest of the generator: matching only the
+    plain `{{.var_x}}` form missed every percent-encoded reference - 22 of the
+    40 variables - so a TailoredProfile left those unset and the operator
+    scanned against upstream defaults while the chart applied ours.
+    """
     lines = [
         "# profileVariables maps each profile to the XCCDF variables its rules use",
         "# (auto-generated; scopes TailoredProfile setValues).",
         "# @ignored",
         "profileVariables:",
     ]
+    layer_profiles = set(_profiles_with_layer(contents, layer))
     for content in contents:
         fixset = rules_with_fixes(content)
-        for pid in sorted(content.profiles):
+        for pid in sorted(p for p in content.profiles if p in layer_profiles):
             prof = content.profiles[pid]
             used: set[str] = set()
             for r in prof.selected_rules:
                 rule = fixset.get(r)
                 if rule and _rule_layer(rule) == layer:
                     for fix in rule.fixes:
-                        used.update(_VAR_RE.findall(fix.yaml))
+                        used.update(resolver.variables_in_fix(fix.yaml))
             if used:
                 lines.append(f"  {pid}:")
                 lines.extend(f"    - {v}" for v in sorted(used))
@@ -406,16 +453,48 @@ def rule_dependencies(contents: list[Content], layer_rules: set) -> dict[str, li
 
 
 def unverifiable_dependencies(contents: list[Content]) -> list[str]:
-    """Dependencies this chart cannot check, because it does not emit them."""
-    emitted = {r.helm_name for c in contents for r in rules_with_fixes(c).values()}
+    """Dependencies no chart can check.
+
+    Two ways that happens: the dependency carries no Kubernetes fix, so no
+    chart emits it at all; or it is emitted but in the *other* layer, and
+    cr.ruleActive only ever resolves rules of its own chart. The layer split is
+    this generator's own invention, so upstream has no reason to respect it -
+    and RULES.md prints `requires <rule>` either way, which would be a claim
+    the preflight cannot keep.
+    """
+    by_layer: dict[str, set[str]] = {}
+    for content in contents:
+        for rule in rules_with_fixes(content).values():
+            by_layer.setdefault(_rule_layer(rule), set()).add(rule.helm_name)
+    emitted = set().union(*by_layer.values()) if by_layer else set()
+
     missing = []
     for content in contents:
         for rule in rules_with_fixes(content).values():
+            layer = _rule_layer(rule)
             for dep in rule.depends_on:
                 name = f"{content.product}-{dep}"
                 if name not in emitted:
-                    missing.append(f"{rule.helm_name} -> {name}")
+                    missing.append(f"{rule.helm_name} -> {name} (no Kubernetes fix)")
+                elif name not in by_layer.get(layer, set()):
+                    missing.append(
+                        f"{rule.helm_name} ({layer}) -> {name} (other layer)")
     return sorted(missing)
+
+
+def _broken_rules_block(broken: dict[str, str], layer_rules: set) -> str:
+    lines = [
+        "# brokenRules records rules whose upstream fix cannot work as written",
+        "# (auto-generated; regenerated by the generator).",
+        "# @ignored",
+        "brokenRules:",
+    ]
+    emitted = [n for n in sorted(broken) if n in layer_rules]
+    if not emitted:
+        return "\n".join(lines[:-1] + ["brokenRules: {}"])
+    for name in emitted:
+        lines.append(f"  {name}: {_yaml_scalar(broken[name])}")
+    return "\n".join(lines)
 
 
 def _rule_dependencies_block(deps: dict[str, list[str]]) -> str:
@@ -500,6 +579,32 @@ OPT_IN_RULES: dict[str, str] = {
 }
 
 
+def broken_rules(contents: list[Content]) -> dict[str, str]:
+    """helm_name -> why the fix cannot work as written.
+
+    Upstream writes `tlsSecurityProfile` with a capitalized `Custom:` block and
+    no sibling `type:`. `Custom` is not a field - the API server prunes it
+    against the structural schema - so the object applies cleanly and changes
+    nothing. Validated against the genuine CRDs from openshift/api release-4.20
+    and independently with kubeconform:
+
+        at '/spec/tlsSecurityProfile': additional properties 'Custom' not allowed
+    """
+    out: dict[str, str] = {}
+    for content in contents:
+        for rule in rules_with_fixes(content).values():
+            for fix in rule.fixes:
+                y = fix.yaml
+                if re.search(r"(?m)^\s*Custom:\s*$", y) and not re.search(
+                    r"(?m)^\s*type:\s*Custom\s*$", y
+                ):
+                    out[rule.helm_name] = (
+                        "upstream writes tlsSecurityProfile.Custom, which is not "
+                        "a field; the API server prunes it and the remediation "
+                        "does nothing")
+    return out
+
+
 def _cluster_block(indent: str = "") -> list[str]:
     """Facts about the target cluster, used to evaluate rule applicability.
 
@@ -518,10 +623,13 @@ def _cluster_block(indent: str = "") -> list[str]:
         "  # Find yours: oc get clusterversion version -o jsonpath='{.status.desired.version}'",
         f'  ocpVersion: "{DEFAULT_OCP_VERSION}"',
         "  # -- Node architecture of the MachineConfigPools listed in node.roles.",
+        "  # Only the node chart has arch-constrained rules; it is declared here",
+        "  # too so one values file validates against either chart.",
         "  # x86_64 | aarch64 | ppc64le | s390x (amd64 and arm64 are accepted too).",
         "  # Find yours: make show-node-arch",
-        "  architecture: x86_64",
+        f"  architecture: {DEFAULT_ARCHITECTURE}",
         "  # -- Set true on a HyperShift hosted cluster (hosted control plane).",
+        "  # Only the platform chart has a hypershift-constrained rule.",
         "  hypershift: false",
     ]
     return [f"{indent}{line}" if line else line for line in lines]
@@ -601,6 +709,7 @@ def preflight_template(conflicts: list[dict]) -> str:
         "*/ -}}",
         '{{- include "cr.applicabilityPreflight" . -}}',
         '{{- include "cr.dependencyPreflight" . -}}',
+        '{{- include "cr.brokenPreflight" . -}}',
     ]
     for conflict in conflicts:
         path = conflict["path"]
@@ -647,26 +756,40 @@ def _excluded_for_arch(appl: dict, layer_rules: set, arch: str) -> dict[str, str
     return out
 
 
-def _arch_overlay(arch: str, excluded: dict[str, str], content_version: str) -> str:
+def _arch_overlay(arch: str, per_chart: dict, content_version: str,
+                 nested: bool = False) -> str:
     """A ready-made values file for a non-default architecture.
 
     The preflight refuses non-applicable rules rather than skipping them, so a
     profile that selects any of them needs them switched off. Hand-maintaining
     that list would go stale on every content bump; generating it does not.
+
+    ``nested`` produces the umbrella form, with every key under its subchart
+    prefix. Without it the umbrella silently ignores the file - the values sit
+    at the wrong level - and the render fails again with the same message that
+    told you to apply it.
     """
     lines = [
-        f"# Overlay for {arch} nodes.",
+        f"# Overlay for {arch} nodes"
+        + (" (umbrella chart)." if nested else "."),
         f"# Generated from ComplianceAsCode/content v{content_version}.",
         "#",
         f"# Upstream marks these rules as not applicable on {arch}, so the chart",
         "# refuses to render them. Apply this file to switch them off in one go:",
         f"#   helm install <release> <chart> -f values-{arch}.yaml",
-        "cluster:",
-        f"  architecture: {arch}",
-        "rules:",
     ]
-    for name, why in excluded.items():
-        lines.append(f"  {name}: false  # {why}")
+    indent = "  " if nested else ""
+    for chart_name, excluded in sorted(per_chart.items()):
+        if nested:
+            lines.append(f"{chart_name}:")
+        lines.append(f"{indent}cluster:")
+        lines.append(f"{indent}  architecture: {arch}")
+        if excluded:
+            lines.append(f"{indent}rules:")
+            for name, why in excluded.items():
+                lines.append(f"{indent}  {name}: false  # {why}")
+        if not nested:
+            break
     return "\n".join(lines) + "\n"
 
 
@@ -743,6 +866,7 @@ def values_yaml(contents: list[Content], layer: str, content_version: str,
     out += ["", _profile_variables_block(contents, layer)]
     out += ["", _rule_applicability_block(appl, layer_rules)]
     out += ["", _rule_dependencies_block(rule_dependencies(contents, layer_rules))]
+    out += ["", _broken_rules_block(broken_rules(contents), layer_rules)]
     return "\n".join(out) + "\n"
 
 
@@ -802,6 +926,13 @@ def object_template(group: MergeGroup, appl: dict | None = None) -> str:
             cond = f'and ({cond}) ({_ocp_semver_expr(doc.ocp_version)})'
         lines.append(f"{{{{- if {cond} -}}}}")
         lines.append(f'{{{{- $frag := include "{name}" . | fromYaml -}}}}')
+        # sprig's fromYaml returns {"Error": "..."} instead of failing, and
+        # merging that replaces the object's spec with an Error field while the
+        # render exits 0 - the remediation silently gone. A variable value
+        # containing YAML punctuation is enough to trigger it.
+        lines.append('{{- if hasKey $frag "Error" -}}')
+        lines.append(f'{{{{- fail (printf {_go_str("Rendering " + doc.rule_id + " for " + key.kind + "/" + key.name + " produced invalid YAML: %s. Check the variables it interpolates.")} $frag.Error) -}}}}')
+        lines.append("{{- end -}}")
         lines.append("{{- $merged = mustMergeOverwrite $merged $frag -}}")
         lines.append("{{- end -}}")
 
@@ -924,29 +1055,36 @@ def tailored_profile_template(contents: list[Content], layer: str) -> str:
         f"{{{{- $profiles := list {' '.join(_go_str(p) for p in profiles)} -}}}}",
         "{{- $root := . -}}",
         "{{- range $profile := $profiles -}}",
-        '{{- if index $root.Values.profiles $profile -}}',
-        "{{- $ruleList := index $root.Values.profileRules $profile | default (list) -}}",
-        "{{- $varList := index $root.Values.profileVariables $profile | default (list) -}}",
+        '{{- if index ($root.Values.profiles | default dict) $profile -}}',
+        "{{- $ruleList := (index ($root.Values.profileRules | default dict) "
+        "$profile) | default (list) -}}",
+        "{{- $varList := (index ($root.Values.profileVariables | default dict) "
+        "$profile) | default (list) -}}",
         '{{- $product := (splitList "-" $profile | first) -}}',
+        # No right-trim on the line before "---": it would swallow the newline
+        # and glue this document onto the previous one, so any two enabled
+        # profiles of a layer produced invalid YAML.
+        '{{- $name := printf "hardening-%s" ($profile | replace "_" "-") }}',
         "---",
         "apiVersion: compliance.openshift.io/v1alpha1",
         "kind: TailoredProfile",
         "metadata:",
-        '  name: {{ printf "hardening-%s" $profile }}',
+        '  name: {{ $name }}',
         "  namespace: {{ $root.Values.complianceNamespace | quote }}",
         "  labels:",
         '    app.kubernetes.io/managed-by: {{ $root.Release.Service | quote }}',
         "  annotations:",
         f'    compliance.openshift.io/product-type: "{product_type}"',
         "spec:",
-        '  extends: {{ $profile | quote }}',
+        '  extends: {{ $profile | replace "_" "-" | quote }}',
         '  title: {{ printf "Hardening-managed selection of %s" $profile | quote }}',
         '  description: >-',
         "    Rule selection managed by the compliance-hardening Helm chart.",
         "  {{- $disabled := list -}}",
         "  {{- range $rule := $ruleList -}}",
-        '  {{- if hasKey $root.Values.rules $rule -}}',
-        "  {{- if not (index $root.Values.rules $rule) -}}",
+        '  {{- $overrides := $root.Values.rules | default dict -}}',
+        '  {{- if hasKey $overrides $rule -}}',
+        "  {{- if not (index $overrides $rule) -}}",
         "  {{- $disabled = append $disabled $rule -}}",
         "  {{- end -}}{{- end -}}{{- end -}}",
         "  {{- if $disabled }}",
@@ -959,7 +1097,7 @@ def tailored_profile_template(contents: list[Content], layer: str) -> str:
         "  {{- if $varList }}",
         "  setValues:",
         "  {{- range $var := $varList }}",
-        "  {{- if hasKey $root.Values.variables $var }}",
+        "  {{- if hasKey ($root.Values.variables | default dict) $var }}",
         '    - name: {{ printf "%s-%s" $product ($var | replace "_" "-") | quote }}',
         "      value: {{ index $root.Values.variables $var | quote }}",
         '      rationale: "Set via compliance-hardening chart values"',
@@ -991,7 +1129,8 @@ def generate_charts(contents: dict[str, Content], charts_dir: Path, version: str
     stats = {"platform": 0, "node": 0, "unparseable": [d.rule_id for d in unparseable],
              "conflicts": [], "dropped": [],
              "applicability": applicability.summarize(appl),
-             "unverifiable_dependencies": unverifiable_dependencies(content_list)}
+             "unverifiable_dependencies": unverifiable_dependencies(content_list),
+             "missing_values": resolver.missing_values(content_list)}
 
     _write_layer_chart(charts_dir / PLATFORM_CHART, PLATFORM_CHART,
                        "OpenShift platform compliance remediations (no reboot).",
@@ -1001,7 +1140,24 @@ def generate_charts(contents: dict[str, Content], charts_dir: Path, version: str
                        "OpenShift node compliance remediations (MachineConfig/KubeletConfig; reboots).",
                        content_list, groups, "node", version, stats, appl,
                        chart_version)
-    _write_umbrella_chart(charts_dir / UMBRELLA_CHART, version, chart_version)
+    # Umbrella overlays: the same exclusions, nested per subchart. Without
+    # these the documented `-f values-<arch>.yaml` is a no-op for umbrella
+    # users, and the render fails again with the message that pointed at it.
+    umbrella_overlays: dict[str, dict] = {}
+    for layer, chart_name in (("platform", PLATFORM_CHART), ("node", NODE_CHART)):
+        layer_rules = {r.helm_name for c in content_list
+                       for r in rules_with_fixes(c).values()
+                       if _rule_layer(r) == layer}
+        for arch in applicability.ARCHITECTURES:
+            excluded = _excluded_for_arch(appl, layer_rules, arch)
+            if excluded or arch != DEFAULT_ARCHITECTURE:
+                umbrella_overlays.setdefault(arch, {})[chart_name] = excluded
+    umbrella_overlays = {
+        arch: per_chart for arch, per_chart in umbrella_overlays.items()
+        if any(per_chart.values())
+    }
+    _write_umbrella_chart(charts_dir / UMBRELLA_CHART, version, chart_version,
+                          umbrella_overlays)
 
     for g in groups:
         for c in g.conflicts():
@@ -1010,7 +1166,8 @@ def generate_charts(contents: dict[str, Content], charts_dir: Path, version: str
 
 
 def _write_umbrella_chart(chart_dir: Path, version: str,
-                          chart_version: str = "0.0.0") -> None:
+                          chart_version: str = "0.0.0",
+                          overlays: dict | None = None) -> None:
     """Umbrella wrapper depending on both subcharts. No `global`: values are
     prefixed per subchart. Subcharts remain standalone-installable."""
     chart_dir.mkdir(parents=True, exist_ok=True)
@@ -1044,25 +1201,69 @@ dependencies:
 # -- Platform remediations (safe cluster config, no reboot).
 {PLATFORM_CHART}:
 {_indent_block(_cluster_block(), 2)}
+  # -- Whitelist whole compliance profiles; see the subchart's own values for
+  # the full list of keys.
   profiles: {{}}
+  # -- Per-rule override / blacklist. The subchart's defaults still apply, so
+  # its pre-disabled alternatives and opt-in rules stay disabled.
   rules: {{}}
+  # -- Tunable XCCDF variables, same keys as the subchart's values.
+  variables: {{}}
+  # -- Namespace the Compliance Operator watches for TailoredProfiles.
+  complianceNamespace: openshift-compliance
   tailoredProfile:
+    # -- Render a matching TailoredProfile per enabled profile.
     enabled: false
 
 # -- Node remediations (MachineConfig/KubeletConfig; trigger reboots).
 {NODE_CHART}:
 {_indent_block(_cluster_block(), 2)}
   node:
+    # -- Master enable switch for node remediations (triggers reboots).
     enabled: false
+    # -- MachineConfigPool roles to target.
     roles:
       - worker
       - master
+  # -- Whitelist whole compliance profiles; see the subchart's own values for
+  # the full list of keys.
   profiles: {{}}
+  # -- Per-rule override / blacklist. The subchart's defaults still apply, so
+  # its pre-disabled alternatives and opt-in rules stay disabled.
   rules: {{}}
+  # -- Tunable XCCDF variables, same keys as the subchart's values.
+  variables: {{}}
+  # -- Namespace the Compliance Operator watches for TailoredProfiles.
+  complianceNamespace: openshift-compliance
   tailoredProfile:
+    # -- Render a matching TailoredProfile per enabled profile.
     enabled: false
 """
     (chart_dir / "values.yaml").write_text(values, encoding="utf-8")
+
+    # Without a schema here a misspelled subchart prefix is silently dropped:
+    # the release installs, reports success, and has nothing enabled. Helm
+    # still validates each subchart's own values against its own schema, so
+    # this only needs to police the top level.
+    (chart_dir / "values.schema.json").write_text(json.dumps({
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+            PLATFORM_CHART: {"type": "object"},
+            NODE_CHART: {"type": "object"},
+            "global": {"type": "object"},
+        },
+        "additionalProperties": False,
+    }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    for arch in applicability.ARCHITECTURES:
+        overlay = chart_dir / f"values-{arch}.yaml"
+        per_chart = (overlays or {}).get(arch)
+        if per_chart:
+            overlay.write_text(_arch_overlay(arch, per_chart, version, nested=True),
+                               encoding="utf-8")
+        elif overlay.exists():
+            overlay.unlink()
 
 
 def _write_layer_chart(chart_dir: Path, name: str, description: str,
@@ -1095,7 +1296,8 @@ def _write_layer_chart(chart_dir: Path, name: str, description: str,
         overlay = chart_dir / f"values-{arch}.yaml"
         excluded = _excluded_for_arch(appl, layer_rules, arch)
         if excluded:
-            overlay.write_text(_arch_overlay(arch, excluded, version), encoding="utf-8")
+            overlay.write_text(_arch_overlay(arch, {name: excluded}, version),
+                               encoding="utf-8")
         elif overlay.exists():
             overlay.unlink()
 
@@ -1139,7 +1341,43 @@ def values_schema(contents: list[Content], layer: str) -> str:
 
     profile_props = {p: {"type": "boolean"} for p in profiles}
     rule_props = {r: {"type": "boolean"} for r in rule_names}
-    var_props = {v: {"type": ["string", "number"]} for v in var_names}
+    # A variable value is interpolated into YAML, and for the encoded payloads
+    # into a data URI. cr.enc handles the URI side; this forbids what would
+    # break the YAML side before it silently truncates a config file: a `#`
+    # starts a comment, quotes and backslashes break the scalar, and leading or
+    # trailing whitespace is never intended. Internal spaces are allowed - and
+    # encoded where they matter. Go's regexp has no lookaround, hence the
+    # character classes. Built with a raw string so the escapes survive into
+    # the JSON unchanged.
+    inner = r"[^\n\t#'\"\\]"
+    edge = r"[^\s#'\"\\]"
+    var_pattern = rf"^{edge}({inner}*{edge})?$"
+    # A bare `~`, `null`, `no` or `y` passes the pattern and then changes the
+    # YAML *type* in the fragments that interpolate a variable unquoted:
+    # `streamingConnectionIdleTimeout: null`, `memory.available: false`. Valid
+    # YAML, so neither the fromYaml guard nor the empty-merge guard notices,
+    # and the control is simply not implemented. Same list _yaml_scalar quotes
+    # against, plus the indicator characters that start a non-scalar node.
+    # Only the tokens YAML actually retypes. `none` is NOT one of them - it
+    # parses as the string "none" - and banning it made `None`, a documented
+    # value of APIServer.spec.audit.profile, unreachable. _YAML11_BOOL_NULL is
+    # the right list for *quoting* (conservative); it is too wide for a ban.
+    retyping = _YAML11_BOOL_NULL - {"none"}
+    forbidden = sorted({*retyping,
+                        *(w.upper() for w in retyping),
+                        *(w.capitalize() for w in retyping)})
+    unquoted = resolver.unquoted_scalar_variables(contents)
+    numeric = resolver.numeric_variables(contents)
+    var_props = {
+        # A trailing % is allowed: auditd takes a percentage for space_left,
+        # and the upstream selectors offer only digits, so deriving from the
+        # datastream alone would have rejected a value the tool accepts.
+        v: ({"type": ["string", "number"], "pattern": r"^\d+%?$"}
+            if v in numeric
+            else {"type": ["string", "number"], "pattern": var_pattern,
+                  **({"not": {"enum": forbidden}} if v in unquoted else {})})
+        for v in var_names
+    }
 
     schema = {
         "$schema": "https://json-schema.org/draft-07/schema#",
@@ -1151,7 +1389,11 @@ def values_schema(contents: list[Content], layer: str) -> str:
                 "properties": {
                     "ocpVersion": {
                         "type": "string",
-                        "pattern": r"^[0-9]+\.[0-9]+(\.[0-9]+)?$",
+                        # The documented `oc get clusterversion` returns
+                        # 4.20.0-ec.2 on any pre-GA cluster, and the templates
+                        # only ever use major.minor - so rejecting the suffix
+                        # blocked an install over something we discard anyway.
+                        "pattern": r"^[0-9]+\.[0-9]+(\.[0-9]+)?([-+].*)?$",
                     },
                     "architecture": {
                         "type": "string",
@@ -1189,17 +1431,35 @@ def values_schema(contents: list[Content], layer: str) -> str:
                 "additionalProperties": False,
             },
             # profileRules / profileVariables are generator-managed data maps.
+            # The generated data maps. Declared *and* required: Helm's
+            # `--set X=null` deletes a key, and every preflight reads its map
+            # with `| default dict`, so a deleted map turned the guard into a
+            # silent no-op. `required` makes that a schema error instead.
             "profileRules": {"type": "object"},
             "profileVariables": {"type": "object"},
+            "ruleApplicability": {"type": "object"},
+            "ruleDependencies": {"type": "object"},
+            "brokenRules": {"type": "object"},
+            # Helm injects `global` into a subchart's values.
+            "global": {"type": "object"},
         },
-        "additionalProperties": True,
+        "required": ["profiles", "rules", "variables", "profileRules",
+                     "profileVariables", "ruleApplicability",
+                     "ruleDependencies", "brokenRules"],
+        # Closed, like every nested block: an umbrella-shaped values file
+        # applied to a subchart was silently discarded, arch stayed x86_64 and
+        # rules upstream marks notapplicable shipped with no error.
+        "additionalProperties": False,
     }
     if layer == "node":
         schema["properties"]["node"] = {
             "type": "object",
             "properties": {
                 "enabled": {"type": "boolean"},
-                "roles": {"type": "array", "items": {"type": "string"}},
+                # Without minItems an empty list renders zero manifests and
+                # exits 0 - every node remediation silently dropped.
+                "roles": {"type": "array", "items": {"type": "string"},
+                          "minItems": 1},
             },
             "additionalProperties": False,
         }
@@ -1237,18 +1497,7 @@ def rules_matrix(contents: dict[str, Content], version: str,
                 for grp in conflict["groups"]:
                     conflicting.update(grp["rules"])
 
-    # Detect upstream-broken fixes: a tlsSecurityProfile written with a
-    # capitalized `Custom:` block but no sibling `type:` - the OpenShift API
-    # ignores it, so selecting this alternative is a silent no-op.
-    broken: set[str] = set()
-    for content in content_list:
-        for rule in rules_with_fixes(content).values():
-            for fix in rule.fixes:
-                y = fix.yaml
-                if re.search(r"(?m)^\s*Custom:\s*$", y) and not re.search(
-                    r"(?m)^\s*type:\s*Custom\s*$", y
-                ):
-                    broken.add(rule.helm_name)
+    broken = broken_rules(content_list)
 
     # rule helm-name -> sorted profile list
     profiles_of: dict[str, list[str]] = {}
@@ -1280,6 +1529,10 @@ def rules_matrix(contents: dict[str, Content], version: str,
             if hn in OPT_IN_RULES:
                 marks.append("⚠️ opt-in")
             mark = (" " + " ".join(marks)) if marks else ""
+            # Node objects are rendered once per role with the role appended,
+            # so the bare name is not what you would look up on a cluster.
+            if layer == "node":
+                target = f"{target}-<role>"
             applies = applicability.describe(app) if app is not None else "-"
             deps = sorted(f"{content.product}-{d}" for d in rule.depends_on)
             if deps:

@@ -69,10 +69,12 @@ jobs:
       - name: Verify charts are current and green
         run: |
           make generate
-          git diff --exit-code charts/ RULES.md || {
+          drift="$(git status --porcelain -- charts/ RULES.md)"
+          if [ -n "$drift" ]; then
             echo "::error::Generated charts/RULES.md are out of date. Run 'make generate', commit, then release.";
+            echo "$drift";
             exit 1;
-          }
+          fi
           make lint
           make test
           make test-py
@@ -118,7 +120,7 @@ jobs:
           # exec plugin regenerated them from the VERSION file before tagging.
 
           # Umbrella needs its subchart dependencies built first.
-          helm dependency build charts/compliance-hardening
+          helm dependency update charts/compliance-hardening
 
           for chart in compliance-platform compliance-node compliance-hardening; do
             echo "== packaging $chart $VERSION =="

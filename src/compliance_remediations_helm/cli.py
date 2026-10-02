@@ -78,7 +78,17 @@ def main(argv: list[str] | None = None) -> int:
     chart_version = (version_file.read_text(encoding="utf-8").strip()
                      if version_file.exists() else "0.0.0")
     print(f"    chart version: {chart_version}")
-    stats = emit.generate_charts(contents, args.charts_dir, pin["version"], chart_version)
+    try:
+        stats = emit.generate_charts(contents, args.charts_dir, pin["version"],
+                                     chart_version)
+    except Exception as exc:
+        # Generation writes into charts/ in place and clears each chart's
+        # templates/ first, so a mid-run failure leaves a partially written
+        # tree. Say so, rather than leaving the operator to discover it.
+        print(f"    ERROR: {exc}")
+        print(f"    {args.charts_dir} is now partially written. Restore it "
+              f"with: git checkout -- {args.charts_dir}")
+        return 1
     print(f"    platform templates: {stats['platform']}")
     print(f"    node templates:     {stats['node']}")
     print(f"    conflict guards:    {len(stats['conflicts'])}")
@@ -87,6 +97,12 @@ def main(argv: list[str] | None = None) -> int:
           f"{app.get('hypershift', 0)} hypershift-constrained, "
           f"{app.get('never', 0)} never applicable, "
           f"{app.get('role', 0)} role-restricted")
+    if stats.get("missing_values"):
+        print(f"    WARNING: {len(stats['missing_values'])} variable(s) are "
+              "referenced by a fix but no longer defined upstream; they ship "
+              "with an empty default:")
+        for v in stats["missing_values"]:
+            print(f"      - {v}")
     if stats.get("unverifiable_dependencies"):
         print(f"    WARNING: {len(stats['unverifiable_dependencies'])} dependency/ies "
               "point at rules this chart does not emit and cannot be checked:")

@@ -17,6 +17,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_delete_success")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-delete-success.rhcos4-audit-delete-success.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-audit_delete_success for MachineConfig/75-ocp4-audit-delete-success produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

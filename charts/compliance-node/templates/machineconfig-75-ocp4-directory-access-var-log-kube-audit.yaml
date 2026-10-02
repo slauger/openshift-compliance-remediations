@@ -17,6 +17,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-directory_access_var_log_kube_audit")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-directory-access-var-log-kube-audit.ocp4-directory-access-var-log-kube-audit.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering ocp4-directory_access_var_log_kube_audit for MachineConfig/75-ocp4-directory-access-var-log-kube-audit produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

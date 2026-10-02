@@ -14,6 +14,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-disable_ctrlaltdel_reboot")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-disable-ctrlaltdel-reboot.rhcos4-disable-ctrlaltdel-reboot.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-disable_ctrlaltdel_reboot for MachineConfig/75-ocp4-disable-ctrlaltdel-reboot produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

@@ -88,6 +88,9 @@ class Value:
     value_id: str
     default: str | None
     selectors: dict[str, str] = field(default_factory=dict)
+    # XCCDF declares the type; "number" is the one we can act on, by keeping a
+    # non-numeric override out of a field that must be a number.
+    value_type: str = "string"
 
 
 @dataclass
@@ -113,7 +116,14 @@ class Content:
 _DEPENDS_ON_RE = re.compile(
     r"(?m)^\s*complianceascode\.io/depends-on:\s*(.+)$")
 
-_OCP_VERSION_RE = re.compile(r"complianceascode\.io/ocp-version:\s*'([^']+)'")
+# Accept any quoting style. Matching only single quotes meant a re-quoted
+# annotation upstream dropped the version gate silently: both variants of a
+# rule then render unconditionally and the merge keeps the last one, so a
+# hardening control lands in the wrong file and stops applying - with the
+# generator, helm lint and the payload checks all reporting success.
+_OCP_VERSION_RE = re.compile(
+    r"""complianceascode\.io/ocp-version:\s*(?:'([^']+)'|"([^"]+)"|([^\s'"][^\n]*?))\s*$""",
+    re.MULTILINE)
 
 
 def _split_fix_by_ocp_version(text: str) -> list[FixVariant]:
@@ -132,7 +142,8 @@ def _split_fix_by_ocp_version(text: str) -> list[FixVariant]:
         if not doc.strip():
             continue
         m = _OCP_VERSION_RE.search(doc)
-        variants.append(FixVariant(yaml=doc, ocp_version=m.group(1) if m else None))
+        version = next((g for g in m.groups() if g), None) if m else None
+        variants.append(FixVariant(yaml=doc, ocp_version=version))
     if not variants:
         variants.append(FixVariant(yaml=text, ocp_version=None))
     return variants
@@ -244,7 +255,9 @@ def parse(datastream_path: Path, product: str = "ocp4") -> Content:
                         selectors[sel] = (c.text or "").strip()
                     else:
                         default = (c.text or "").strip()
-            values[value_id] = Value(value_id=value_id, default=default, selectors=selectors)
+            values[value_id] = Value(value_id=value_id, default=default,
+                                     selectors=selectors,
+                                     value_type=el.get("type", "string"))
 
         elif tag == "Profile":
             short_id = el.get("id", "").split(_PROFILE_PREFIX)[-1]

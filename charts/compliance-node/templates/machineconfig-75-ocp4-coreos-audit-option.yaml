@@ -12,6 +12,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-coreos_audit_option")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-coreos-audit-option.rhcos4-coreos-audit-option.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-coreos_audit_option for MachineConfig/75-ocp4-coreos-audit-option produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

@@ -174,9 +174,18 @@ _UNION_SUBTREES = ("spec.tlsSecurityProfile",)
 
 def _detect_conflicts(docs: list[FixDoc]) -> list[Conflict]:
     # 1) same leaf path, different value.
+    # Merge, do not overwrite: a rule may contribute several docs to one object
+    # - every kubelet_eviction_* rule emits two or three - and assigning per
+    # rule id kept only the last, hiding 15 of the 22 leaf paths in the
+    # consolidated KubeletConfig group from conflict detection entirely.
+    #
+    # Where a rule's own version variants write one path differently, the last
+    # wins here. That is harmless: conflicts are only ever reported between
+    # *different* rules, and only one variant renders at a given
+    # cluster.ocpVersion anyway.
     leaf_by_rule: dict[str, dict[str, str]] = {}
     for d in docs:
-        leaf_by_rule[d.rule_id] = _leaf_paths(d.yaml)
+        leaf_by_rule.setdefault(d.rule_id, {}).update(_leaf_paths(d.yaml))
 
     conflicts: dict[str, set[str]] = defaultdict(set)
 

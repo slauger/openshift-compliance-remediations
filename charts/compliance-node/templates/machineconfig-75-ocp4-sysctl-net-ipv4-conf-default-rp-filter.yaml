@@ -17,6 +17,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sysctl_net_ipv4_conf_default_rp_filter")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-sysctl-net-ipv4-conf-default-rp-filter.rhcos4-sysctl-net-ipv4-conf-default-rp-filter.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-sysctl_net_ipv4_conf_default_rp_filter for MachineConfig/75-ocp4-sysctl-net-ipv4-conf-default-rp-filter produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

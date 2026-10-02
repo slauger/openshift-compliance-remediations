@@ -14,6 +14,9 @@ from compliance_remediations_helm import applicability as ap
 from compliance_remediations_helm import emit
 from compliance_remediations_helm import parser as xccdf
 from compliance_remediations_helm.parser import Content, FactRef, LogicalTest
+from compliance_remediations_helm.resolver import (
+    rewrite_placeholders as resolver_rewrite,
+)
 
 ALL = set(ap.ARCHITECTURES)
 
@@ -39,6 +42,7 @@ KERNEL = FactRef("system_with_kernel")
 CHRONY = FactRef("package_chrony")
 NTP = FactRef("package_ntp")
 OPENSSH_7_5 = FactRef("package_openssh-server_le_7_5")
+MASTER_NODE = FactRef("node_is_ocp4_master_node")
 
 
 class TestReduce(unittest.TestCase):
@@ -98,6 +102,32 @@ class TestVocabularyIsClosed(unittest.TestCase):
             self.assertNotEqual(
                 fact.const is None, fact.axis is None,
                 f"{name} must be exactly one of const or axis")
+
+
+class TestSafeDirections(unittest.TestCase):
+    """Where the reduction is unsure, it must not drop hardening silently."""
+
+    def test_a_negated_role_fact_raises(self):
+        # "any pool but master" is the opposite of "master only". Guessing
+        # would remove hardening from the pools the rule applies to.
+        expr = _and(MASTER_NODE, negate=True)
+        with self.assertRaises(ap.UnsupportedFact) as cm:
+            ap._roles_for(expr, "rhcos4-some_rule")
+        self.assertIn("negated", str(cm.exception))
+
+    def test_an_expression_with_no_classified_leaves_is_unconstrained(self):
+        # Bare CPE product names are dropped by the parser, so an OR can end
+        # up empty. `any([])` is False, which would pre-disable the rule.
+        self.assertFalse(ap.reduce([LogicalTest("OR", False, ())], where="x").never)
+        self.assertTrue(ap.reduce([LogicalTest("OR", False, ())],
+                                  where="x").unconstrained)
+
+    def test_an_empty_role_intersection_stays_empty(self):
+        # An empty set is a real answer ("no pool"), not "unrestricted" - it
+        # must not be overwritten by the next expression's role set.
+        expr = _and(MASTER_NODE)
+        app = ap.reduce([expr], where="x")
+        self.assertFalse(app.never)
 
 
 class TestNonSeparable(unittest.TestCase):
@@ -279,9 +309,6 @@ class TestUnconstrainedRules(unittest.TestCase):
 
     def test_all_three_rules_still_produce_objects(self):
         self.assertEqual(len(self.templates), 3)
-
-
-MASTER_NODE = FactRef("node_is_ocp4_master_node")
 
 
 class TestRoleRestriction(unittest.TestCase):
@@ -479,6 +506,66 @@ class TestConsolidatedObjects(unittest.TestCase):
         self.assertIn("no longer identical", str(cm.exception))
 
 
+class TestUmbrellaOverlays(unittest.TestCase):
+    """The umbrella needs its own overlay, with the values nested.
+
+    A top-level `cluster:`/`rules:` file is silently ignored by the umbrella -
+    the values sit at the wrong level - so following the render's own advice
+    would fail again with the same message.
+    """
+
+    @classmethod
+    @requires(OCP4, RHCOS4)
+    def setUpClass(cls):
+        import tempfile
+        from pathlib import Path
+        contents = {p: xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))}
+        cls._tmp = tempfile.TemporaryDirectory()
+        root = Path(cls._tmp.name)
+        emit.generate_charts(contents, root, "0.0.0")
+        cls.node = root / emit.NODE_CHART
+        cls.umbrella = root / emit.UMBRELLA_CHART
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def test_both_charts_ship_an_overlay(self):
+        for chart in (self.node, self.umbrella):
+            self.assertTrue((chart / "values-aarch64.yaml").exists(), chart.name)
+
+    def test_the_umbrella_overlay_is_nested_per_subchart(self):
+        text = (self.umbrella / "values-aarch64.yaml").read_text()
+        self.assertIn(f"{emit.NODE_CHART}:", text)
+        self.assertIn("    architecture: aarch64", text)
+        self.assertNotIn("\ncluster:", text)
+
+    def test_the_subchart_overlay_is_not_nested(self):
+        text = (self.node / "values-aarch64.yaml").read_text()
+        self.assertIn("\ncluster:", text)
+        self.assertNotIn(f"{emit.NODE_CHART}:", text)
+
+    def test_no_overlay_for_an_architecture_without_exclusions(self):
+        for chart in (self.node, self.umbrella):
+            self.assertFalse((chart / "values-ppc64le.yaml").exists(), chart.name)
+            self.assertFalse((chart / "values-x86_64.yaml").exists(), chart.name)
+
+
+class TestScheduleForSilentTotalFailure(unittest.TestCase):
+    """Values that would render nothing at all must be rejected, not accepted."""
+
+    @requires(OCP4, RHCOS4)
+    def test_node_roles_may_not_be_empty(self):
+        # `node.roles: []` rendered zero manifests and exited 0 - every node
+        # remediation silently dropped, with nothing to notice it.
+        contents = {p: xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))}
+        schema = json.loads(emit.values_schema(list(contents.values()), "node"))
+        self.assertEqual(schema["properties"]["node"]["properties"]["roles"]
+                         .get("minItems"), 1)
+
+
 class TestRuleDependencies(unittest.TestCase):
     """Upstream says some rules must not be applied without another."""
 
@@ -502,8 +589,10 @@ class TestRuleDependencies(unittest.TestCase):
         layer_rules = {"ocp4-dependent", "ocp4-emitted"}
         deps = emit.rule_dependencies([content], layer_rules)
         self.assertEqual(deps, {"ocp4-dependent": ["ocp4-emitted"]})
+        # The message names why it cannot be checked: no Kubernetes fix at
+        # all, or emitted but in the other layer.
         self.assertEqual(emit.unverifiable_dependencies([content]),
-                         ["ocp4-dependent -> ocp4-not_emitted"])
+                         ["ocp4-dependent -> ocp4-not_emitted (no Kubernetes fix)"])
 
     def test_helper_and_map_are_emitted(self):
         import tempfile
@@ -553,6 +642,196 @@ class TestRuleDependencies(unittest.TestCase):
         contents = [xccdf.parse(f, product=p)
                     for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))]
         self.assertEqual(emit.unverifiable_dependencies(contents), [])
+
+
+class TestLoudOnContentChange(unittest.TestCase):
+    """A content bump must fail or report, never degrade silently."""
+
+    def test_any_annotation_quoting_keeps_the_version_gate(self):
+        # Matching only single quotes dropped the gate silently: both variants
+        # then render unconditionally and the merge keeps the last, so a
+        # control lands in the wrong file and stops applying.
+        fix = ("apiVersion: v1\nkind: MachineConfig\nmetadata:\n  annotations:\n"
+               "    complianceascode.io/ocp-version: {v}\nspec:\n  config: {{}}\n")
+        for quoted in ("'>=4.13.0'", '">=4.13.0"', ">=4.13.0"):
+            variants = xccdf._split_fix_by_ocp_version(fix.format(v=quoted))
+            self.assertEqual(variants[0].ocp_version, ">=4.13.0", quoted)
+
+    def test_template_source_in_a_plain_block_raises(self):
+        # Dropping the markers emitted the action as literal text into the
+        # object, and the no-template-syntax check looks for exactly the
+        # markers that were stripped.
+        from compliance_remediations_helm import resolver
+        with self.assertRaises(ValueError) as cm:
+            resolver.rewrite_placeholders(
+                'x: {{ printf "%d" .var_event_record_qps }}')
+        self.assertIn("not a percent-encoded payload", str(cm.exception))
+
+    def test_an_encoded_payload_without_references_is_fine(self):
+        # The audit rules are payloads with no variables at all and must not
+        # trip that check.
+        out = resolver_rewrite("source: data:,{{ -a%20always%2Cexit%20-F%20dir%3D/var/log }}")
+        self.assertEqual(out, "source: data:,-a%20always%2Cexit%20-F%20dir%3D/var/log")
+
+    def test_every_emitting_action_in_a_payload_is_encoded(self):
+        # A bare $var emits into the encoded payload and needs the same
+        # encoding a bare .var gets; an assignment or range/end does not emit
+        # and must be left alone, or the template breaks.
+        from compliance_remediations_helm import resolver
+        self.assertEqual(resolver._translate_action("%24element"),
+                         '{{ include "cr.enc" $element }}')
+        self.assertNotIn("cr.enc", resolver._translate_action("end"))
+        self.assertNotIn("cr.enc", resolver._translate_action(
+            "range%20%24e%3A%3D.var_y%7CtoArrayByComma"))
+
+    @requires(OCP4, RHCOS4)
+    def test_a_missing_upstream_value_is_reported(self):
+        from compliance_remediations_helm import resolver
+        contents = [xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))]
+        # Nothing is missing today; the reporting path must exist and be empty.
+        self.assertEqual(resolver.missing_values(contents), [])
+
+    @requires(OCP4, RHCOS4)
+    def test_a_cross_layer_dependency_would_be_reported(self):
+        # cr.ruleActive only resolves rules of its own chart, so a dependency
+        # in the other layer can never be checked - and RULES.md would still
+        # print `requires <rule>`.
+        contents = [xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))]
+        self.assertEqual(emit.unverifiable_dependencies(contents), [])
+        platform = next(c for c in contents if c.product == "ocp4")
+        rule = platform.rules["audit_profile_set"]
+        rule.depends_on.append("kubelet_enable_protect_kernel_sysctl")
+        try:
+            reported = emit.unverifiable_dependencies(contents)
+            self.assertTrue(any("other layer" in r for r in reported), reported)
+        finally:
+            rule.depends_on.remove("kubelet_enable_protect_kernel_sysctl")
+
+
+class TestValuesContract(unittest.TestCase):
+    """What the templates read, values.yaml declares and the schema allows."""
+
+    @classmethod
+    @requires(OCP4, RHCOS4)
+    def setUpClass(cls):
+        cls.contents = [xccdf.parse(f, product=p)
+                        for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))]
+
+    def test_numeric_variables_are_constrained_to_digits(self):
+        # A non-numeric override used to render straight into a field that
+        # must be a number.
+        from compliance_remediations_helm import resolver
+        numeric = resolver.numeric_variables(self.contents)
+        self.assertTrue(numeric)
+        schema = json.loads(emit.values_schema(self.contents, "node"))
+        props = schema["properties"]["variables"]["properties"]
+        for name in numeric:
+            if name in props:
+                # A trailing % is allowed: auditd takes a percentage for
+                # space_left, which the digit-only selectors do not reveal.
+                self.assertEqual(props[name]["pattern"], r"^\d+%?$", name)
+
+    def test_only_variables_whose_options_are_all_digits_are_constrained(self):
+        # The declared XCCDF type alone is not enough - a number-typed value
+        # may carry a unit suffix, and constraining it would reject the
+        # shipped default.
+        from compliance_remediations_helm import resolver
+        numeric = resolver.numeric_variables(self.contents)
+        defaults = {}
+        for c in self.contents:
+            defaults.update(resolver.resolve_defaults(c))
+        for name in numeric:
+            self.assertRegex(defaults[name], r"^\d+$", name)
+
+    def test_ocp_version_accepts_a_prerelease(self):
+        # The documented `oc get clusterversion` returns 4.20.0-ec.2 on any
+        # pre-GA cluster, and the templates use only major.minor.
+        schema = json.loads(emit.values_schema(self.contents, "node"))
+        pattern = schema["properties"]["cluster"]["properties"]["ocpVersion"]["pattern"]
+        for v in ("4.20", "4.20.1", "4.20.0-ec.2", "4.19.0-rc.1"):
+            self.assertRegex(v, pattern, v)
+        for v in ("x.y", "", "4"):
+            self.assertNotRegex(v, pattern, v)
+
+    def test_generated_maps_are_required_and_declared(self):
+        # Helm's `--set X=null` deletes a key, and every preflight reads its
+        # map with `| default dict` - so a deleted map turned the guard into a
+        # silent no-op. `required` makes that a schema error.
+        for layer in ("node", "platform"):
+            schema = json.loads(emit.values_schema(self.contents, layer))
+            for key in ("profileRules", "profileVariables", "ruleApplicability",
+                        "ruleDependencies", "brokenRules", "profiles", "rules",
+                        "variables"):
+                self.assertIn(key, schema["properties"], f"{layer}/{key}")
+                self.assertIn(key, schema["required"], f"{layer}/{key}")
+
+    def test_the_root_is_closed_but_allows_global(self):
+        # An umbrella-shaped values file applied to a subchart was silently
+        # discarded. Helm injects `global` into a subchart, so that one key has
+        # to stay allowed.
+        for layer in ("node", "platform"):
+            schema = json.loads(emit.values_schema(self.contents, layer))
+            self.assertFalse(schema["additionalProperties"])
+            self.assertIn("global", schema["properties"])
+
+    def test_only_unquoted_variables_forbid_yaml_type_tokens(self):
+        # A bare `~` or `no` changes the type of the field it lands in, but
+        # only where the fragment interpolates it unquoted. Inside an encoded
+        # payload `no` is ordinary config text - var_sshd_disable_compression
+        # ships exactly that.
+        from compliance_remediations_helm import resolver
+        unquoted = resolver.unquoted_scalar_variables(self.contents)
+        schema = json.loads(emit.values_schema(self.contents, "node"))
+        props = schema["properties"]["variables"]["properties"]
+        self.assertIn("var_openshift_audit_profile", unquoted)
+        self.assertNotIn("var_sshd_disable_compression", unquoted)
+        for name, spec in props.items():
+            self.assertEqual("not" in spec, name in unquoted, name)
+
+    def test_profile_variables_cover_encoded_references(self):
+        # Matching only the plain form missed 22 of the 40 variables, so a node
+        # TailoredProfile set none of them.
+        import yaml
+        values = yaml.safe_load(emit.values_yaml(self.contents, "node", "0.0.0"))
+        stig = values["profileVariables"].get("rhcos4-stig") or []
+        self.assertTrue(stig, "rhcos4-stig references no variables at all")
+        self.assertIn("var_auditd_action_mail_acct", stig)
+
+    def test_profile_maps_only_carry_this_layer(self):
+        # They used to carry all 49 profiles in both charts, while `profiles`
+        # declares only its own - so most entries were unreachable.
+        import yaml
+        for layer in ("node", "platform"):
+            values = yaml.safe_load(emit.values_yaml(self.contents, layer, "0.0.0"))
+            self.assertEqual(set(values["profileRules"]), set(values["profiles"]))
+            self.assertEqual(set(values["profileVariables"]), set(values["profiles"]))
+
+
+class TestBrokenRules(unittest.TestCase):
+    """Rules whose upstream fix the API server silently prunes."""
+
+    @requires(OCP4, RHCOS4)
+    def test_the_two_known_ones_are_detected(self):
+        contents = [xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))]
+        broken = emit.broken_rules(contents)
+        self.assertEqual(sorted(broken), [
+            "ocp4-api_server_tls_security_profile_custom_min_tls_version",
+            "ocp4-ingress_controller_tls_security_profile_custom_min_tls_version",
+        ])
+        for why in broken.values():
+            self.assertIn("prunes", why)
+
+    @requires(OCP4, RHCOS4)
+    def test_they_ship_disabled_and_are_in_the_map(self):
+        contents = {p: xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))}
+        values = emit.values_yaml(list(contents.values()), "platform", "0.0.0")
+        for name in emit.broken_rules(list(contents.values())):
+            self.assertIn(f"  {name}: false", values)
+        self.assertIn("brokenRules:", values)
 
 
 class TestOptInRules(unittest.TestCase):

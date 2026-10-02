@@ -21,14 +21,23 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-project_config_and_template_resource_quota")) "true" -}}
 {{- $frag := include "cr.frag.project-cluster.ocp4-project-config-and-template-resource-quota.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering ocp4-project_config_and_template_resource_quota for Project/cluster produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-project_config_has_template")) "true" -}}
 {{- $frag := include "cr.frag.project-cluster.ocp4-project-config-has-template.1" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering ocp4-project_config_has_template for Project/cluster produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-project_config_and_template_network_policy")) "true" -}}
 {{- $frag := include "cr.frag.project-cluster.ocp4-project-config-and-template-network-policy.2" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering ocp4-project_config_and_template_network_policy for Project/cluster produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

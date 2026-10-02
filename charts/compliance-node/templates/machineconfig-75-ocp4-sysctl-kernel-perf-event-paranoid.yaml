@@ -17,6 +17,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sysctl_kernel_perf_event_paranoid")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-sysctl-kernel-perf-event-paranoid.rhcos4-sysctl-kernel-perf-event-paranoid.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-sysctl_kernel_perf_event_paranoid for MachineConfig/75-ocp4-sysctl-kernel-perf-event-paranoid produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

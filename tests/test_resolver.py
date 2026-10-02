@@ -40,14 +40,19 @@ class TestRewritePlaceholders(unittest.TestCase):
     percent-encoding, variable refs (plain or encoded) become Helm refs."""
 
     def test_xccdf_var_becomes_helm_ref(self):
+        # A plain reference is not encoded: it sits in ordinary YAML, not in a
+        # data URI, and encoding it there would corrupt legitimate values.
         out = resolver.rewrite_placeholders("x: {{.var_foo}}")
         self.assertEqual(out, "x: {{ .Values.variables.var_foo }}")
 
     def test_encoded_var_inside_ignition_payload_becomes_helm_ref(self):
         out = resolver.rewrite_placeholders(
             "source: data:,{{ flush%20%3D%20%7B%7B.var_auditd_flush%7D%7D%0A }}")
+        # cr.enc, because the reference sits inside a percent-encoded payload:
+        # a raw space or `#` in a data:, URI truncates the file on the node.
         self.assertEqual(
-            out, "source: data:,flush%20%3D%20{{ .Values.variables.var_auditd_flush }}%0A")
+            out, 'source: data:,flush%20%3D%20{{ include "cr.enc" '
+                 '.Values.variables.var_auditd_flush }}%0A')
 
     def test_block_markers_are_not_written_into_the_payload(self):
         # Regression: emitting the markers as literal text laid down a file
@@ -62,7 +67,8 @@ class TestRewritePlaceholders(unittest.TestCase):
 
     def test_var_without_var_prefix_is_recognized(self):
         out = resolver.rewrite_placeholders("s: {{ %7B%7B.sshd_idle_timeout_value%7D%7D }}")
-        self.assertEqual(out, "s: {{ .Values.variables.sshd_idle_timeout_value }}")
+        self.assertEqual(out, 's: {{ include "cr.enc" '
+                              '.Values.variables.sshd_idle_timeout_value }}')
 
     def test_unterminated_brace_is_escaped(self):
         out = resolver.rewrite_placeholders("x: {{ unterminated")

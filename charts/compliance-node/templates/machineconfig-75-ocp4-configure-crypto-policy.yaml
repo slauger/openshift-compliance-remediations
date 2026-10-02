@@ -23,6 +23,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-configure_crypto_policy")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-configure-crypto-policy.rhcos4-configure-crypto-policy.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-configure_crypto_policy for MachineConfig/75-ocp4-configure-crypto-policy produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

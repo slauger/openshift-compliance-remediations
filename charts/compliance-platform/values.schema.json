@@ -1,7 +1,10 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "properties": {
+    "brokenRules": {
+      "type": "object"
+    },
     "cluster": {
       "additionalProperties": false,
       "properties": {
@@ -20,7 +23,7 @@
           "type": "boolean"
         },
         "ocpVersion": {
-          "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+          "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?([-+].*)?$",
           "type": "string"
         }
       },
@@ -33,6 +36,9 @@
     },
     "complianceNamespace": {
       "type": "string"
+    },
+    "global": {
+      "type": "object"
     },
     "profileRules": {
       "type": "object"
@@ -95,6 +101,12 @@
           "type": "boolean"
         }
       },
+      "type": "object"
+    },
+    "ruleApplicability": {
+      "type": "object"
+    },
+    "ruleDependencies": {
       "type": "object"
     },
     "rules": {
@@ -161,240 +173,790 @@
       "additionalProperties": false,
       "properties": {
         "sshd_idle_timeout_value": {
+          "pattern": "^\\d+%?$",
           "type": [
             "string",
             "number"
           ]
         },
         "sshd_max_auth_tries_value": {
+          "pattern": "^\\d+%?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_accounts_passwords_pam_faillock_dir": {
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_auditd_action_mail_acct": {
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_auditd_disk_error_action": {
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_auditd_disk_full_action": {
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_auditd_flush": {
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_auditd_max_log_file": {
+          "pattern": "^\\d+%?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_auditd_max_log_file_action": {
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_auditd_num_logs": {
+          "pattern": "^\\d+%?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_auditd_space_left": {
+          "pattern": "^\\d+%?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_auditd_space_left_action": {
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_event_record_qps": {
+          "not": {
+            "enum": [
+              "FALSE",
+              "False",
+              "N",
+              "NO",
+              "NULL",
+              "No",
+              "Null",
+              "OFF",
+              "ON",
+              "Off",
+              "On",
+              "TRUE",
+              "True",
+              "Y",
+              "YES",
+              "Yes",
+              "false",
+              "n",
+              "no",
+              "null",
+              "off",
+              "on",
+              "true",
+              "y",
+              "yes",
+              "~"
+            ]
+          },
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_kubelet_evictionhard_imagefs_available": {
+          "not": {
+            "enum": [
+              "FALSE",
+              "False",
+              "N",
+              "NO",
+              "NULL",
+              "No",
+              "Null",
+              "OFF",
+              "ON",
+              "Off",
+              "On",
+              "TRUE",
+              "True",
+              "Y",
+              "YES",
+              "Yes",
+              "false",
+              "n",
+              "no",
+              "null",
+              "off",
+              "on",
+              "true",
+              "y",
+              "yes",
+              "~"
+            ]
+          },
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_kubelet_evictionhard_imagefs_inodesfree": {
+          "not": {
+            "enum": [
+              "FALSE",
+              "False",
+              "N",
+              "NO",
+              "NULL",
+              "No",
+              "Null",
+              "OFF",
+              "ON",
+              "Off",
+              "On",
+              "TRUE",
+              "True",
+              "Y",
+              "YES",
+              "Yes",
+              "false",
+              "n",
+              "no",
+              "null",
+              "off",
+              "on",
+              "true",
+              "y",
+              "yes",
+              "~"
+            ]
+          },
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_kubelet_evictionhard_memory_available": {
+          "not": {
+            "enum": [
+              "FALSE",
+              "False",
+              "N",
+              "NO",
+              "NULL",
+              "No",
+              "Null",
+              "OFF",
+              "ON",
+              "Off",
+              "On",
+              "TRUE",
+              "True",
+              "Y",
+              "YES",
+              "Yes",
+              "false",
+              "n",
+              "no",
+              "null",
+              "off",
+              "on",
+              "true",
+              "y",
+              "yes",
+              "~"
+            ]
+          },
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_kubelet_evictionhard_nodefs_available": {
+          "not": {
+            "enum": [
+              "FALSE",
+              "False",
+              "N",
+              "NO",
+              "NULL",
+              "No",
+              "Null",
+              "OFF",
+              "ON",
+              "Off",
+              "On",
+              "TRUE",
+              "True",
+              "Y",
+              "YES",
+              "Yes",
+              "false",
+              "n",
+              "no",
+              "null",
+              "off",
+              "on",
+              "true",
+              "y",
+              "yes",
+              "~"
+            ]
+          },
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_kubelet_evictionhard_nodefs_inodesfree": {
+          "not": {
+            "enum": [
+              "FALSE",
+              "False",
+              "N",
+              "NO",
+              "NULL",
+              "No",
+              "Null",
+              "OFF",
+              "ON",
+              "Off",
+              "On",
+              "TRUE",
+              "True",
+              "Y",
+              "YES",
+              "Yes",
+              "false",
+              "n",
+              "no",
+              "null",
+              "off",
+              "on",
+              "true",
+              "y",
+              "yes",
+              "~"
+            ]
+          },
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_kubelet_evictionsoft_imagefs_available": {
+          "not": {
+            "enum": [
+              "FALSE",
+              "False",
+              "N",
+              "NO",
+              "NULL",
+              "No",
+              "Null",
+              "OFF",
+              "ON",
+              "Off",
+              "On",
+              "TRUE",
+              "True",
+              "Y",
+              "YES",
+              "Yes",
+              "false",
+              "n",
+              "no",
+              "null",
+              "off",
+              "on",
+              "true",
+              "y",
+              "yes",
+              "~"
+            ]
+          },
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_kubelet_evictionsoft_imagefs_inodesfree": {
+          "not": {
+            "enum": [
+              "FALSE",
+              "False",
+              "N",
+              "NO",
+              "NULL",
+              "No",
+              "Null",
+              "OFF",
+              "ON",
+              "Off",
+              "On",
+              "TRUE",
+              "True",
+              "Y",
+              "YES",
+              "Yes",
+              "false",
+              "n",
+              "no",
+              "null",
+              "off",
+              "on",
+              "true",
+              "y",
+              "yes",
+              "~"
+            ]
+          },
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_kubelet_evictionsoft_memory_available": {
+          "not": {
+            "enum": [
+              "FALSE",
+              "False",
+              "N",
+              "NO",
+              "NULL",
+              "No",
+              "Null",
+              "OFF",
+              "ON",
+              "Off",
+              "On",
+              "TRUE",
+              "True",
+              "Y",
+              "YES",
+              "Yes",
+              "false",
+              "n",
+              "no",
+              "null",
+              "off",
+              "on",
+              "true",
+              "y",
+              "yes",
+              "~"
+            ]
+          },
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_kubelet_evictionsoft_nodefs_available": {
+          "not": {
+            "enum": [
+              "FALSE",
+              "False",
+              "N",
+              "NO",
+              "NULL",
+              "No",
+              "Null",
+              "OFF",
+              "ON",
+              "Off",
+              "On",
+              "TRUE",
+              "True",
+              "Y",
+              "YES",
+              "Yes",
+              "false",
+              "n",
+              "no",
+              "null",
+              "off",
+              "on",
+              "true",
+              "y",
+              "yes",
+              "~"
+            ]
+          },
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_kubelet_evictionsoft_nodefs_inodesfree": {
+          "not": {
+            "enum": [
+              "FALSE",
+              "False",
+              "N",
+              "NO",
+              "NULL",
+              "No",
+              "Null",
+              "OFF",
+              "ON",
+              "Off",
+              "On",
+              "TRUE",
+              "True",
+              "Y",
+              "YES",
+              "Yes",
+              "false",
+              "n",
+              "no",
+              "null",
+              "off",
+              "on",
+              "true",
+              "y",
+              "yes",
+              "~"
+            ]
+          },
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_kubelet_tls_cipher_suites": {
+          "not": {
+            "enum": [
+              "FALSE",
+              "False",
+              "N",
+              "NO",
+              "NULL",
+              "No",
+              "Null",
+              "OFF",
+              "ON",
+              "Off",
+              "On",
+              "TRUE",
+              "True",
+              "Y",
+              "YES",
+              "Yes",
+              "false",
+              "n",
+              "no",
+              "null",
+              "off",
+              "on",
+              "true",
+              "y",
+              "yes",
+              "~"
+            ]
+          },
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_kubelet_tls_min_version": {
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_multiple_time_servers": {
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_oauth_inactivity_timeout": {
+          "not": {
+            "enum": [
+              "FALSE",
+              "False",
+              "N",
+              "NO",
+              "NULL",
+              "No",
+              "Null",
+              "OFF",
+              "ON",
+              "Off",
+              "On",
+              "TRUE",
+              "True",
+              "Y",
+              "YES",
+              "Yes",
+              "false",
+              "n",
+              "no",
+              "null",
+              "off",
+              "on",
+              "true",
+              "y",
+              "yes",
+              "~"
+            ]
+          },
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_oauth_token_maxage": {
+          "not": {
+            "enum": [
+              "FALSE",
+              "False",
+              "N",
+              "NO",
+              "NULL",
+              "No",
+              "Null",
+              "OFF",
+              "ON",
+              "Off",
+              "On",
+              "TRUE",
+              "True",
+              "Y",
+              "YES",
+              "Yes",
+              "false",
+              "n",
+              "no",
+              "null",
+              "off",
+              "on",
+              "true",
+              "y",
+              "yes",
+              "~"
+            ]
+          },
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_openshift_audit_profile": {
+          "not": {
+            "enum": [
+              "FALSE",
+              "False",
+              "N",
+              "NO",
+              "NULL",
+              "No",
+              "Null",
+              "OFF",
+              "ON",
+              "Off",
+              "On",
+              "TRUE",
+              "True",
+              "Y",
+              "YES",
+              "Yes",
+              "false",
+              "n",
+              "no",
+              "null",
+              "off",
+              "on",
+              "true",
+              "y",
+              "yes",
+              "~"
+            ]
+          },
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_rekey_limit_size": {
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_rekey_limit_time": {
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_sshd_disable_compression": {
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_sshd_max_sessions": {
+          "pattern": "^\\d+%?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_sshd_priv_separation": {
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_sshd_set_keepalive": {
+          "pattern": "^\\d+%?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_sshd_set_login_grace_time": {
+          "pattern": "^\\d+%?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_sshd_set_maxstartups": {
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_streaming_connection_timeouts": {
+          "not": {
+            "enum": [
+              "FALSE",
+              "False",
+              "N",
+              "NO",
+              "NULL",
+              "No",
+              "Null",
+              "OFF",
+              "ON",
+              "Off",
+              "On",
+              "TRUE",
+              "True",
+              "Y",
+              "YES",
+              "Yes",
+              "false",
+              "n",
+              "no",
+              "null",
+              "off",
+              "on",
+              "true",
+              "y",
+              "yes",
+              "~"
+            ]
+          },
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_system_crypto_policy": {
+          "not": {
+            "enum": [
+              "FALSE",
+              "False",
+              "N",
+              "NO",
+              "NULL",
+              "No",
+              "Null",
+              "OFF",
+              "ON",
+              "Off",
+              "On",
+              "TRUE",
+              "True",
+              "Y",
+              "YES",
+              "Yes",
+              "false",
+              "n",
+              "no",
+              "null",
+              "off",
+              "on",
+              "true",
+              "y",
+              "yes",
+              "~"
+            ]
+          },
+          "pattern": "^[^\\s#'\\\"\\\\]([^\\n\\t#'\\\"\\\\]*[^\\s#'\\\"\\\\])?$",
           "type": [
             "string",
             "number"
           ]
         },
         "var_time_service_set_maxpoll": {
+          "pattern": "^\\d+%?$",
           "type": [
             "string",
             "number"
@@ -404,6 +966,16 @@
       "type": "object"
     }
   },
+  "required": [
+    "profiles",
+    "rules",
+    "variables",
+    "profileRules",
+    "profileVariables",
+    "ruleApplicability",
+    "ruleDependencies",
+    "brokenRules"
+  ],
   "title": "compliance-platform values",
   "type": "object"
 }

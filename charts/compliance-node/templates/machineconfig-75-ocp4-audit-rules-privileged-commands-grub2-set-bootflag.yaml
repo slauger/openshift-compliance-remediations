@@ -19,6 +19,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_privileged_commands_grub2_set_bootflag")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-privileged-commands-grub2-set-bootflag.rhcos4-audit-rules-privileged-commands-grub2-set-bootflag.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-audit_rules_privileged_commands_grub2_set_bootflag for MachineConfig/75-ocp4-audit-rules-privileged-commands-grub2-set-bootflag produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

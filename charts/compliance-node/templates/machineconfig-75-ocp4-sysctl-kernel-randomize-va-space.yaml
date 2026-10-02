@@ -17,6 +17,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sysctl_kernel_randomize_va_space")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-sysctl-kernel-randomize-va-space.rhcos4-sysctl-kernel-randomize-va-space.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-sysctl_kernel_randomize_va_space for MachineConfig/75-ocp4-sysctl-kernel-randomize-va-space produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

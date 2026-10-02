@@ -17,6 +17,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sysctl_net_ipv4_tcp_syncookies")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-sysctl-net-ipv4-tcp-syncookies.rhcos4-sysctl-net-ipv4-tcp-syncookies.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-sysctl_net_ipv4_tcp_syncookies for MachineConfig/75-ocp4-sysctl-net-ipv4-tcp-syncookies produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

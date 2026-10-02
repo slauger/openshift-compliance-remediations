@@ -17,6 +17,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-sysctl_kernel_kptr_restrict")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-sysctl-kernel-kptr-restrict.rhcos4-sysctl-kernel-kptr-restrict.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-sysctl_kernel_kptr_restrict for MachineConfig/75-ocp4-sysctl-kernel-kptr-restrict produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

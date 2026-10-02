@@ -72,6 +72,14 @@ def _block_variables(block: str) -> set[str]:
     return names
 
 
+def variables_in_fix(fix_yaml: str) -> set[str]:
+    """Variables one fix payload references, in either shape."""
+    names: set[str] = set()
+    for block in _BLOCK_RE.findall(fix_yaml):
+        names.update(_block_variables(block))
+    return names
+
+
 def referenced_variables(content: Content) -> set[str]:
     names: set[str] = set()
     for rule in content.rules.values():
@@ -95,7 +103,14 @@ def _resolve_value(value: Value, selector: str | None) -> str:
 def _find_value(content: Content, name: str) -> Value | None:
     # Value ids are stored without the "var_" prefix in some content, with it
     # in others. Try both.
-    return content.values.get(name) or content.values.get(name[len("var_"):])
+    direct = content.values.get(name)
+    if direct is not None:
+        return direct
+    # Only strip the prefix if it is actually there: not every variable carries
+    # it (sshd_idle_timeout_value), and slicing blindly looked up a mangled id.
+    if name.startswith("var_"):
+        return content.values.get(name[len("var_"):])
+    return None
 
 
 def resolve_defaults(content: Content, default_profile: str | None = None) -> dict[str, str]:
@@ -149,7 +164,16 @@ def resolve_defaults(content: Content, default_profile: str | None = None) -> di
     return resolved
 
 
-def _helm_ref(name: str) -> str:
+def _helm_ref(name: str, encode: bool = False) -> str:
+    """A Helm reference to a chart variable.
+
+    ``encode`` wraps it in cr.enc, for a reference sitting inside a
+    percent-encoded Ignition payload: the operator runs url.PathEscape over its
+    own substituted output, and a raw space or ``#`` in a ``data:,`` URI
+    truncates the file that lands on the node without any error.
+    """
+    if encode:
+        return f'{{{{ include "cr.enc" .Values.variables.{name} }}}}'
     return f"{{{{ .Values.variables.{name} }}}}"
 
 
@@ -168,6 +192,11 @@ def _translate_action(encoded: str) -> str:
     using one, `make generate` fails loudly and the translation gets extended.
     """
     body = urllib.parse.unquote(encoded).strip()
+    # The common shape by far: the whole action is one variable reference.
+    # Encode it, since it lands inside a percent-encoded payload.
+    plain = _PLAIN_INNER_RE.fullmatch(body)
+    if plain:
+        return _helm_ref(plain.group(1), encode=True)
     unsupported = sorted(set(_BARE_WORD_RE.findall(body)) - _SUPPORTED_WORDS)
     if unsupported:
         raise ValueError(
@@ -176,7 +205,14 @@ def _translate_action(encoded: str) -> str:
         )
     body = _DOT_REF_RE.sub(r".Values.variables.\1", body)
     body = _TO_ARRAY_RE.sub(' | splitList ","', body)
-    return "{{ " + " ".join(body.split()) + " }}"
+    body = " ".join(body.split())
+    # An action that is a bare `$var` *emits* its value into the encoded
+    # payload, so it needs the same encoding a bare `.var` reference gets. An
+    # assignment or a range/end does not emit anything, so it must be left
+    # alone - wrapping it would produce invalid template syntax.
+    if re.fullmatch(r"\$\w+", body):
+        return f'{{{{ include "cr.enc" {body} }}}}'
+    return "{{ " + body + " }}"
 
 
 def _rewrite_block(block: str) -> str:
@@ -192,7 +228,79 @@ def _rewrite_block(block: str) -> str:
     plain = _PLAIN_INNER_RE.fullmatch(inner)
     if plain:
         return _helm_ref(plain.group(1))
+    # Anything that is not a bare reference must be a percent-encoded payload,
+    # and upstream encodes the spaces in those - all 140 blocks in the pinned
+    # content hold to that. A literal space means this is template source we do
+    # not understand, and substituting nothing while dropping the markers
+    # emitted it as literal text into the object
+    # (`eventRecordQPS: printf "%d" .var_event_record_qps`) with the whole
+    # pipeline reporting success - the no-template-syntax check looks for the
+    # very markers that were stripped.
+    if " " in inner:
+        raise ValueError(
+            f"unsupported remediation-templating block: {inner[:120]!r}. It is "
+            f"not a percent-encoded payload, so it carries template source we "
+            f"would emit as literal text; teach _rewrite_block to translate it."
+        )
     return _ENC_ACTION_RE.sub(lambda m: _translate_action(m.group(1)), inner)
+
+
+_PLAIN_USE_RE = re.compile(r"(.?)\{\{ \.Values\.variables\.(\w+) \}\}")
+
+
+def unquoted_scalar_variables(contents) -> set[str]:
+    """Variables interpolated into a YAML scalar without quotes.
+
+    Only these can change the *type* of the field they land in - a bare `~` or
+    `no` becomes null or false, which is valid YAML and therefore invisible to
+    every render-time guard. Values inside an encoded Ignition payload are
+    plain config text, where `no` is a perfectly good value, so constraining
+    them would reject shipped defaults such as var_sshd_disable_compression.
+    """
+    out: set[str] = set()
+    for content in contents:
+        for rule in content.rules.values():
+            for fix in rule.fixes:
+                for before, name in _PLAIN_USE_RE.findall(
+                        rewrite_placeholders(fix.yaml)):
+                    if before not in ('"', "'"):
+                        out.add(name)
+    return out
+
+
+def missing_values(contents) -> list[str]:
+    """Variables a fix references but the datastream no longer defines.
+
+    resolve_defaults falls back to an empty string and carries on, which used
+    to surface only by accident, downstream, as a schema-pattern failure that
+    said nothing about the cause.
+    """
+    out: list[str] = []
+    for content in contents:
+        for name in sorted(referenced_variables(content)):
+            if _find_value(content, name) is None:
+                out.append(f"{content.product}: {name}")
+    return out
+
+
+def numeric_variables(contents) -> set[str]:
+    """Variables XCCDF declares as numbers, and whose options really are.
+
+    The declared type alone is not enough: some number-typed values carry unit
+    suffixes. Require every selector and the resolved default to be digits, so
+    a constraint is only applied where it cannot reject a legitimate value.
+    """
+    out: set[str] = set()
+    for content in contents:
+        defaults = resolve_defaults(content)
+        for name in referenced_variables(content):
+            value = _find_value(content, name)
+            if value is None or value.value_type != "number":
+                continue
+            options = set(value.selectors.values()) | {defaults.get(name, "")}
+            if options and all(re.fullmatch(r"\d+", o) for o in options if o):
+                out.add(name)
+    return out
 
 
 def rewrite_placeholders(fix_yaml: str) -> str:

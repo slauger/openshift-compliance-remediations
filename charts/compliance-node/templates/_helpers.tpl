@@ -11,10 +11,11 @@
 {{-   if index $overrides $rule -}}true{{- else -}}false{{- end -}}
 {{- else -}}
 {{-   $active := false -}}
-{{-   $profileMap := index $root.Values "profileRules" -}}
+{{-   $profileMap := (index $root.Values "profileRules") | default dict -}}
 {{-   range $profile, $enabled := $root.Values.profiles -}}
 {{-     if $enabled -}}
-{{-       $ruleList := index $profileMap $profile | default (list) -}}
+{{-       $ruleList := (index $profileMap $profile) | default (list) -}}
+{{-       if not (kindIs "slice" $ruleList) -}}{{- $ruleList = list -}}{{- end -}}
 {{-       if has $rule $ruleList -}}{{- $active = true -}}{{- end -}}
 {{-     end -}}
 {{-   end -}}
@@ -32,6 +33,20 @@
 {{- if $any -}}true{{- else -}}false{{- end -}}
 {{- end -}}
 
+{{/*
+  Percent-encode a value substituted into an Ignition data URI. The operator
+  runs url.PathEscape over its own substituted output; the chart keeps the
+  payload encoded and injects the value, so the value has to be encoded here.
+  Without it a value containing a space and a # is read as a YAML comment and
+  the rest of the data: scalar - the rest of the config file - disappears with
+  no error. `%` goes first, or it would double-encode the escapes below.
+  Quotes and backslashes are not handled here: values.schema.json rejects them
+  outright, which is a clearer failure than an encoded surprise.
+*/}}
+{{- define "cr.enc" -}}
+{{- . | toString | replace "%" "%25" | replace " " "%20" | replace "#" "%23" | replace "&" "%26" | replace "?" "%3F" | replace "+" "%2B" -}}
+{{- end -}}
+
 {{/* Canonical `uname -m` architecture; the Kubernetes spellings are accepted. */}}
 {{- define "cr.arch" -}}
 {{- $a := .Values.cluster.architecture | toString -}}
@@ -47,6 +62,7 @@
 {{- $root := . -}}
 {{- $arch := include "cr.arch" $root -}}
 {{- $bad := list -}}
+{{- $archBad := false -}}
 {{- range $rule, $req := ($root.Values.ruleApplicability | default dict) -}}
 {{-   if eq (include "cr.ruleActive" (dict "root" $root "rule" $rule)) "true" -}}
 {{-     $reason := "" -}}
@@ -54,6 +70,7 @@
 {{-       $reason = printf "never applicable (%s)" $req.never -}}
 {{-     else if and (hasKey $req "arch") (not (has $arch $req.arch)) -}}
 {{-       $reason = printf "not applicable on %s" $arch -}}
+{{-       $archBad = true -}}
 {{-     else if and (hasKey $req "hypershift") (not (has $root.Values.cluster.hypershift $req.hypershift)) -}}
 {{-       $reason = printf "not applicable when cluster.hypershift is %v" $root.Values.cluster.hypershift -}}
 {{-     end -}}
@@ -63,7 +80,10 @@
 {{-   end -}}
 {{- end -}}
 {{- if $bad -}}
-{{- $hint := printf "Disable them in .Values.rules, or apply the generated overlay for this architecture (-f values-%s.yaml). See RULES.md for the applicability of every rule." $arch -}}
+{{- $hint := "Disable them in .Values.rules, or change the cluster facts they depend on. See RULES.md for the applicability of every rule." -}}
+{{- if $archBad -}}
+{{- $hint = printf "Disable them in .Values.rules, or apply the generated overlay for this architecture: -f values-%s.yaml from the chart you are installing (the umbrella ships its own, with the values nested per subchart). See RULES.md for the applicability of every rule." $arch -}}
+{{- end -}}
 {{- fail (printf "%d active rule(s) are not applicable to this cluster:\n%s\n%s" (len $bad) (join "\n" (sortAlpha $bad)) $hint) -}}
 {{- end -}}
 {{- end -}}
@@ -88,6 +108,24 @@
 {{- end -}}
 {{- if $bad -}}
 {{- fail (printf "%d active rule(s) have an unmet dependency:\n%s\nUpstream marks these with complianceascode.io/depends-on; enable the dependency, or disable the rule that needs it." (len $bad) (join "\n" (sortAlpha $bad))) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+  Refuse a rule whose upstream fix cannot work as written. These are already
+  shipped disabled and marked in RULES.md, but opting one in rendered an object
+  the API server accepts and then prunes - success reported, nothing changed.
+*/}}
+{{- define "cr.brokenPreflight" -}}
+{{- $root := . -}}
+{{- $bad := list -}}
+{{- range $rule, $why := ($root.Values.brokenRules | default dict) -}}
+{{-   if eq (include "cr.ruleActive" (dict "root" $root "rule" $rule)) "true" -}}
+{{-     $bad = append $bad (printf "  %s - %s" $rule $why) -}}
+{{-   end -}}
+{{- end -}}
+{{- if $bad -}}
+{{- fail (printf "%d active rule(s) reproduce an upstream fix that cannot work:\n%s\nPrefer the non-broken alternative in the same group; see RULES.md." (len $bad) (join "\n" (sortAlpha $bad))) -}}
 {{- end -}}
 {{- end -}}
 

@@ -3,29 +3,31 @@
 {{- $profiles := list "ocp4-bsi" "ocp4-bsi-2022" "ocp4-cis" "ocp4-cis-1-7" "ocp4-cis-1-9" "ocp4-e8" "ocp4-high" "ocp4-high-rev-4" "ocp4-moderate" "ocp4-moderate-rev-4" "ocp4-nerc-cip" "ocp4-pci-dss" "ocp4-pci-dss-3-2" "ocp4-pci-dss-4-0" "ocp4-stig" "ocp4-stig-v2r2" "ocp4-stig-v2r3" -}}
 {{- $root := . -}}
 {{- range $profile := $profiles -}}
-{{- if index $root.Values.profiles $profile -}}
-{{- $ruleList := index $root.Values.profileRules $profile | default (list) -}}
-{{- $varList := index $root.Values.profileVariables $profile | default (list) -}}
+{{- if index ($root.Values.profiles | default dict) $profile -}}
+{{- $ruleList := (index ($root.Values.profileRules | default dict) $profile) | default (list) -}}
+{{- $varList := (index ($root.Values.profileVariables | default dict) $profile) | default (list) -}}
 {{- $product := (splitList "-" $profile | first) -}}
+{{- $name := printf "hardening-%s" ($profile | replace "_" "-") }}
 ---
 apiVersion: compliance.openshift.io/v1alpha1
 kind: TailoredProfile
 metadata:
-  name: {{ printf "hardening-%s" $profile }}
+  name: {{ $name }}
   namespace: {{ $root.Values.complianceNamespace | quote }}
   labels:
     app.kubernetes.io/managed-by: {{ $root.Release.Service | quote }}
   annotations:
     compliance.openshift.io/product-type: "Platform"
 spec:
-  extends: {{ $profile | quote }}
+  extends: {{ $profile | replace "_" "-" | quote }}
   title: {{ printf "Hardening-managed selection of %s" $profile | quote }}
   description: >-
     Rule selection managed by the compliance-hardening Helm chart.
   {{- $disabled := list -}}
   {{- range $rule := $ruleList -}}
-  {{- if hasKey $root.Values.rules $rule -}}
-  {{- if not (index $root.Values.rules $rule) -}}
+  {{- $overrides := $root.Values.rules | default dict -}}
+  {{- if hasKey $overrides $rule -}}
+  {{- if not (index $overrides $rule) -}}
   {{- $disabled = append $disabled $rule -}}
   {{- end -}}{{- end -}}{{- end -}}
   {{- if $disabled }}
@@ -38,7 +40,7 @@ spec:
   {{- if $varList }}
   setValues:
   {{- range $var := $varList }}
-  {{- if hasKey $root.Values.variables $var }}
+  {{- if hasKey ($root.Values.variables | default dict) $var }}
     - name: {{ printf "%s-%s" $product ($var | replace "_" "-") | quote }}
       value: {{ index $root.Values.variables $var | quote }}
       rationale: "Set via compliance-hardening chart values"

@@ -19,6 +19,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_execution_setsebool")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-execution-setsebool.rhcos4-audit-rules-execution-setsebool.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-audit_rules_execution_setsebool for MachineConfig/75-ocp4-audit-rules-execution-setsebool produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

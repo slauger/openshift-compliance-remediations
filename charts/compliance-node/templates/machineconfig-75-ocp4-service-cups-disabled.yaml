@@ -18,6 +18,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-service_cups_disabled")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-service-cups-disabled.rhcos4-service-cups-disabled.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-service_cups_disabled for MachineConfig/75-ocp4-service-cups-disabled produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}

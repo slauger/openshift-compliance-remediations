@@ -30,13 +30,17 @@ generate: venv
 docs:
 	helm-docs --chart-search-root=$(CHARTS)
 
-## helm lint all charts.
-lint:
+## helm lint all charts. Depends on deps: without the subchart archives the
+## umbrella is an empty shell and `helm lint` passes it with a warning, so CI
+## was linting nothing at all for that chart.
+lint: deps
 	@for c in $(ALL_CHARTS); do echo "== lint $$c =="; helm lint $$c || exit 1; done
 
-## helm unittest the subcharts.
-test:
-	@for c in $(SUBCHARTS); do echo "== test $$c =="; helm unittest $$c || exit 1; done
+## helm unittest every chart. Depends on deps: the umbrella can only render
+## once its subchart archives are built, and leaving it untested is how an
+## overlay that only works for standalone subcharts got through.
+test: deps
+	@for c in $(ALL_CHARTS); do echo "== test $$c =="; helm unittest $$c || exit 1; done
 
 ## Python unit tests (parser + collisions). Depends on fetch: the datastream
 ## tests skip without .cache, and REQUIRE_DATASTREAM turns that skip into a
@@ -53,7 +57,10 @@ validate-payloads: venv
 
 ## Build umbrella dependencies (pulls subcharts).
 deps:
-	helm dependency build $(CHARTS)/compliance-hardening
+	# `update`, not `build`: Chart.lock is gitignored, so CI writes it at the
+	# old version and a release bumps Chart.yaml past it - `build` then
+	# aborts with "lock file out of sync", after the tag is already pushed.
+	helm dependency update $(CHARTS)/compliance-hardening
 
 ## Render the platform chart with a sample profile.
 template:
@@ -67,8 +74,8 @@ show-ocp-version:
 
 ## Suggest the live cluster's node architecture for cluster.architecture.
 show-node-arch:
-	@oc get nodes -o jsonpath='{range .items[*]}{.status.nodeInfo.architecture}{"\\n"}{end}' 2>/dev/null \
-		| sort -u \
+	@oc get nodes -o jsonpath='{.items[*].status.nodeInfo.architecture}' 2>/dev/null \
+		| tr ' ' '\n' | sort -u \
 		|| echo "not an OpenShift cluster or no access (set cluster.architecture manually)"
 
 ## Ruff lint the generator + tests (installs ruff via the dev extra).

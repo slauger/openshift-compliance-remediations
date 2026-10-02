@@ -17,6 +17,9 @@ spec:
 {{- $merged := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-disable_ctrlaltdel_burstaction")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-disable-ctrlaltdel-burstaction.rhcos4-disable-ctrlaltdel-burstaction.0" . | fromYaml -}}
+{{- if hasKey $frag "Error" -}}
+{{- fail (printf "Rendering rhcos4-disable_ctrlaltdel_burstaction for MachineConfig/75-ocp4-disable-ctrlaltdel-burstaction produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if not $merged -}}
