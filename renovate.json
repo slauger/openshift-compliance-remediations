@@ -44,6 +44,18 @@
       "automerge": true
     },
     {
+      "description": "Automerge the tool versions pinned in the workflows. These come from custom regex managers, which the github-actions rule above does not match, so without this they pile up.",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchDepNames": [
+        "helm-unittest/helm-unittest",
+        "coreos/ignition",
+        "norwoodj/helm-docs"
+      ],
+      "automerge": true
+    },
+    {
       "matchDepNames": [
         "ComplianceAsCode/content"
       ],
@@ -57,7 +69,9 @@
         "make verify       # lint + unit tests",
         "```",
         "Review the diff of `charts/` and `RULES.md`: it shows exactly which rules and fixes changed between content releases."
-      ]
+      ],
+      "automerge": false,
+      "description": "Never automerge a content bump: it changes the generated charts, and the diff of charts/ and RULES.md is the review."
     }
   ]
 }
