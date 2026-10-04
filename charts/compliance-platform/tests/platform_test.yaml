@@ -91,3 +91,30 @@ tests:
       - equal:
           path: kind
           value: IngressController
+
+  - it: labels the object for ownership queries
+    template: templates/apiserver-cluster.yaml
+    documentIndex: 0
+    release:
+      name: hardening
+    set:
+      rules:
+        ocp4-audit_profile_set: true
+    asserts:
+      - equal:
+          path: metadata.labels["app.kubernetes.io/part-of"]
+          value: compliance-hardening
+      - equal:
+          path: metadata.labels["app.kubernetes.io/name"]
+          value: compliance-platform
+      - equal:
+          path: metadata.labels["app.kubernetes.io/instance"]
+          value: hardening
+      - equal:
+          path: metadata.labels["app.kubernetes.io/component"]
+          value: remediation
+      # Platform objects are cluster singletons, so no role label here.
+      - notExists:
+          path: metadata.labels["machineconfiguration.openshift.io/role"]
+      - notExists:
+          path: metadata.labels["compliance.openshift.io/managed"]

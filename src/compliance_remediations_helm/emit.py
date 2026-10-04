@@ -605,6 +605,40 @@ def broken_rules(contents: list[Content]) -> dict[str, str]:
     return out
 
 
+def _labels_block(ref: str, component: str, role: str | None = None) -> list[str]:
+    """The metadata.labels block every rendered object carries.
+
+    `ref` is the Go template root expression at the call site, without the
+    trailing dot: "$" inside a `range`, "" at the top level, "$root" in the
+    TailoredProfile loop.
+
+    Only the Kubernetes recommended set, deliberately. A marker of our own
+    under `compliance.openshift.io/` squats in the Compliance Operator's key
+    space, and it answered none of the questions one actually has in a cluster
+    where our object names collide with the operator's by design: which chart,
+    which release, what kind of object. `part-of` is the selector, and a
+    literal rather than a template so it reads the same standalone and under
+    the umbrella. No `version` label: it would rewrite the labels of every
+    object on every release without making anything selectable.
+
+    `role` adds the MCO pool selector. That one is functional, not
+    descriptive - without it a MachineConfig belongs to no pool.
+    """
+    lines = [
+        "  labels:",
+        f"    app.kubernetes.io/name: {{{{ {ref}.Chart.Name | quote }}}}",
+        f"    app.kubernetes.io/instance: "
+        f'{{{{ {ref}.Release.Name | trunc 63 | trimSuffix "-" | quote }}}}',
+        f"    app.kubernetes.io/component: {component}",
+        f"    app.kubernetes.io/part-of: {UMBRELLA_CHART}",
+        f"    app.kubernetes.io/managed-by: {{{{ {ref}.Release.Service | quote }}}}",
+    ]
+    if role is not None:
+        lines.append(
+            f"    machineconfiguration.openshift.io/role: {{{{ {role} | quote }}}}")
+    return lines
+
+
 def _cluster_block(indent: str = "") -> list[str]:
     """Facts about the target cluster, used to evaluate rule applicability.
 
@@ -1007,10 +1041,7 @@ def object_template(group: MergeGroup, appl: dict | None = None) -> str:
         lines.append(f"kind: {key.kind}")
         lines.append("metadata:")
         lines.append(f'  name: {{{{ printf "%s-%s" {_go_str(key.name)} $role }}}}')
-        lines.append("  labels:")
-        lines.append('    app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}')
-        lines.append('    compliance.openshift.io/managed: "true"')
-        lines.append('    machineconfiguration.openshift.io/role: {{ $role | quote }}')
+        lines.extend(_labels_block("$", "remediation", role="$role"))
         lines.append(f"{{{{ {body} | toYaml }}}}")
         if roles:
             lines.append("{{- end }}")
@@ -1023,9 +1054,7 @@ def object_template(group: MergeGroup, appl: dict | None = None) -> str:
         lines.append(f"  name: {key.name}")
         if key.namespace:
             lines.append(f"  namespace: {key.namespace}")
-        lines.append("  labels:")
-        lines.append('    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}')
-        lines.append('    compliance.openshift.io/managed: "true"')
+        lines.extend(_labels_block("", "remediation"))
         lines.append("{{ $merged | toYaml }}")
     lines.append("{{- end -}}")
     return "\n".join(lines) + "\n"
@@ -1071,8 +1100,7 @@ def tailored_profile_template(contents: list[Content], layer: str) -> str:
         "metadata:",
         '  name: {{ $name }}',
         "  namespace: {{ $root.Values.complianceNamespace | quote }}",
-        "  labels:",
-        '    app.kubernetes.io/managed-by: {{ $root.Release.Service | quote }}',
+        *_labels_block("$root", "tailored-profile"),
         "  annotations:",
         f'    compliance.openshift.io/product-type: "{product_type}"',
         "spec:",

@@ -62,3 +62,33 @@ tests:
           content:
             name: ocp4-audit-profile-set
             rationale: "Disabled via compliance-hardening chart values"
+
+  - it: carries the same ownership labels as the remediation objects
+    # This object used to carry managed-by alone, so an ownership query missed
+    # exactly the objects the operator reads. It is off by default, which is
+    # why the gap went unnoticed.
+    documentIndex: 0
+    release:
+      name: hardening
+    set:
+      tailoredProfile:
+        enabled: true
+      profiles:
+        ocp4-cis: true
+    asserts:
+      - equal:
+          path: metadata.labels["app.kubernetes.io/part-of"]
+          value: compliance-hardening
+      - equal:
+          path: metadata.labels["app.kubernetes.io/name"]
+          value: compliance-platform
+      - equal:
+          path: metadata.labels["app.kubernetes.io/instance"]
+          value: hardening
+      - equal:
+          path: metadata.labels["app.kubernetes.io/component"]
+          value: tailored-profile
+      # The annotation is operator-required and must survive the label change.
+      - equal:
+          path: metadata.annotations["compliance.openshift.io/product-type"]
+          value: Platform

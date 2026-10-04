@@ -32,8 +32,11 @@ kind: MachineConfig
 metadata:
   name: {{ printf "%s-%s" "75-ocp4-audit-rules-dac-modification-setxattr" $role }}
   labels:
+    app.kubernetes.io/name: {{ $.Chart.Name | quote }}
+    app.kubernetes.io/instance: {{ $.Release.Name | trunc 63 | trimSuffix "-" | quote }}
+    app.kubernetes.io/component: remediation
+    app.kubernetes.io/part-of: compliance-hardening
     app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}
-    compliance.openshift.io/managed: "true"
     machineconfiguration.openshift.io/role: {{ $role | quote }}
 {{ $merged | toYaml }}
 {{- end }}
