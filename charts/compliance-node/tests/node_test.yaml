@@ -57,3 +57,43 @@ tests:
       - equal:
           path: spec.kubeletConfig.eventRecordQPS
           value: 50
+
+  - it: labels the object for ownership queries
+    # Our object names collide with the operator-generated ones on purpose, so
+    # part-of is the only way to tell from the cluster what this chart owns.
+    # Nothing pinned any of these labels before, which is how the TailoredProfile
+    # came to be the one object missing the set.
+    template: templates/kubeletconfig-compliance-operator-kubelet.yaml
+    documentIndex: 0
+    release:
+      name: hardening
+    set:
+      node:
+        enabled: true
+        roles: [worker]
+      rules:
+        ocp4-kubelet_configure_event_creation: true
+    asserts:
+      - equal:
+          path: metadata.labels["app.kubernetes.io/part-of"]
+          value: compliance-hardening
+      - equal:
+          path: metadata.labels["app.kubernetes.io/name"]
+          value: compliance-node
+      # The documented mixed-architecture pattern installs the node chart twice
+      # with different node.roles; instance is what tells the two apart.
+      - equal:
+          path: metadata.labels["app.kubernetes.io/instance"]
+          value: hardening
+      - equal:
+          path: metadata.labels["app.kubernetes.io/component"]
+          value: remediation
+      - equal:
+          path: metadata.labels["app.kubernetes.io/managed-by"]
+          value: Helm
+      # Still the functional one: without it the object belongs to no pool.
+      - equal:
+          path: metadata.labels["machineconfiguration.openshift.io/role"]
+          value: worker
+      - notExists:
+          path: metadata.labels["compliance.openshift.io/managed"]

@@ -15,6 +15,10 @@ metadata:
   name: {{ $name }}
   namespace: {{ $root.Values.complianceNamespace | quote }}
   labels:
+    app.kubernetes.io/name: {{ $root.Chart.Name | quote }}
+    app.kubernetes.io/instance: {{ $root.Release.Name | trunc 63 | trimSuffix "-" | quote }}
+    app.kubernetes.io/component: tailored-profile
+    app.kubernetes.io/part-of: compliance-hardening
     app.kubernetes.io/managed-by: {{ $root.Release.Service | quote }}
   annotations:
     compliance.openshift.io/product-type: "Platform"

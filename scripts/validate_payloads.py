@@ -65,6 +65,7 @@ FLOORS: dict[str, dict[str, int]] = {
     "render": {
         "render": 40,
         "object-has-body": 40,
+        "selector-label": 40,
         "kubeletconfig-pool-selector": 20,
         "no-cross-object-file-collisions": 40,
     },
@@ -362,6 +363,31 @@ def check_object_has_body(where: str, docs: list, fnd: Findings) -> None:
     fnd.ok("object-has-body")
 
 
+SELECTOR_LABEL = "app.kubernetes.io/part-of"
+SELECTOR_VALUE = "compliance-hardening"
+
+
+def check_selector_label(where: str, docs: list, fnd: Findings) -> None:
+    """Every rendered object must carry the ownership selector.
+
+    Our object names collide with the operator-generated ones by design, so
+    `app.kubernetes.io/part-of` is the only way to tell from the cluster what
+    this chart put there. An object rendered without it is invisible to that
+    query and to anything built on it, and no YAML-level check would notice.
+    """
+    for doc in docs:
+        if not doc:
+            continue
+        labels = (doc.get("metadata") or {}).get("labels") or {}
+        if labels.get(SELECTOR_LABEL) != SELECTOR_VALUE:
+            name = (doc.get("metadata") or {}).get("name", "<unnamed>")
+            fnd.error(where, f"{doc.get('kind')}/{name} is missing "
+                             f"{SELECTOR_LABEL}={SELECTOR_VALUE} and cannot be "
+                             f"found by an ownership query")
+            return
+    fnd.ok("selector-label")
+
+
 def check_pool_selectors(where: str, docs: list, fnd: Findings) -> None:
     """A KubeletConfig without a pool selector applies to nothing.
 
@@ -443,6 +469,7 @@ def validate_renders(fnd: Findings) -> None:
                     break
                 seen[key] = where
             check_object_has_body(where, docs, fnd)
+            check_selector_label(where, docs, fnd)
             check_pool_selectors(where, docs, fnd)
             check_cross_object_files(where, docs, fnd)
             fnd.ok("render")

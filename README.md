@@ -54,6 +54,40 @@ Rules and profiles keep the **exact OpenShift/ComplianceAsCode naming** so resul
 - Profile: `<product>-<profile>`, e.g. `ocp4-cis`, `rhcos4-moderate`
 - Rule id: `<product>-<rule_name_with_underscores>`, e.g. `ocp4-audit_profile_set`
 
+## Labels
+
+Object **names** are deliberately the operator-aligned ones, which means a chart-rendered
+`MachineConfig` can share its name with one the Compliance Operator would create. Labels
+are what tell the two apart. Every rendered object - remediations and `TailoredProfile`s
+alike - carries the Kubernetes recommended set:
+
+| Label | Value |
+|---|---|
+| `app.kubernetes.io/name` | the chart that rendered it: `compliance-node` or `compliance-platform` |
+| `app.kubernetes.io/instance` | the Helm release name |
+| `app.kubernetes.io/component` | `remediation` or `tailored-profile` |
+| `app.kubernetes.io/part-of` | always `compliance-hardening` - this is the ownership selector |
+| `app.kubernetes.io/managed-by` | `Helm` |
+
+So, to see everything the charts own:
+
+```bash
+oc get machineconfig,kubeletconfig,tailoredprofile -A \
+  -l app.kubernetes.io/part-of=compliance-hardening
+```
+
+`part-of` is a fixed literal, identical standalone and under the umbrella. `instance`
+separates two releases of the same chart, which is exactly the
+[mixed-architecture pattern](#applicability) (one release per architecture, each with its
+own `node.roles`).
+
+No label of ours sits under `compliance.openshift.io/` - that key space belongs to the
+Compliance Operator. The one thing we do set there is the `product-type` **annotation**
+on a `TailoredProfile`, because the operator requires it to route the scan.
+
+Node objects additionally carry `machineconfiguration.openshift.io/role`, which is not
+descriptive but functional: it is how the MCO associates the object with a pool.
+
 ## Charts
 
 Two standalone charts plus a thin umbrella wrapper:
