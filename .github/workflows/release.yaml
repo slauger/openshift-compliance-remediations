@@ -90,6 +90,13 @@ jobs:
       # run aborts at commit analysis with "Cannot find module". That is a
       # safe place to fail - before the tag - but it fails every time, and
       # releases are manual, so nothing surfaced it until one was attempted.
+      #
+      # The major is pinned: preset 10 depends on @conventional-changelog/
+      # template, whose templates need conventional-changelog-writer@9, while
+      # @semantic-release/release-notes-generator@14 - what this action bundles
+      # - still carries writer@8. The mismatch surfaces only at generateNotes,
+      # as handlebars reporting a "Missing helper" whose name is a paragraph of
+      # prose. Do not bump this to 10 before the notes generator ships writer@9.
       - name: Semantic release
         id: semrel
         uses: cycjimmy/semantic-release-action@v6.0.0
@@ -97,7 +104,7 @@ jobs:
           extra_plugins: |
             @semantic-release/exec
             @semantic-release/git
-            conventional-changelog-conventionalcommits
+            conventional-changelog-conventionalcommits@9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
