@@ -82,6 +82,14 @@ jobs:
       # Computes the next version from conventional commits, writes it to
       # VERSION, regenerates charts/ + docs (exec plugin), commits the result
       # back to main (git plugin), tags and creates the GitHub release.
+      #
+      # conventional-changelog-conventionalcommits is listed with the plugins
+      # because .releaserc.json asks for `preset: conventionalcommits`, and
+      # semantic-release resolves a preset by require()ing that package from
+      # its own install. It does not ship with it, so without this entry the
+      # run aborts at commit analysis with "Cannot find module". That is a
+      # safe place to fail - before the tag - but it fails every time, and
+      # releases are manual, so nothing surfaced it until one was attempted.
       - name: Semantic release
         id: semrel
         uses: cycjimmy/semantic-release-action@v6.0.0
@@ -89,6 +97,7 @@ jobs:
           extra_plugins: |
             @semantic-release/exec
             @semantic-release/git
+            conventional-changelog-conventionalcommits
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
