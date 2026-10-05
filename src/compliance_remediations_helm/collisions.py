@@ -87,84 +87,189 @@ class Conflict:
     rules: list[str]
 
 
-def _leaf_paths(doc_yaml: str) -> dict[str, str]:
-    """Map full dotted leaf path -> value, for content below the object root.
+class YamlShapeError(ValueError):
+    """A fix body did not match the YAML subset this module parses."""
 
-    Single structural pass over the raw body lines, tracking the key path
-    stack. Scalar leaves map to their value. List items (``- ...``) attach to
-    the path of their *immediate* parent key (by indentation), so a list is
-    serialized against its true path - not first-match, and not aggregated onto
-    ancestor keys. This makes two rules writing different lists to the same
-    path collide, while disjoint list-bearing subtrees stay independent.
+
+_KEY_RE = re.compile(r"^([\w.\-/]+):(.*)$")
+_BLOCK_START_RE = re.compile(r"^[|>][+-]?\d*$")
+# Top-level keys that hold the object's content. Everything else at the top
+# level (apiVersion, kind, metadata) is identity, not content: comparing it
+# would make every rule targeting one object conflict on its own name.
+#
+# The single definition: emit builds its body-stripping regex from this and
+# scripts/validate_payloads.py imports it, because three hand-kept copies of
+# one vocabulary is three chances to drift.
+BODY_ROOTS = ("spec", "data", "rules", "parameters", "projectRequestTemplate", "objects")
+
+
+def _indent_of(raw: str) -> int:
+    return len(raw) - len(raw.lstrip())
+
+
+def _skip_blank(lines: list[str], i: int) -> int:
+    while i < len(lines) and (not lines[i].strip() or lines[i].lstrip().startswith("#")):
+        i += 1
+    return i
+
+
+def _read_block_scalar(lines: list[str], i: int, key_indent: int) -> tuple[str, int]:
+    """Consume a `|`/`>` scalar as opaque text.
+
+    Everything more-indented than the owning key is content, never structure,
+    so a `foo: bar` line inside a script or config blob cannot become a leaf.
     """
-    leaves: dict[str, str] = {}
-    lists: dict[str, list[str]] = {}
-    stack: list[tuple[int, str]] = []  # (indent, key)
-
-    in_body = False
-    block_scalar: tuple[int, str, list[str]] | None = None  # (key_indent, path, lines)
-    lines_iter = doc_yaml.splitlines()
-    for raw in lines_iter:
-        # Inside a block scalar (| or >): consume every line more-indented than
-        # the owning key as opaque scalar content, never as YAML structure.
-        # This prevents a "foo: bar" line inside a script/config blob from being
-        # misread as a nested key (false conflict) or masking a real one.
-        if block_scalar is not None:
-            key_indent, bpath, blines = block_scalar
-            if not raw.strip():
-                blines.append("")
-                continue
-            indent = len(raw) - len(raw.lstrip())
-            if indent > key_indent:
-                blines.append(raw.strip())
-                continue
-            # block scalar ended; record its serialized content as the leaf
-            leaves[bpath] = "|" + "\\n".join(blines).strip()
-            block_scalar = None
-            # fall through to process the current line normally
-
-        if not raw.strip() or raw.strip().startswith("#"):
+    out: list[str] = []
+    while i < len(lines):
+        raw = lines[i]
+        if not raw.strip():
+            out.append("")
+            i += 1
             continue
-        indent = len(raw) - len(raw.lstrip())
+        if _indent_of(raw) <= key_indent:
+            break
+        out.append(raw.strip())
+        i += 1
+    return "|" + "\\n".join(out).strip(), i
+
+
+def _read_value(lines: list[str], i: int, key_indent: int, where: str):
+    """Parse the block that belongs to a key sitting at `key_indent`."""
+    i = _skip_blank(lines, i)
+    if i >= len(lines):
+        return None, i
+    raw = lines[i]
+    indent = _indent_of(raw)
+    if raw.strip().startswith("-"):
+        # A block sequence may be indented at its key's own column or deeper.
+        # Accepting only "deeper" is what attached every `files:` list to
+        # `storage` instead: ComplianceAsCode writes `files:` and `- contents:`
+        # at the same indent.
+        if indent >= key_indent:
+            return _read_sequence(lines, i, indent, where)
+        return None, i
+    if indent > key_indent:
+        return _read_mapping(lines, i, indent, where)
+    return None, i
+
+
+def _read_sequence(lines: list[str], i: int, indent: int, where: str):
+    items: list = []
+    while True:
+        i = _skip_blank(lines, i)
+        if i >= len(lines):
+            break
+        raw = lines[i]
+        if _indent_of(raw) != indent or not raw.strip().startswith("-"):
+            break
+        rest = raw.strip()[1:].lstrip()
+        if not rest:
+            item, i = _read_value(lines, i + 1, indent, where)
+            items.append(item)
+        elif _KEY_RE.match(rest):
+            # `- key: value` starts a mapping item whose keys sit at the
+            # column of `key`. Blank out the dash and parse it as an ordinary
+            # mapping, so the item's keys nest under the item - not onto the
+            # list's own path, last-wins, which dropped every file but one.
+            item_indent = len(raw) - len(rest)
+            lines[i] = " " * item_indent + rest
+            item, i = _read_mapping(lines, i, item_indent, where)
+            items.append(item)
+        else:
+            items.append(rest)
+            i += 1
+    return items, i
+
+
+def _read_mapping(lines: list[str], i: int, indent: int, where: str):
+    out: dict = {}
+    while True:
+        i = _skip_blank(lines, i)
+        if i >= len(lines):
+            break
+        raw = lines[i]
+        line_indent = _indent_of(raw)
         stripped = raw.strip()
-
-        if stripped.startswith("- "):
-            # List item belongs to the deepest key on the stack whose indent is
-            # smaller than the item's indent (its parent key). The parent path
-            # is that key plus all shallower ancestors.
-            parent_keys = [k for ind, k in stack if ind < indent]
-            if parent_keys:
-                lists.setdefault(".".join(parent_keys), []).append(stripped)
-            continue
-
-        m = re.match(r"^(\s*)([\w.-]+):(.*)$", raw)
+        if line_indent < indent or stripped.startswith("-"):
+            break
+        if line_indent > indent:
+            raise YamlShapeError(
+                f"{where}: line indented {line_indent} where {indent} was expected: {stripped!r}")
+        m = _KEY_RE.match(stripped)
         if not m:
-            continue
-        key, val = m.group(2), m.group(3).strip()
-        if not in_body and key in ("spec", "data", "rules", "parameters",
-                                   "projectRequestTemplate", "objects"):
-            in_body = True
-        if not in_body:
-            continue
-        while stack and stack[-1][0] >= indent:
-            stack.pop()
-        stack.append((indent, key))
-        path = ".".join(k for _, k in stack)
-        # Block scalar start: value is | or > (with optional chomping/indent
-        # indicators like |-, >-, |2). Begin consuming its indented content.
-        if re.match(r"^[|>][+-]?\d*\s*$", val):
-            block_scalar = (indent, path, [])
-            continue
-        if val and val not in ("{}", "[]"):
-            leaves[path] = val
+            raise YamlShapeError(f"{where}: not a mapping key: {stripped!r}")
+        key, val = m.group(1), m.group(2).strip()
+        i += 1
+        if _BLOCK_START_RE.match(val):
+            out[key], i = _read_block_scalar(lines, i, line_indent)
+        elif not val:
+            out[key], i = _read_value(lines, i, line_indent, where)
+        else:
+            out[key] = val
+    return out, i
 
-    if block_scalar is not None:
-        _, bpath, blines = block_scalar
-        leaves[bpath] = "|" + "\\n".join(blines).strip()
 
-    for path, items in lists.items():
-        leaves[path] = "[" + ",".join(sorted(items)) + "]"
-    return leaves
+def _canonical(node) -> str:
+    """Order-insensitive, lossless-enough serialization of a subtree.
+
+    Used as the value of a list leaf, so two rules writing the same list in a
+    different order compare equal while any difference in content does not.
+    """
+    if isinstance(node, dict):
+        return "{" + ",".join(f"{k}={_canonical(v)}" for k, v in sorted(node.items())) + "}"
+    if isinstance(node, list):
+        return "[" + ",".join(sorted(_canonical(v) for v in node)) + "]"
+    return "" if node is None else str(node)
+
+
+def _flatten(node, path: str, out: dict[str, str]) -> None:
+    if isinstance(node, dict):
+        for k, v in node.items():
+            _flatten(v, f"{path}.{k}" if path else k, out)
+        return
+    if isinstance(node, list):
+        # A list is one leaf at its own path, serialized whole. Helm's
+        # mustMergeOverwrite *replaces* lists rather than concatenating them,
+        # so two rules writing the same list path differently are alternatives
+        # no matter which entries differ - per-entry leaves would under-report
+        # exactly that.
+        if node:
+            out[path] = _canonical(node)
+        return
+    if node is None or node in ("{}", "[]"):
+        return
+    out[path] = str(node)
+
+
+def _leaf_paths(doc_yaml: str, where: str = "<doc>") -> dict[str, str]:
+    """Map dotted leaf path -> value, for the content below the object root.
+
+    Parses the document into nested dicts/lists first, then flattens it. The
+    previous version flattened in a single line-wise pass, which mis-handled
+    sequences three ways at once: a list attached to its grandparent, an item
+    was serialized as its first line only, and an item's keys were flattened
+    onto the list's own path with last-wins - so a three-file MachineConfig
+    came out as one file plus a path that does not exist.
+
+    Deliberately strict: the pinned content has no line this parser cannot
+    place, so anything it cannot place is a content change that needs looking
+    at rather than guessing about.
+    """
+    lines = doc_yaml.splitlines()
+    doc, consumed = _read_mapping(lines, 0, 0, where)
+    # Nothing may be left over: silently stopping early would quietly shrink
+    # the leaf map, and a smaller leaf map means fewer conflicts detected.
+    rest = _skip_blank(lines, consumed)
+    if rest < len(lines):
+        raise YamlShapeError(f"{where}: unparsed trailing content: {lines[rest].strip()!r}")
+    # A document with no recognized body yields no leaves, on purpose: emit
+    # reports it as a dropped fix rather than emitting it, so there is nothing
+    # to compare and nothing to fail about here.
+    out: dict[str, str] = {}
+    for root in BODY_ROOTS:
+        if root in doc:
+            _flatten(doc[root], root, out)
+    return out
 
 
 # Subtrees that are discriminated unions: if two rules both write under such a
@@ -185,7 +290,7 @@ def _detect_conflicts(docs: list[FixDoc]) -> list[Conflict]:
     # cluster.ocpVersion anyway.
     leaf_by_rule: dict[str, dict[str, str]] = {}
     for d in docs:
-        leaf_by_rule.setdefault(d.rule_id, {}).update(_leaf_paths(d.yaml))
+        leaf_by_rule.setdefault(d.rule_id, {}).update(_leaf_paths(d.yaml, d.rule_id))
 
     conflicts: dict[str, set[str]] = defaultdict(set)
 

@@ -25,7 +25,7 @@ import re
 from pathlib import Path
 
 from . import applicability, classify, resolver
-from .collisions import MergeGroup, build_groups
+from .collisions import BODY_ROOTS, MergeGroup, build_groups
 from .parser import Content, rules_with_fixes
 from .resolver import resolve_defaults, rewrite_placeholders
 
@@ -68,15 +68,16 @@ def _strip_doc_separators(y: str) -> str:
     return re.sub(r"(?m)^---\s*$", "", y).strip("\n")
 
 
+_BODY_ROOT_RE = r"^(" + "|".join(BODY_ROOTS) + r"):"
+
+
 def _fragment_body(doc_yaml: str) -> str:
     """Content body (spec/data/...) with the apiVersion/kind/metadata header removed."""
     y = _strip_doc_separators(doc_yaml)
     out: list[str] = []
     capturing = False
     for line in y.splitlines():
-        if not capturing and re.match(
-            r"^(spec|data|rules|parameters|projectRequestTemplate|objects):", line
-        ):
+        if not capturing and re.match(_BODY_ROOT_RE, line):
             capturing = True
         if capturing:
             out.append(line)

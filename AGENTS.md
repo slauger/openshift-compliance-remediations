@@ -62,6 +62,17 @@ XCCDF `<platform>` constraints are parsed and enforced. The leaves of those CPE 
 - **KubeletConfig is consolidated per pool, not per rule.** `classify.synthesize_name` returns a constant for that kind, so every kubelet fix lands in one merge group rendered per role - mirroring the operator's `verifyAndCompleteKC`, which names the object `compliance-operator-kubelet-<pool>` and sets `spec.machineConfigPoolSelector`. The selector is the load-bearing part: without it the MCO matches no pool and the object silently does nothing. It is merged per role (the label contains the pool name), so the render deep-copies `$merged` inside the role loop.
 - **A non-applicable active rule aborts the render**, centrally, listing every offender. Per-architecture overlays (`values-<arch>.yaml`) are generated so the remedy is one `-f`, not a hand-maintained list.
 
+## Conflicts inside one object
+
+`collisions._leaf_paths()` parses a fix body into nested dicts and lists and *then* flattens it to dotted leaf paths. `_detect_conflicts` compares those maps: same path with a different value means the rules are alternatives, disjoint paths merge. Two properties are load-bearing:
+
+- **A list is one leaf at its own path, serialized whole.** Helm's `mustMergeOverwrite` *replaces* lists rather than concatenating them, so any difference anywhere in a list means one rule's version silently wins - per-entry leaves would under-report exactly that. `_canonical()` sorts, so reordering the same entries is not a conflict.
+- **The parser is strict.** The pinned content has no structural line it cannot place, so an unplaceable one raises `YamlShapeError` naming the rule instead of yielding a quietly smaller leaf map. A smaller leaf map means fewer conflicts found, which is the failure mode that hides.
+
+The earlier line-wise flattener got sequences wrong three ways at once (list attached to its grandparent, item reduced to its first line, item keys hoisted onto the list path last-wins), so a three-file MachineConfig came out as one file plus a leaf path that does not exist. `BODY_ROOTS` lives here and is imported by `emit` and `scripts/validate_payloads.py` - one vocabulary, not three copies.
+
+Keying list entries by identity (`files` by `path`) is deliberately **not** done: it would only be safe once the render-time merge combines `storage.files` by path too, and until then it would turn a loud conflict into a silent drop.
+
 ## Conflicts across objects
 
 The collision detector works inside one object. Across objects the MCO decides: `MergeMachineConfigs` sorts alphanumerically, takes the first Ignition config as the base and merges the rest, so for a duplicate file path the later MachineConfig silently wins.

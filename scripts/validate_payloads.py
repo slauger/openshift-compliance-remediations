@@ -43,6 +43,11 @@ try:
 except ImportError:  # pragma: no cover - dev extra
     sys.exit("PyYAML is required: pip install -e '.[dev]'")
 
+# Imported, not restated: emit strips bodies with this vocabulary and
+# collisions compares leaves below it. A third hand-kept copy would be a third
+# chance for this check to go looking for a key nothing emits any more.
+from compliance_remediations_helm.collisions import BODY_ROOTS as _BODY_KEYS
+
 ROOT = Path(__file__).resolve().parents[1]
 CHARTS = ROOT / "charts"
 NODE = CHARTS / "compliance-node"
@@ -342,8 +347,6 @@ def validate_payloads(fnd: Findings) -> None:
 
 
 # The same key set object_template() looks for when deciding a fix has content.
-_BODY_KEYS = ("spec", "data", "rules", "parameters", "projectRequestTemplate",
-              "objects")
 
 
 def check_object_has_body(where: str, docs: list, fnd: Findings) -> None:
