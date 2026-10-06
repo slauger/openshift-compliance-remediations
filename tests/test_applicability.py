@@ -853,11 +853,20 @@ class TestOptInRules(unittest.TestCase):
 
     @requires(OCP4, RHCOS4)
     def test_they_ship_disabled_even_though_profiles_select_them(self):
-        contents = {p: xccdf.parse(f, product=p)
-                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))}
-        values = emit.values_yaml(list(contents.values()), "node", "0.0.0")
+        # Checked against whichever layer the rule belongs to, not just the
+        # node chart: values_yaml filters by layer, so asserting on one chart
+        # only would pass an entry that lands in neither - and an opt-in rule
+        # that reaches no values.yaml is enabled, which is the whole point.
+        contents = [xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))]
+        values = {layer: emit.values_yaml(contents, layer, "0.0.0")
+                  for layer in ("node", "platform")}
         for name in emit.OPT_IN_RULES:
-            self.assertIn(f"  {name}: false", values)
+            where = [layer for layer, text in values.items()
+                     if f"  {name}: false" in text]
+            self.assertEqual(
+                len(where), 1,
+                f"{name} must ship disabled in exactly one layer, found {where}")
 
 
 class TestDanglingPlatformReference(unittest.TestCase):

@@ -97,3 +97,19 @@ tests:
           value: worker
       - notExists:
           path: metadata.labels["compliance.openshift.io/managed"]
+
+  - it: does not protect node objects from a helm uninstall
+    # The mirror image of the platform chart: a MachineConfig is ours, so
+    # uninstalling must delete it and roll the hardening back. A keep policy
+    # here would leave the pools hardened with no way to undo it via Helm.
+    template: templates/kubeletconfig-compliance-operator-kubelet.yaml
+    documentIndex: 0
+    set:
+      node:
+        enabled: true
+        roles: [worker]
+      rules:
+        ocp4-kubelet_configure_event_creation: true
+    asserts:
+      - notExists:
+          path: metadata.annotations["helm.sh/resource-policy"]

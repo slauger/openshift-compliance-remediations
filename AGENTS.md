@@ -111,6 +111,18 @@ They were already shipped disabled and marked in `RULES.md`, but that knowledge 
 
 Resist growing this list. Disabling a rule that a compliance profile selects is a deviation from that profile; the chart's job is to implement the profile, not to second-guess it. "This reboots nodes" is not a reason - the whole node chart does that, which is why it is gated behind `node.enabled`.
 
+There is one entry on a second ground: `ocp4-audit_error_alert_exists`. A field another controller actively reconciles cannot be remediated by applying a manifest at all - server-side apply refuses it and client-side apply loses the ensuing fight. That is the admissible second reason, and it needs evidence from a cluster (the field manager, and whether the object carries `release.openshift.io/create-only`), not a guess.
+
+## Object ownership, and why the two charts install differently
+
+Checked against a live OKD 4.22 cluster. Five of the six platform objects already exist on a stock cluster and each is owned by a cluster operator (`cluster-version-operator` for APIServer/OAuth/Project, `ingress-operator` for the IngressController, `cluster-kube-apiserver-operator` for the PrometheusRule); only `Template/co-project-request` is ours. Node objects are all ours.
+
+That asymmetry drives three decisions, none of which `helm template` could have surfaced - every offline test in this repo renders manifests and never talks to an API server:
+
+- **The platform chart is applied, not installed.** `helm install` refuses pre-existing objects (correctly), and `--take-ownership` lifts only Helm's own check: Helm 4 applies server-side and exposes no `--force-conflicts`, so the API server still refuses fields another manager owns. The documented path is `helm template | oc apply --server-side --force-conflicts`. Plain client-side `oc apply -f` must not be recommended: it has no conflict detection and silently takes fields from their owner.
+- **Platform objects carry `helm.sh/resource-policy: keep`**, emitted in the non-node branch of `object_template()`. Without it a `helm uninstall` deletes cluster configuration - `IngressController/default` would take the router with it, and dropping `Project/cluster` while its `Template/co-project-request` survives breaks project creation.
+- **Node objects deliberately do not carry it.** A `MachineConfig` is ours, and uninstalling has to roll the hardening back.
+
 ## Testing notes
 
 Which layer covers what:
