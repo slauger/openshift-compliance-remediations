@@ -16,22 +16,12 @@
     },
     {
       "customType": "regex",
-      "description": "Track the pinned ignition-validate release used by the payload checks",
-      "managerFilePatterns": [
-        "/^\\.github/workflows/ci\\.yaml$/"
-      ],
-      "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+IGNITION_VERSION:\\s*(?<currentValue>\\S+)"
-      ]
-    },
-    {
-      "customType": "regex",
-      "description": "Track the pinned helm-unittest plugin version in the workflows",
+      "description": "Track every tool version pinned as a *_VERSION env var in the workflows. One manager for all of them on purpose: a manager per variable name is how the helm-docs pin ended up annotated, named in packageRules, and tracked by nothing.",
       "managerFilePatterns": [
         "/^\\.github/workflows/.+\\.yaml$/"
       ],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+HELM_UNITTEST_VERSION:\\s*(?<currentValue>\\S+)"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+[A-Z][A-Z0-9_]*_VERSION:\\s*(?<currentValue>\\S+)"
       ]
     }
   ],
