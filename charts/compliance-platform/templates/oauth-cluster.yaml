@@ -41,5 +41,7 @@ metadata:
     app.kubernetes.io/component: remediation
     app.kubernetes.io/part-of: compliance-hardening
     app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+  annotations:
+    helm.sh/resource-policy: keep
 {{ $merged | toYaml }}
 {{- end -}}

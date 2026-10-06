@@ -120,9 +120,9 @@ They ship disabled, are marked stop/broken in [`RULES.md`](RULES.md), and enabli
 
 ## Rules that need an explicit opt-in
 
-A few rules ship **disabled even when a profile selects them**, because applying them can take a node down and the chart has no way to check the precondition first. They are marked **⚠️ opt-in** in [`RULES.md`](RULES.md), the reason sits next to the entry in `values.yaml`, and turning one on is a single line.
+A few rules ship **disabled even when a profile selects them**, because the chart has no way to check the precondition first. They are marked **⚠️ opt-in** in [`RULES.md`](RULES.md), the reason sits next to the entry in `values.yaml`, and turning one on is a single line.
 
-Currently four:
+Currently five:
 
 | Rule | Why |
 | --- | --- |
@@ -130,6 +130,9 @@ Currently four:
 | `rhcos4-service_sshd_disabled` | masks `sshd.service` and `sshd.socket`, removing the recovery path into a node |
 | `rhcos4-coreos_nousb_kernel_argument` | boots with `nousb`; on bare metal that disables USB keyboards, so the console stops being a way back in |
 | `rhcos4-coreos_page_poison_kernel_argument` | `page_poison=1` carries a measurable runtime cost |
+| `ocp4-audit_error_alert_exists` | a stock cluster already ships this alert, and `cluster-kube-apiserver-operator` owns the field. See below |
+
+The last one is a different case from the other four and worth spelling out, because it is the one place where this chart and the Compliance Operator genuinely diverge. **The operator remediates only what fails; a Helm chart applies everything selected.** On a live OKD 4.22 cluster the `AuditLogError` alert already existed, so the operator would report the rule compliant and never touch it. Applying upstream's fix anyway does two unwanted things: it drops the alert's `namespace` label (upstream's copy is older than what ships), and it takes `.spec.groups[apiserver-audit].rules` from an operator that actively reconciles it - server-side apply refuses the change outright, and client-side apply starts a fight the operator wins.
 
 The first one deserves a word on ordering. `protectKernelDefaults: true` makes the kubelet refuse to start unless the kernel parameters it expects are already set - nodes go NotReady pool by pool as the rollout proceeds. The companion rule that sets those parameters (`ocp4-kubelet_enable_protect_kernel_sysctl`) is a MachineConfig and stays enabled, so the safe order is: let the sysctl remediation roll out, confirm the nodes are healthy, then enable this one.
 
@@ -194,15 +197,47 @@ Every other constraint is an assumption about RHCOS/OKD, documented per fact in 
 
 ## Install
 
-Released charts are published as signed OCI artifacts under `ghcr.io/slauger/charts/`. Install a chart directly:
+Released charts are published as signed OCI artifacts under `ghcr.io/slauger/charts/`. Charts are cosign keyless-signed and ship an SBOM attestation. See [`SECURITY.md`](SECURITY.md) for how to verify a signature before installing.
+
+The two charts install **differently**, and the reason is ownership: the node chart creates objects that are ours, while every platform object but one already exists on a stock cluster and belongs to a cluster operator.
+
+### compliance-node: `helm install`
 
 ```bash
-helm install compliance-platform oci://ghcr.io/slauger/charts/compliance-platform \
+helm install compliance-node oci://ghcr.io/slauger/charts/compliance-node \
   --namespace openshift-compliance --create-namespace \
   -f my-values.yaml
 ```
 
-Charts are cosign keyless-signed and ship an SBOM attestation. See [`SECURITY.md`](SECURITY.md) for how to verify a signature before installing.
+Every `MachineConfig` and `KubeletConfig` is new, so Helm owns them cleanly. `helm uninstall` deletes them, which is what you want: the pools roll back to the configuration they had before.
+
+### compliance-platform: render and server-side apply
+
+```bash
+helm template compliance-platform oci://ghcr.io/slauger/charts/compliance-platform \
+  -f my-values.yaml | oc apply --server-side --force-conflicts -f -
+```
+
+Not `helm install`. Checked against a live OKD 4.22 cluster, five of the six objects already existed and each was owned by a cluster operator:
+
+| Object | Field manager | Exists on a stock cluster |
+|---|---|---|
+| `APIServer/cluster` | `cluster-version-operator` | yes |
+| `OAuth/cluster` | `cluster-version-operator` | yes |
+| `Project/cluster` | `cluster-version-operator` | yes |
+| `IngressController/default` | `ingress-operator` | yes |
+| `PrometheusRule/audit-errors` | `cluster-kube-apiserver-operator` | yes |
+| `Template/co-project-request` | - | no, this one is ours |
+
+Three consequences, in order of how much trouble they save you:
+
+1. **`helm install` refuses**, with `invalid ownership metadata ... missing key "app.kubernetes.io/managed-by"`. That is the right default and nothing is touched.
+2. **`--take-ownership` is not enough.** It lifts only Helm's own release-ownership check. Underneath, Helm 4 applies server-side, and the API server still refuses fields another manager owns - Helm exposes no `--force-conflicts`.
+3. **Plain client-side `oc apply -f` appears to work and should not be used.** It has no field-manager conflict detection, so it silently takes fields away from the operator that owns them.
+
+`--force-conflicts` takes over exactly one field today, `.spec.audit.profile`, from the cluster-version-operator. That is safe and is the supported way to configure audit logging: `APIServer/cluster` carries `release.openshift.io/create-only: "true"`, so the CVO creates the object and never reconciles it. Run the apply without `--force-conflicts` first and read the conflicts - a conflict against an *actively reconciled* object means a fight you lose, not a field to take.
+
+**Removing platform hardening is not `helm uninstall`.** These objects carry `helm.sh/resource-policy: keep`, so a Helm-managed release will never delete them - deleting `IngressController/default` would take the router down, and deleting `Project/cluster` while its `Template/co-project-request` survives would break project creation. To undo, edit the objects back.
 
 ## Generating from source
 

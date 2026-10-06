@@ -577,6 +577,11 @@ OPT_IN_RULES: dict[str, str] = {
     "rhcos4-coreos_page_poison_kernel_argument":
         "page_poison=1 carries a measurable runtime cost - a deliberate "
         "trade-off rather than something to inherit from a profile",
+    "ocp4-audit_error_alert_exists":
+        "a stock cluster already ships this alert, and cluster-kube-apiserver-"
+        "operator owns .spec.groups[apiserver-audit].rules: server-side apply "
+        "refuses the change and client-side apply starts a fight the operator "
+        "wins. Upstream's copy also drops the alert's namespace label",
 }
 
 
@@ -1056,6 +1061,20 @@ def object_template(group: MergeGroup, appl: dict | None = None) -> str:
         if key.namespace:
             lines.append(f"  namespace: {key.namespace}")
         lines.extend(_labels_block("", "remediation"))
+        # Platform objects are pre-existing cluster configuration, not ours:
+        # APIServer/cluster, OAuth/cluster, Project/cluster,
+        # IngressController/default and PrometheusRule/audit-errors all exist on
+        # a stock cluster and are owned by a cluster operator. Without this,
+        # `helm uninstall` deletes them - and deleting IngressController/default
+        # takes the router down. Keeping Project/cluster and its
+        # Template/co-project-request together matters for the same reason: the
+        # Project references the Template, so deleting one and not the other
+        # breaks project creation.
+        #
+        # Node objects deliberately do NOT carry this: a MachineConfig is ours,
+        # and uninstalling must roll the hardening back.
+        lines.append("  annotations:")
+        lines.append('    helm.sh/resource-policy: keep')
         lines.append("{{ $merged | toYaml }}")
     lines.append("{{- end -}}")
     return "\n".join(lines) + "\n"

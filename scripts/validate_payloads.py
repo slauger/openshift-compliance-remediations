@@ -71,6 +71,8 @@ FLOORS: dict[str, dict[str, int]] = {
         "render": 40,
         "object-has-body": 40,
         "selector-label": 40,
+        "resource-policy-keep": 10,
+        "resource-policy-absent": 20,
         "kubeletconfig-pool-selector": 20,
         "no-cross-object-file-collisions": 40,
     },
@@ -391,6 +393,33 @@ def check_selector_label(where: str, docs: list, fnd: Findings) -> None:
     fnd.ok("selector-label")
 
 
+KEEP_POLICY = "helm.sh/resource-policy"
+
+
+def check_resource_policy(where: str, docs: list, fnd: Findings, keep: bool) -> None:
+    """Platform objects must survive a helm uninstall; node objects must not.
+
+    Five of the six platform objects exist on a stock cluster and belong to a
+    cluster operator, so deleting them with the release deletes cluster
+    configuration - IngressController/default takes the router with it. A
+    MachineConfig is ours, and uninstalling has to roll the hardening back, so
+    the same annotation there would be a bug. Checked per chart rather than
+    per kind: the point is whose object it is, and that is what the layer says.
+    """
+    for doc in docs:
+        if not doc:
+            continue
+        annotations = (doc.get("metadata") or {}).get("annotations") or {}
+        has = annotations.get(KEEP_POLICY) == "keep"
+        if has != keep:
+            name = (doc.get("metadata") or {}).get("name", "<unnamed>")
+            want = "must" if keep else "must not"
+            fnd.error(where, f"{doc.get('kind')}/{name} {want} carry "
+                             f"{KEEP_POLICY}: keep")
+            return
+    fnd.ok("resource-policy-keep" if keep else "resource-policy-absent")
+
+
 def check_pool_selectors(where: str, docs: list, fnd: Findings) -> None:
     """A KubeletConfig without a pool selector applies to nothing.
 
@@ -473,6 +502,7 @@ def validate_renders(fnd: Findings) -> None:
                 seen[key] = where
             check_object_has_body(where, docs, fnd)
             check_selector_label(where, docs, fnd)
+            check_resource_policy(where, docs, fnd, keep=(chart is PLATFORM))
             check_pool_selectors(where, docs, fnd)
             check_cross_object_files(where, docs, fnd)
             fnd.ok("render")

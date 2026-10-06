@@ -3,6 +3,7 @@ templates:
   - templates/apiserver-cluster.yaml
   - templates/oauth-cluster.yaml
   - templates/openshift-ingress-operator-ingresscontroller-default.yaml
+  - templates/openshift-kube-apiserver-prometheusrule-audit-errors.yaml
 tests:
   - it: renders nothing with all profiles off (defaults)
     template: templates/apiserver-cluster.yaml
@@ -118,3 +119,47 @@ tests:
           path: metadata.labels["machineconfiguration.openshift.io/role"]
       - notExists:
           path: metadata.labels["compliance.openshift.io/managed"]
+
+  - it: protects pre-existing cluster objects from a helm uninstall
+    # APIServer/cluster, OAuth/cluster, Project/cluster, IngressController/default
+    # and PrometheusRule/audit-errors all exist on a stock cluster and belong to
+    # a cluster operator. Without this annotation, removing the release deletes
+    # cluster configuration - and IngressController/default takes the router
+    # with it.
+    template: templates/apiserver-cluster.yaml
+    documentIndex: 0
+    set:
+      rules:
+        ocp4-audit_profile_set: true
+    asserts:
+      - equal:
+          path: metadata.annotations["helm.sh/resource-policy"]
+          value: keep
+
+  - it: does not ship the already-satisfied audit alert by default
+    # A stock cluster ships this alert, and cluster-kube-apiserver-operator owns
+    # .spec.groups[apiserver-audit].rules: server-side apply refuses the change
+    # and client-side apply loses to the operator. Upstream's copy also drops
+    # the alert's namespace label. The operator would never apply it either -
+    # it remediates only what fails, and this check passes.
+    template: templates/openshift-kube-apiserver-prometheusrule-audit-errors.yaml
+    set:
+      profiles:
+        ocp4-moderate: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: still ships it on an explicit opt-in
+    template: templates/openshift-kube-apiserver-prometheusrule-audit-errors.yaml
+    set:
+      profiles:
+        ocp4-moderate: true
+      rules:
+        ocp4-audit_error_alert_exists: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: kind
+          value: PrometheusRule
