@@ -82,7 +82,11 @@ FLOORS: dict[str, dict[str, int]] = {
         "sysctl-syntax": 20,
         "keyvalue-conf": 1,
         "sshd -t": 10,
-        "ausyscall": 100,
+        # No floor for ausyscall: like ignition-validate it is skipped
+        # where the tool is absent, and REQUIRE_TOOLS=1 is what turns a
+        # skip into a CI failure. A floor would break make verify on any
+        # machine without auditd, and audit-rule-shape already walks the
+        # same payloads, so a broken loop cannot hide.
         "no-cross-object-file-collisions": len(VERSIONS),
     },
     "arch": {
@@ -273,25 +277,29 @@ def check_audit_syscalls(where: str, path: str, body: str, fnd: Findings) -> Non
 
 
 def check_audit_rules(where: str, path: str, body: str, fnd: Findings) -> None:
+    # Three independent assertions, all of which always run. The shape and
+    # syscall checks used to be the fallback for a missing auditctl; once CI
+    # installed one, they stopped running and their floors caught it.
+    #
     # DISPATCH runs one check per path, so the syscall-name check hangs off
     # this one rather than getting an entry of its own.
     check_audit_syscalls(where, path, body, fnd)
-    auditctl = shutil.which("auditctl")
-    if auditctl:
-        proc = subprocess.run([auditctl, "-R", "/dev/stdin"], input=body,
-                              capture_output=True, text=True)
-        # -R needs privileges; only treat a syntax complaint as a failure.
-        if "syntax error" in (proc.stderr + proc.stdout).lower():
-            fnd.error(where, f"{path} rejected by auditctl: {proc.stderr.strip()}")
-            return
-        fnd.ok("auditctl -R")
-        return
-    fnd.skip("auditctl -R")
     for n, line in enumerate(body.splitlines(), 1):
         if not _AUDIT_LINE_RE.match(line):
             fnd.error(where, f"{path}:{n} is not an audit rule option: {line[:60]!r}")
             return
     fnd.ok("audit-rule-shape")
+    auditctl = shutil.which("auditctl")
+    if not auditctl:
+        fnd.skip("auditctl -R")
+        return
+    proc = subprocess.run([auditctl, "-R", "/dev/stdin"], input=body,
+                          capture_output=True, text=True)
+    # -R needs privileges; only treat a syntax complaint as a failure.
+    if "syntax error" in (proc.stderr + proc.stdout).lower():
+        fnd.error(where, f"{path} rejected by auditctl: {proc.stderr.strip()}")
+        return
+    fnd.ok("auditctl -R")
 
 
 def check_sysctl(where: str, path: str, body: str, fnd: Findings) -> None:
