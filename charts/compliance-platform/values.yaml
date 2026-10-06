@@ -46,9 +46,9 @@ profiles:
 # and rules that need an explicit opt-in because applying them can take a
 # node down. See RULES.md for which is which.
 rules:
-  ocp4-api_server_tls_security_profile_custom_min_tls_version: false  # alternative of ocp4-api_server_tls_security_profile_not_old on APIServer/cluster
+  ocp4-api_server_tls_security_profile_custom_min_tls_version: false  # broken: upstream writes tlsSecurityProfile.Custom, which is not a field; the API server prunes it and the remediation does nothing
   ocp4-audit_error_alert_exists: false  # opt-in: a stock cluster already ships this alert, and cluster-kube-apiserver-operator owns .spec.groups[apiserver-audit].rules: server-side apply refuses the change and client-side apply starts a fight the operator wins. Upstream's copy also drops the alert's namespace label
-  ocp4-ingress_controller_tls_security_profile_custom_min_tls_version: false  # alternative of ocp4-ingress_controller_tls_cipher_suites on IngressController/default
+  ocp4-ingress_controller_tls_security_profile_custom_min_tls_version: false  # broken: upstream writes tlsSecurityProfile.Custom, which is not a field; the API server prunes it and the remediation does nothing
   ocp4-ingress_controller_tls_security_profile_not_old: false  # alternative of ocp4-ingress_controller_tls_cipher_suites on IngressController/default
 
 # -- Optionally render a matching TailoredProfile per enabled profile so the

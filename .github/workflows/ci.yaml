@@ -91,6 +91,19 @@ jobs:
           sudo install -m 0755 "$RUNNER_TEMP/ignition-validate" /usr/local/bin/ignition-validate
           ignition-validate --version
 
+      # ausyscall resolves the syscall names in the generated audit rules
+      # against this architecture's table. Read-only, unlike `auditctl -R`,
+      # which is why it is not in OPTIONAL_CHECKS: with REQUIRE_TOOLS=1 a
+      # missing tool is a failure, so this check cannot quietly stop running.
+      # It exists because augenrules aborts at the first rule it cannot load -
+      # a single dead syscall name dropped 42 rules and the immutable flag on a
+      # live node while every offline check passed.
+      - name: Install audit tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq auditd
+          ausyscall --dump | head -1
+
       - name: Python unit tests
         run: make test-py
 

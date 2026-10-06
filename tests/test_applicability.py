@@ -810,28 +810,43 @@ class TestValuesContract(unittest.TestCase):
 
 
 class TestBrokenRules(unittest.TestCase):
-    """Rules whose upstream fix the API server silently prunes."""
+    """Rules reproducing an upstream fix that cannot work as written."""
 
     @requires(OCP4, RHCOS4)
-    def test_the_two_known_ones_are_detected(self):
+    def test_the_known_ones_are_detected(self):
         contents = [xccdf.parse(f, product=p)
                     for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))]
         broken = emit.broken_rules(contents)
         self.assertEqual(sorted(broken), [
             "ocp4-api_server_tls_security_profile_custom_min_tls_version",
             "ocp4-ingress_controller_tls_security_profile_custom_min_tls_version",
+            "rhcos4-audit_rules_time_stime",
         ])
-        for why in broken.values():
-            self.assertIn("prunes", why)
+        # The tlsSecurityProfile pair is pruned by the API server; the audit
+        # rule names a syscall the 64-bit table dropped.
+        self.assertIn("prunes", broken[
+            "ocp4-api_server_tls_security_profile_custom_min_tls_version"])
+        self.assertIn("augenrules", broken["rhcos4-audit_rules_time_stime"])
 
     @requires(OCP4, RHCOS4)
-    def test_they_ship_disabled_and_are_in_the_map(self):
-        contents = {p: xccdf.parse(f, product=p)
-                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))}
-        values = emit.values_yaml(list(contents.values()), "platform", "0.0.0")
-        for name in emit.broken_rules(list(contents.values())):
-            self.assertIn(f"  {name}: false", values)
-        self.assertIn("brokenRules:", values)
+    def test_they_ship_disabled_in_their_own_layer(self):
+        # Checked per layer, not against the platform chart alone: values_yaml
+        # filters by layer, and the first broken rule that was a node rule
+        # proved that asserting on one chart passes an entry reaching neither.
+        # A broken rule with no values.yaml entry is enabled, and the preflight
+        # then refuses every profile that selects it.
+        contents = [xccdf.parse(f, product=p)
+                    for p, f in (("ocp4", OCP4), ("rhcos4", RHCOS4))]
+        values = {layer: emit.values_yaml(contents, layer, "0.0.0")
+                  for layer in ("node", "platform")}
+        for text in values.values():
+            self.assertIn("brokenRules:", text)
+        for name in emit.broken_rules(contents):
+            where = [layer for layer, text in values.items()
+                     if f"  {name}: false" in text]
+            self.assertEqual(
+                len(where), 1,
+                f"{name} must ship disabled in exactly one layer, found {where}")
 
 
 class TestOptInRules(unittest.TestCase):

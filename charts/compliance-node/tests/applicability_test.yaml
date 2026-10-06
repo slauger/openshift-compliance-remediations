@@ -1,6 +1,10 @@
 suite: applicability gate (architecture)
 tests:
   # --- the gate refuses, and says which rules and why --------------------
+  # time_stime is the fixture here because it is the only rule upstream
+  # excludes on both aarch64 and s390x. It is additionally broken-gated, so
+  # forcing it on produces two complaints in one error; these tests assert on
+  # the applicability wording specifically.
   - it: refuses an aarch64 cluster when an inapplicable rule is active
     template: templates/preflight.yaml
     set:
@@ -90,6 +94,10 @@ tests:
           errorPattern: "values-aarch64.yaml"
 
   # --- and stays out of the way otherwise --------------------------------
+  # These two use dac_modification_chmod rather than time_stime: stime is the
+  # only rule upstream excludes on both aarch64 and s390x, which is why the
+  # refusal tests above keep it, but it is also broken-gated (the 64-bit
+  # syscall no longer exists), so it can never render anywhere.
   - it: passes on an architecture the rule applies to
     template: templates/preflight.yaml
     set:
@@ -98,19 +106,19 @@ tests:
       cluster:
         architecture: ppc64le
       rules:
-        rhcos4-audit_rules_time_stime: true
+        rhcos4-audit_rules_dac_modification_chmod: true
     asserts:
       - hasDocuments:
           count: 0
 
   - it: renders the gated object on the default architecture
-    template: templates/machineconfig-75-ocp4-audit-rules-time-stime.yaml
+    template: templates/machineconfig-75-ocp4-audit-rules-dac-modification-chmod.yaml
     set:
       node:
         enabled: true
         roles: [worker, master]
       rules:
-        rhcos4-audit_rules_time_stime: true
+        rhcos4-audit_rules_dac_modification_chmod: true
     asserts:
       - hasDocuments:
           count: 2

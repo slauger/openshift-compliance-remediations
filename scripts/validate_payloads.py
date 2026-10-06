@@ -82,6 +82,7 @@ FLOORS: dict[str, dict[str, int]] = {
         "sysctl-syntax": 20,
         "keyvalue-conf": 1,
         "sshd -t": 10,
+        "ausyscall": 100,
         "no-cross-object-file-collisions": len(VERSIONS),
     },
     "arch": {
@@ -237,7 +238,44 @@ def check_sshd(where: str, path: str, body: str, fnd: Findings) -> None:
 _AUDIT_LINE_RE = re.compile(r"^\s*(#|$|-)")
 
 
+_SYSCALL_RE = re.compile(r"(?m)^\s*-a\b.*?-S\s+([A-Za-z0-9_,]+)")
+_ausyscall_cache: dict[str, bool] = {}
+
+
+def check_audit_syscalls(where: str, path: str, body: str, fnd: Findings) -> None:
+    """Every syscall an audit rule names must exist in this arch's table.
+
+    Read-only, unlike `auditctl -R`: ausyscall only consults the lookup table,
+    so this can run anywhere and is not in OPTIONAL_CHECKS. It earns its place
+    because augenrules stops at the first rule it cannot load - one dead name
+    silently drops every rule after it, plus the trailing `-e 2`, while the
+    node still looks hardened. Measured on a live OKD 4.22 node before this
+    check existed: 181 of 223 rules active and the audit config not immutable,
+    all because of `stime`.
+    """
+    tool = shutil.which("ausyscall")
+    if not tool:
+        fnd.skip("ausyscall")
+        return
+    for match in _SYSCALL_RE.finditer(body):
+        for name in match.group(1).split(","):
+            if name not in _ausyscall_cache:
+                proc = subprocess.run([tool, name], capture_output=True, text=True)
+                out = (proc.stdout + proc.stderr).lower()
+                _ausyscall_cache[name] = proc.returncode == 0 and "unknown" not in out
+            if not _ausyscall_cache[name]:
+                fnd.error(where, f"{path} audits syscall {name!r}, which this "
+                                 f"architecture's table does not define; "
+                                 f"augenrules would stop there and drop every "
+                                 f"rule after it")
+                return
+    fnd.ok("ausyscall")
+
+
 def check_audit_rules(where: str, path: str, body: str, fnd: Findings) -> None:
+    # DISPATCH runs one check per path, so the syscall-name check hangs off
+    # this one rather than getting an entry of its own.
+    check_audit_syscalls(where, path, body, fnd)
     auditctl = shutil.which("auditctl")
     if auditctl:
         proc = subprocess.run([auditctl, "-R", "/dev/stdin"], input=body,
