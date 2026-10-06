@@ -82,6 +82,11 @@ FLOORS: dict[str, dict[str, int]] = {
         "sysctl-syntax": 20,
         "keyvalue-conf": 1,
         "sshd -t": 10,
+        # No floor for ausyscall: like ignition-validate it is skipped
+        # where the tool is absent, and REQUIRE_TOOLS=1 is what turns a
+        # skip into a CI failure. A floor would break make verify on any
+        # machine without auditd, and audit-rule-shape already walks the
+        # same payloads, so a broken loop cannot hide.
         "no-cross-object-file-collisions": len(VERSIONS),
     },
     "arch": {
@@ -237,23 +242,64 @@ def check_sshd(where: str, path: str, body: str, fnd: Findings) -> None:
 _AUDIT_LINE_RE = re.compile(r"^\s*(#|$|-)")
 
 
-def check_audit_rules(where: str, path: str, body: str, fnd: Findings) -> None:
-    auditctl = shutil.which("auditctl")
-    if auditctl:
-        proc = subprocess.run([auditctl, "-R", "/dev/stdin"], input=body,
-                              capture_output=True, text=True)
-        # -R needs privileges; only treat a syntax complaint as a failure.
-        if "syntax error" in (proc.stderr + proc.stdout).lower():
-            fnd.error(where, f"{path} rejected by auditctl: {proc.stderr.strip()}")
-            return
-        fnd.ok("auditctl -R")
+_SYSCALL_RE = re.compile(r"(?m)^\s*-a\b.*?-S\s+([A-Za-z0-9_,]+)")
+_ausyscall_cache: dict[str, bool] = {}
+
+
+def check_audit_syscalls(where: str, path: str, body: str, fnd: Findings) -> None:
+    """Every syscall an audit rule names must exist in this arch's table.
+
+    Read-only, unlike `auditctl -R`: ausyscall only consults the lookup table,
+    so this can run anywhere and is not in OPTIONAL_CHECKS. It earns its place
+    because augenrules stops at the first rule it cannot load - one dead name
+    silently drops every rule after it, plus the trailing `-e 2`, while the
+    node still looks hardened. Measured on a live OKD 4.22 node before this
+    check existed: 181 of 223 rules active and the audit config not immutable,
+    all because of `stime`.
+    """
+    tool = shutil.which("ausyscall")
+    if not tool:
+        fnd.skip("ausyscall")
         return
-    fnd.skip("auditctl -R")
+    for match in _SYSCALL_RE.finditer(body):
+        for name in match.group(1).split(","):
+            if name not in _ausyscall_cache:
+                proc = subprocess.run([tool, name], capture_output=True, text=True)
+                out = (proc.stdout + proc.stderr).lower()
+                _ausyscall_cache[name] = proc.returncode == 0 and "unknown" not in out
+            if not _ausyscall_cache[name]:
+                fnd.error(where, f"{path} audits syscall {name!r}, which this "
+                                 f"architecture's table does not define; "
+                                 f"augenrules would stop there and drop every "
+                                 f"rule after it")
+                return
+    fnd.ok("ausyscall")
+
+
+def check_audit_rules(where: str, path: str, body: str, fnd: Findings) -> None:
+    # Three independent assertions, all of which always run. The shape and
+    # syscall checks used to be the fallback for a missing auditctl; once CI
+    # installed one, they stopped running and their floors caught it.
+    #
+    # DISPATCH runs one check per path, so the syscall-name check hangs off
+    # this one rather than getting an entry of its own.
+    check_audit_syscalls(where, path, body, fnd)
     for n, line in enumerate(body.splitlines(), 1):
         if not _AUDIT_LINE_RE.match(line):
             fnd.error(where, f"{path}:{n} is not an audit rule option: {line[:60]!r}")
             return
     fnd.ok("audit-rule-shape")
+    auditctl = shutil.which("auditctl")
+    if not auditctl:
+        fnd.skip("auditctl -R")
+        return
+    proc = subprocess.run([auditctl, "-R", "/dev/stdin"], input=body,
+                          capture_output=True, text=True)
+    # -R needs privileges; only treat a syntax complaint as a failure.
+    if "syntax error" in (proc.stderr + proc.stdout).lower():
+        fnd.error(where, f"{path} rejected by auditctl: {proc.stderr.strip()}")
+        return
+    fnd.ok("auditctl -R")
 
 
 def check_sysctl(where: str, path: str, body: str, fnd: Findings) -> None:

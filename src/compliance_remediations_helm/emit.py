@@ -585,8 +585,29 @@ OPT_IN_RULES: dict[str, str] = {
 }
 
 
+# Syscalls an upstream audit rule names that no longer exist in the 64-bit
+# syscall table. Keyed by name so a content fix stops the detection by itself.
+#
+# This is not a style complaint: augenrules aborts at the first rule it cannot
+# load, so one dead syscall silently drops every rule after it. Measured on a
+# live OKD 4.22 / CentOS Stream CoreOS 10 node, x86_64, with rhcos4-moderate
+# applied: `ausyscall stime` reports "Unknown syscall stime using x86_64 lookup
+# table", audit-rules.service fails, 181 of 223 rules load, and the trailing
+# `-e 2` never runs - so the audit configuration is not immutable either, which
+# is itself a rule the same profile requires.
+_DEAD_SYSCALLS = {
+    "stime": "stime was removed from the 64-bit syscall table; augenrules stops "
+             "at the rule it cannot load, so the 42 rules after it and the "
+             "trailing -e 2 (immutable audit config) never apply",
+}
+
+_AUDIT_SYSCALL_RE = re.compile(r"-S%20([A-Za-z0-9_]+)|-S ([A-Za-z0-9_]+)")
+
+
 def broken_rules(contents: list[Content]) -> dict[str, str]:
     """helm_name -> why the fix cannot work as written.
+
+    Two kinds so far, both reproduced rather than reasoned about.
 
     Upstream writes `tlsSecurityProfile` with a capitalized `Custom:` block and
     no sibling `type:`. `Custom` is not a field - the API server prunes it
@@ -595,6 +616,9 @@ def broken_rules(contents: list[Content]) -> dict[str, str]:
     and independently with kubeconform:
 
         at '/spec/tlsSecurityProfile': additional properties 'Custom' not allowed
+
+    And an audit rule naming a syscall the 64-bit table no longer has, which
+    costs far more than itself - see _DEAD_SYSCALLS.
     """
     out: dict[str, str] = {}
     for content in contents:
@@ -608,6 +632,12 @@ def broken_rules(contents: list[Content]) -> dict[str, str]:
                         "upstream writes tlsSecurityProfile.Custom, which is not "
                         "a field; the API server prunes it and the remediation "
                         "does nothing")
+                if "/etc/audit/rules.d/" not in y:
+                    continue
+                for m in _AUDIT_SYSCALL_RE.finditer(y):
+                    name = m.group(1) or m.group(2)
+                    if name in _DEAD_SYSCALLS:
+                        out[rule.helm_name] = _DEAD_SYSCALLS[name]
     return out
 
 
@@ -877,6 +907,12 @@ def values_yaml(contents: list[Content], layer: str, content_version: str,
     disabled = dict(default_disabled_rules(contents))
     disabled.update(applicability.never_applicable_rules(appl))
     disabled.update({r: f"opt-in: {why}" for r, why in OPT_IN_RULES.items()})
+    # A rule the preflight refuses must also ship disabled, or every profile
+    # that selects it fails to render. The two tlsSecurityProfile.Custom rules
+    # hid this: they are non-winning alternatives, so default_disabled_rules
+    # already covered them. The first broken rule that was not an alternative
+    # broke eight profiles at once.
+    disabled.update({r: f"broken: {why}" for r, why in broken_rules(contents).items()})
     layer_rules = {r.helm_name for c in contents for r in rules_with_fixes(c).values()
                    if _rule_layer(r) == layer}
     layer_disabled = {r: why for r, why in disabled.items() if r in layer_rules}

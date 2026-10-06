@@ -13,12 +13,13 @@ Generate Helm charts of OpenShift compliance **remediations** from the upstream 
 ## Quick start
 
 ```bash
-helm install compliance-platform oci://ghcr.io/slauger/charts/compliance-platform \
-  --namespace openshift-compliance --create-namespace \
-  --set profiles.ocp4-cis=true
+helm template compliance-platform oci://ghcr.io/slauger/charts/compliance-platform \
+  --set profiles.ocp4-cis=true | oc apply --server-side --force-conflicts -f -
 ```
 
-Renders and applies all CIS platform remediations (safe, no reboots). Preview first with `helm template` or an ArgoCD diff. See [Install](#install) and [Generating from source](#generating-from-source) for details.
+Applies all CIS platform remediations (safe, no reboots). Drop the pipe to preview, or diff it in ArgoCD.
+
+Note it is `helm template | oc apply`, not `helm install`: these objects are **pre-existing cluster singletons** owned by cluster operators, which Helm refuses to adopt and must never delete. The node chart is the opposite - its objects are its own, so there `helm install` is the right command. [Install](#install) explains both, and why.
 
 ## Why
 
@@ -110,13 +111,23 @@ Several rules target the **same** object (e.g. four rules edit `APIServer/cluste
 
 ## Rules whose upstream fix cannot work
 
-Two rules reproduce an upstream fix that writes `tlsSecurityProfile.Custom` with a capital C and no sibling `type:`. `Custom` is not a field, so the API server prunes it against the structural schema: the object applies cleanly, reports success, and changes nothing. Validated against the CRDs from `openshift/api` and independently with kubeconform:
+Two of the three reproduce an upstream fix that writes `tlsSecurityProfile.Custom` with a capital C and no sibling `type:`. `Custom` is not a field, so the API server prunes it against the structural schema: the object applies cleanly, reports success, and changes nothing. Validated against the CRDs from `openshift/api` and independently with kubeconform:
 
 ```
 at '/spec/tlsSecurityProfile': additional properties 'Custom' not allowed
 ```
 
 They ship disabled, are marked stop/broken in [`RULES.md`](RULES.md), and enabling one now **aborts the render** rather than producing an object that quietly does nothing. Prefer the non-broken alternative in the same group.
+
+A third rule, `rhcos4-audit_rules_time_stime`, costs far more than itself. Upstream writes both a 64-bit and a 32-bit audit rule for `stime`, but the syscall is not in the 64-bit table - `ausyscall stime` answers *"Unknown syscall stime using x86_64 lookup table"*. And `augenrules` stops at the first rule it cannot load. Measured on a live OKD 4.22 / CentOS Stream CoreOS 10 node with `rhcos4-moderate` applied:
+
+```
+$ systemctl is-failed audit-rules.service   -> failed
+$ auditctl -l | wc -l                       -> 181      # of 223 rules in the file
+$ auditctl -s | grep enabled                -> enabled 1 # the trailing -e 2 never ran
+```
+
+So one obsolete syscall silently dropped 42 audit rules - including the `delete` key that audits file removal - and left the audit configuration mutable, which the same profile separately requires. The node still looked hardened. `scripts/validate_payloads.py` now resolves every syscall an audit rule names through `ausyscall`, so this class cannot reach a cluster again.
 
 ## Rules that need an explicit opt-in
 
