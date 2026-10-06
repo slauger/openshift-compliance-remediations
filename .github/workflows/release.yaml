@@ -54,10 +54,18 @@ jobs:
           helm plugin install https://github.com/helm-unittest/helm-unittest \
             --version "$HELM_UNITTEST_VERSION" --verify=false
 
+      # Same pin as ci.yaml and regenerate-charts.yaml, and via the same env
+      # var so Renovate moves all three together. It has to: semantic-release
+      # runs `make docs` here and commits charts/**/README.md, so a helm-docs
+      # version newer or older than CI's would commit docs CI never validated
+      # and leave the drift gate failing on the next push.
       - name: Install helm-docs
+        env:
+          # renovate: datasource=github-releases depName=norwoodj/helm-docs
+          HELM_DOCS_VERSION: v1.14.2
         run: |
           curl -sSLo /tmp/helm-docs.tar.gz \
-            https://github.com/norwoodj/helm-docs/releases/download/v1.14.2/helm-docs_1.14.2_Linux_x86_64.tar.gz
+            "https://github.com/norwoodj/helm-docs/releases/download/${HELM_DOCS_VERSION}/helm-docs_${HELM_DOCS_VERSION#v}_Linux_x86_64.tar.gz"
           sudo tar -xzf /tmp/helm-docs.tar.gz -C /usr/local/bin helm-docs
 
       - name: Cache upstream content tarball
