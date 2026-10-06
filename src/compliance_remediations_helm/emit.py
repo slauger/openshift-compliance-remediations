@@ -1553,7 +1553,148 @@ def values_schema(contents: list[Content], layer: str) -> str:
 # --------------------------------------------------------------------------- #
 # RULES.md matrix
 # --------------------------------------------------------------------------- #
+def _alternatives_of(groups) -> dict[str, set[str]]:
+    """helm_name -> the rules it is mutually exclusive with.
+
+    Both kinds of conflict: inside one object, and the pairwise cross-object
+    file conflicts (upstream's `enable`/`disable` sshd drop-in pairs). Needed to
+    answer whether a disabled rule leaves its control unmet or whether a
+    sibling covers it.
+    """
+    alts: dict[str, set[str]] = {}
+    for group in groups:
+        for conflict in group.conflicts():
+            for rule in conflict.rules:
+                alts.setdefault(rule, set()).update(set(conflict.rules) - {rule})
+    for layer in ("platform", "node"):
+        for conflict in cross_object_file_conflicts(groups, layer):
+            if not all(len(grp["rules"]) == 1 for grp in conflict["groups"]):
+                continue
+            rules = {r for grp in conflict["groups"] for r in grp["rules"]}
+            for rule in rules:
+                alts.setdefault(rule, set()).update(rules - {rule})
+    return alts
+
+
+def _disabled_with_category(contents: list[Content], appl: dict) -> dict[str, tuple[str, str]]:
+    """helm_name -> (category, why) for every rule that ships disabled.
+
+    Same union as values_yaml builds, but keeping the category instead of
+    flattening it into one comment string, and in the same precedence order so
+    the two cannot disagree about which rule is disabled.
+    """
+    out: dict[str, tuple[str, str]] = {}
+    for rule, why in default_disabled_rules(contents).items():
+        out[rule] = ("alternative", why)
+    for rule, why in applicability.never_applicable_rules(appl).items():
+        out[rule] = ("not applicable", why)
+    for rule, why in OPT_IN_RULES.items():
+        out[rule] = ("opt-in", why)
+    for rule, why in broken_rules(contents).items():
+        out[rule] = ("broken", why)
+    return out
+
+
+def profile_coverage(contents: list[Content], appl: dict | None = None) -> tuple[list[dict], dict]:
+    """How much of each profile these charts can actually apply.
+
+    Returns (rows, open_rules).
+
+    The question this answers is the one you have after an apply, and it is not
+    the same as "which rules ship disabled". A profile selects rules that carry
+    no Kubernetes remediation at all - upstream has none, so the Compliance
+    Operator cannot apply them either; it reports them FAIL or MANUAL. For
+    `ocp4-cis` that is the overwhelming majority, and nothing in this repo said
+    so before.
+
+    A disabled rule is only counted as *open* when no alternative of it is
+    active. Checked on a live cluster: we ship
+    `ocp4-api_server_tls_security_profile_custom_min_tls_version` disabled
+    (broken) and its check still reports PASS, because the alternative we do
+    apply sets `tlsSecurityProfile.type: Intermediate`, which satisfies the
+    same control. Listing every disabled rule as open would have been wrong.
+    """
+    appl = appl if appl is not None else applicability.build_map(contents)
+    groups, _ = build_groups(*contents)
+    alternatives = _alternatives_of(groups)
+    disabled = _disabled_with_category(contents, appl)
+
+    rows: list[dict] = []
+    open_rules: dict[str, tuple[str, str, set[str]]] = {}
+    for content in contents:
+        fixset = set(rules_with_fixes(content))
+        for pid in sorted(content.profiles):
+            selected = content.profiles[pid].selected_rules
+            with_fix = {f"{content.product}-{r}" for r in selected if r in fixset}
+            no_fix = len(set(selected)) - len(with_fix)
+            disabled_here = {r for r in with_fix if r in disabled}
+            active = with_fix - disabled_here
+            # Two reasons a disabled rule is not an unmet control: an
+            # alternative of it is applied, or upstream says it does not apply
+            # to this target at all - the operator reports the latter as
+            # notapplicable, which is neither pass nor fail. No profile selects
+            # a never-applicable rule today, so this only matters after a
+            # content bump, which is exactly when it would be missed.
+            still_open = {r for r in disabled_here
+                          if disabled[r][0] != "not applicable"
+                          and not (alternatives.get(r, set()) & active)}
+            for rule in still_open:
+                category, why = disabled[rule]
+                open_rules.setdefault(rule, (category, why, set()))[2].add(pid)
+            rows.append({
+                "profile": pid,
+                "selects": len(set(selected)),
+                "remediated": len(active),
+                "no_remediation": no_fix,
+                "open": len(still_open),
+            })
+    rows.sort(key=lambda r: (-r["selects"], r["profile"]))
+    return rows, open_rules
+
+
+def _coverage_section(contents: list[Content], appl: dict) -> list[str]:
+    rows, open_rules = profile_coverage(contents, appl)
+    out = [
+        "## Coverage per profile",
+        "",
+        "What a profile asks for, and how much of it these charts can apply. "
+        "**No remediation** counts rules the profile selects for which upstream "
+        "ships no Kubernetes fix at all: nothing can apply those, and the "
+        "Compliance Operator reports them FAIL or MANUAL rather than "
+        "remediating them. **Open** counts rules that do have a fix but ship "
+        "disabled with nothing else covering the control - those are listed "
+        "below. A rule that ships disabled because an alternative of it is "
+        "applied is not open, and is not counted here.",
+        "",
+        "| Profile | Selects | Remediated | No remediation | Open |",
+        "|---------|---------|------------|----------------|------|",
+    ]
+    for row in rows:
+        out.append(f"| `{row['profile']}` | {row['selects']} | {row['remediated']} | "
+                   f"{row['no_remediation']} | {row['open'] or '-'} |")
+    out += [
+        "",
+        "### What stays open",
+        "",
+        "Rules a profile selects, that carry a remediation, and that still "
+        "leave their control unmet. Each ships disabled on purpose; the reason "
+        "is also next to the entry in `values.yaml`.",
+        "",
+        "| Rule | Category | Why |",
+        "|------|----------|-----|",
+    ]
+    if open_rules:
+        for rule in sorted(open_rules):
+            category, why, _profiles = open_rules[rule]
+            out.append(f"| `{rule}` | {category} | {why} |")
+    else:
+        out.append("| - | - | nothing: every disabled rule is covered by an alternative |")
+    out.append("")
+    return out
+
+
 def rules_matrix(contents: dict[str, Content], version: str,
+
                  appl: dict | None = None) -> str:
     """Build a markdown matrix: rule | target object | severity | layer |
     product | applicability | profiles, with alternatives and non-applicable
@@ -1668,6 +1809,11 @@ def rules_matrix(contents: dict[str, Content], version: str,
         "never reaches a worker there. Rules marked **⛔ n/a** are never "
         "applicable to RHCOS/OKD at all and ship disabled - enable one explicitly "
         "only if you know the assumption behind it does not hold for you.",
+        "",
+    ]
+    header += _coverage_section(content_list, appl)
+    header += [
+        "## Rules",
         "",
         "| Rule | Target object | Severity | Layer | Product | Applicability | Profiles |",
         "|------|---------------|----------|-------|---------|---------------|----------|",

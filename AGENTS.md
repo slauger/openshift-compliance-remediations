@@ -123,6 +123,16 @@ That asymmetry drives three decisions, none of which `helm template` could have 
 - **Platform objects carry `helm.sh/resource-policy: keep`**, emitted in the non-node branch of `object_template()`. Without it a `helm uninstall` deletes cluster configuration - `IngressController/default` would take the router with it, and dropping `Project/cluster` while its `Template/co-project-request` survives breaks project creation.
 - **Node objects deliberately do not carry it.** A `MachineConfig` is ours, and uninstalling has to roll the hardening back.
 
+## Coverage, and what counts as open
+
+`profile_coverage()` answers the question an operator has after applying: of what this profile asks for, how much did the charts actually do. It feeds the generated `## Coverage per profile` section of `RULES.md`. Three things it gets right that a naive version would not:
+
+- **The biggest category is not ours.** A profile selects many rules for which upstream ships no Kubernetes fix at all - 91 of the 96 in `ocp4-cis`. `Profile.selected_rules` keeps the full XCCDF selection (`parser.py:272`), while everything else in the generator filters through `rules_with_fixes()`, so the complement had to be materialised. Nothing in this repo admitted that ceiling before.
+- **Disabled is not the same as unmet.** A rule only counts as open when no alternative of it is active. Verified on a cluster: `ocp4-api_server_tls_security_profile_custom_min_tls_version` ships disabled as broken and its check reports PASS, because the alternative we apply sets `tlsSecurityProfile.type: Intermediate`, which satisfies the same control. `_alternatives_of()` builds the relation from both conflict kinds - inside one object, and the pairwise cross-object sshd pairs.
+- **Never-applicable is not unmet either.** The operator reports those `notapplicable`, which is neither pass nor fail, so they are excluded from the open list. No profile selects one today, so this only bites after a content bump - which is when it would be missed.
+
+Prose in `README.md` carries only what cannot be derived: that FIPS is install-time, that `sshd_limit_user_access` needs a list only the operator has, and that a `systemd.units` entry with `enabled: true` and no `contents` is applied by Ignition at provisioning and ignored by the MCO on a day-2 update. Counts quoted in README prose are allowed to go stale on a content bump - `make generate` does not touch it - the same accepted trade-off as "Currently five" in the opt-in section.
+
 ## Testing notes
 
 Which layer covers what:
