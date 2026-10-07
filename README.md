@@ -12,7 +12,7 @@ Generate Helm charts of OpenShift compliance **remediations** from the upstream 
 
 ## Quick start
 
-A benchmark on OpenShift is **two or three profiles**, not one, so apply them together. CIS, complete:
+A benchmark on OpenShift is **two or three profiles**, not one, so apply them together. For CIS that is two - the platform half and the node half:
 
 ```bash
 # node half - installs normally, reboots the pool
