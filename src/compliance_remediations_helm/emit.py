@@ -1159,8 +1159,18 @@ def object_template(group: MergeGroup, appl: dict | None = None) -> str:
         #
         # Node objects deliberately do NOT carry this: a MachineConfig is ours,
         # and uninstalling must roll the hardening back.
+        #
+        # Both annotations, because each tool only honours its own.
+        # `helm.sh/resource-policy` means nothing to Argo CD, and the README
+        # recommends GitOps as the primary path - so without the Argo CD form
+        # deleting an Application with pruning on would delete
+        # IngressController/default and take the router with it, which is the
+        # exact disaster the Helm annotation exists to prevent. Prune=false
+        # covers the object disappearing from git, Delete=false the Application
+        # itself being deleted.
         lines.append("  annotations:")
         lines.append('    helm.sh/resource-policy: keep')
+        lines.append('    argocd.argoproj.io/sync-options: Prune=false,Delete=false')
         lines.append("{{ $merged | toYaml }}")
     lines.append("{{- end -}}")
     return "\n".join(lines) + "\n"

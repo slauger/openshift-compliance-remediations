@@ -40,6 +40,46 @@ Swap `rhcos4-moderate` for `rhcos4-stig`, `rhcos4-high`, `rhcos4-bsi` or `rhcos4
 - The platform chart is `helm template | oc apply`, never `helm install`. Its objects are **pre-existing cluster singletons** owned by cluster operators, which Helm refuses to adopt and must never delete. The same applies to the `compliance-hardening` umbrella, because it contains them - `helm install` fails there too. [Install](#install) explains both paths.
 - The platform chart reboots nothing, but it is not free: with `ocp4-cis` it sets `spec.audit.profile` and `spec.encryption.type` on `APIServer/cluster`, each of which redeploys the kube-apiserver one static-pod revision at a time, and `encryption.type` starts an etcd secret migration. On a single-control-plane cluster the API is briefly unavailable - measured twice on OCP 4.22.15: **208s and 185s**. Plan it like any other control-plane change.
 
+### GitOps is the point
+
+The commands above are the quick way to try this. In practice these charts exist so your hardening posture is **whatever Git says** - that is the whole argument in [Why](#why), and an imperative `helm install` only gets you half of it. An Argo CD `Application` per chart:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: compliance-node
+  namespace: openshift-gitops
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openshift-compliance
+  source:
+    repoURL: ghcr.io/slauger/charts
+    chart: compliance-node
+    targetRevision: 0.4.0
+    helm:
+      valuesObject:
+        node:
+          enabled: true
+          roles: [worker]
+        profiles:
+          ocp4-cis-node: true
+          rhcos4-moderate: true
+  syncPolicy:
+    syncOptions:
+      - ServerSideApply=true
+```
+
+Three things to get right, and the first one is not optional:
+
+- **`ServerSideApply=true`.** Without it Argo CD applies client-side, which has no field-manager conflict detection - it would silently take `.spec.audit.profile` away from the cluster-version-operator and `.spec.groups` from the kube-apiserver-operator. The platform chart needs it; see [Install](#install) for what those conflicts look like and why one of them is safe to force.
+- **Pin `targetRevision`.** A floating chart version means a content bump reaches the cluster without anyone reading the diff, which is the one thing this project is built to prevent. Pin it and let Renovate open the bump as a PR.
+- **Platform objects are protected from pruning**, with `argocd.argoproj.io/sync-options: Prune=false,Delete=false` alongside the Helm `resource-policy` - each tool ignores the other's annotation. Deleting the platform `Application` therefore leaves `IngressController/default` and friends in place, as it must. Node objects carry neither: pruning a `MachineConfig` is how you roll the hardening back.
+
+One wrinkle: Argo CD's default resource tracking uses the `app.kubernetes.io/instance` label, which these charts also set to the Helm release name. Argo CD wins and writes its `Application` name there instead. Nothing breaks - two Applications still distinguish their objects, which is what the [mixed-architecture pattern](#applicability) needs - but if you rely on that label meaning the Helm release, switch Argo CD to annotation-based tracking.
+
 ## Profiles
 
 Profile names are upstream's, unchanged, so scan results map 1:1. Each benchmark is split by what it configures:

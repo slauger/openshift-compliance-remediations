@@ -439,7 +439,11 @@ def check_selector_label(where: str, docs: list, fnd: Findings) -> None:
     fnd.ok("selector-label")
 
 
-KEEP_POLICY = "helm.sh/resource-policy"
+# Both tools need telling, and each ignores the other's annotation.
+KEEP_ANNOTATIONS = {
+    "helm.sh/resource-policy": "keep",
+    "argocd.argoproj.io/sync-options": "Prune=false,Delete=false",
+}
 
 
 def check_resource_policy(where: str, docs: list, fnd: Findings, keep: bool) -> None:
@@ -456,13 +460,14 @@ def check_resource_policy(where: str, docs: list, fnd: Findings, keep: bool) -> 
         if not doc:
             continue
         annotations = (doc.get("metadata") or {}).get("annotations") or {}
-        has = annotations.get(KEEP_POLICY) == "keep"
-        if has != keep:
-            name = (doc.get("metadata") or {}).get("name", "<unnamed>")
-            want = "must" if keep else "must not"
-            fnd.error(where, f"{doc.get('kind')}/{name} {want} carry "
-                             f"{KEEP_POLICY}: keep")
-            return
+        for key, value in KEEP_ANNOTATIONS.items():
+            has = annotations.get(key) == value
+            if has != keep:
+                name = (doc.get("metadata") or {}).get("name", "<unnamed>")
+                want = "must" if keep else "must not"
+                fnd.error(where, f"{doc.get('kind')}/{name} {want} carry "
+                                 f"{key}: {value}")
+                return
     fnd.ok("resource-policy-keep" if keep else "resource-policy-absent")
 
 

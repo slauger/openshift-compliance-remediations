@@ -106,5 +106,6 @@ metadata:
     app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
   annotations:
     helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
 {{ $merged | toYaml }}
 {{- end -}}
