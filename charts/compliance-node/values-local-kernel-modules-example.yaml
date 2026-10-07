@@ -1,0 +1,120 @@
+# Example overlay: disable kernel modules that have NO upstream SCAP remediation.
+#
+# ComplianceAsCode ships rules for sctp, dccp, rds, tipc, cramfs, freevxfs,
+# jffs2, hfs, hfsplus, squashfs, udf, firewire-core, bluetooth and usb-storage.
+# Enable those through `rules:` / a profile, NOT here - this file is only for
+# modules upstream has no remediation for, which is exactly what extraManifests
+# exists for (see README "Adding your own objects" and AGENTS.md).
+#
+# One MachineConfig per module, each writing its own /etc/modprobe.d/<mod>.conf,
+# matching the style of the generated kernel-module-*-disabled templates
+# (`install <mod> /bin/false` + `blacklist <mod>`). Each entry is individually
+# togglable via `enabled: false`.
+#
+# extraManifests are rendered verbatim and are NOT expanded per node.roles, so
+# the pool role label is set here by hand. For both master and worker, add a
+# second entry per module with role: master and a -master name suffix (see the
+# commented block at the end).
+#
+# Apply:
+#   helm template <release> charts/compliance-node \
+#     -f charts/compliance-node/values-local-kernel-modules-example.yaml
+
+extraManifests:
+
+  kernel-module-floppy-disabled:
+    apiVersion: machineconfiguration.openshift.io/v1
+    kind: MachineConfig
+    metadata:
+      name: 75-local-kernel-module-floppy-disabled-worker
+      labels:
+        machineconfiguration.openshift.io/role: worker
+    spec:
+      config:
+        ignition:
+          version: 3.1.0
+        storage:
+          files:
+            - path: /etc/modprobe.d/floppy.conf
+              mode: 420
+              overwrite: true
+              contents:
+                source: data:,install%20floppy%20/bin/false%0Ablacklist%20floppy%0A
+
+  kernel-module-joydev-disabled:
+    apiVersion: machineconfiguration.openshift.io/v1
+    kind: MachineConfig
+    metadata:
+      name: 75-local-kernel-module-joydev-disabled-worker
+      labels:
+        machineconfiguration.openshift.io/role: worker
+    spec:
+      config:
+        ignition:
+          version: 3.1.0
+        storage:
+          files:
+            - path: /etc/modprobe.d/joydev.conf
+              mode: 420
+              overwrite: true
+              contents:
+                source: data:,install%20joydev%20/bin/false%0Ablacklist%20joydev%0A
+
+  kernel-module-pcspkr-disabled:
+    apiVersion: machineconfiguration.openshift.io/v1
+    kind: MachineConfig
+    metadata:
+      name: 75-local-kernel-module-pcspkr-disabled-worker
+      labels:
+        machineconfiguration.openshift.io/role: worker
+    spec:
+      config:
+        ignition:
+          version: 3.1.0
+        storage:
+          files:
+            - path: /etc/modprobe.d/pcspkr.conf
+              mode: 420
+              overwrite: true
+              contents:
+                source: data:,install%20pcspkr%20/bin/false%0Ablacklist%20pcspkr%0A
+
+  kernel-module-bnep-disabled:
+    apiVersion: machineconfiguration.openshift.io/v1
+    kind: MachineConfig
+    metadata:
+      name: 75-local-kernel-module-bnep-disabled-worker
+      labels:
+        machineconfiguration.openshift.io/role: worker
+    spec:
+      config:
+        ignition:
+          version: 3.1.0
+        storage:
+          files:
+            - path: /etc/modprobe.d/bnep.conf
+              mode: 420
+              overwrite: true
+              contents:
+                source: data:,install%20bnep%20/bin/false%0Ablacklist%20bnep%0A
+
+  # For master nodes too, add a parallel entry per module, e.g.:
+  #
+  # kernel-module-floppy-disabled-master:
+  #   apiVersion: machineconfiguration.openshift.io/v1
+  #   kind: MachineConfig
+  #   metadata:
+  #     name: 75-local-kernel-module-floppy-disabled-master
+  #     labels:
+  #       machineconfiguration.openshift.io/role: master
+  #   spec:
+  #     config:
+  #       ignition:
+  #         version: 3.1.0
+  #       storage:
+  #         files:
+  #           - path: /etc/modprobe.d/floppy.conf
+  #             mode: 420
+  #             overwrite: true
+  #             contents:
+  #               source: data:,install%20floppy%20/bin/false%0Ablacklist%20floppy%0A
