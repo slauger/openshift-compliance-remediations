@@ -74,5 +74,28 @@ class TestDroppedBodyWarning(unittest.TestCase):
         self.assertEqual(stats["dropped"], [])
 
 
+class TestChartYaml(unittest.TestCase):
+    def test_a_colon_in_the_description_does_not_break_the_file(self):
+        # description was interpolated unquoted, so ": " in it made Chart.yaml
+        # invalid YAML - and the failure surfaced later, in `helm dependency
+        # update`, after the charts were already written.
+        import yaml
+        text = emit.chart_yaml("c", "Remediations: config objects, no reboots.",
+                               "0.1.82", "1.2.3")
+        doc = yaml.safe_load(text)
+        self.assertEqual(doc["description"],
+                         "Remediations: config objects, no reboots.")
+
+    def test_every_generated_chart_yaml_parses(self):
+        import yaml
+        from pathlib import Path
+        charts = sorted(Path("charts").glob("*/Chart.yaml"))
+        self.assertTrue(charts, "no charts generated")
+        for path in charts:
+            with self.subTest(chart=path.parent.name):
+                doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+                self.assertTrue(doc.get("description"))
+
+
 if __name__ == "__main__":
     unittest.main()

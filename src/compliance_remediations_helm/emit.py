@@ -1,7 +1,7 @@
 """Emit Helm charts from parsed content.
 
 Produces two standalone charts under ``charts_dir``:
-  * compliance-platform  - ocp4 config objects (no reboot)
+  * compliance-platform  - ocp4 config objects (no node reboots)
   * compliance-node       - MachineConfig/KubeletConfig (reboots, per MCP role)
 
 And (task 7) an umbrella ``compliance-hardening`` that depends on both.
@@ -108,12 +108,20 @@ def _ocp_semver_expr(constraint: str) -> str:
 # --------------------------------------------------------------------------- #
 # static chart files
 # --------------------------------------------------------------------------- #
+def _yaml_str(s: str) -> str:
+    """A double-quoted YAML scalar."""
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 def chart_yaml(name: str, description: str, content_version: str,
                chart_version: str = "0.0.0") -> str:
+    # description is quoted: an unquoted scalar containing ": " is invalid
+    # YAML, and `helm dependency update` then fails with "mapping values are
+    # not allowed in this context" - after the charts are already written.
     return f"""\
 apiVersion: v2
 name: {name}
-description: {description}
+description: {_yaml_str(description)}
 type: application
 version: {chart_version}
 appVersion: "{content_version}"
@@ -122,6 +130,42 @@ keywords:
   - openshift
   - hardening
   - openscap
+"""
+
+
+UMBRELLA_README_GOTMPL = """\
+{{ template "chart.header" . }}
+{{ template "chart.description" . }}
+
+{{ template "chart.versionBadge" . }}
+{{ template "chart.appVersionBadge" . }}
+
+## Install
+
+This chart contains the platform objects, which are pre-existing cluster
+singletons owned by cluster operators. Helm refuses to adopt them, so
+`helm install` **fails** here - render and apply instead:
+
+```sh
+helm template compliance . | oc apply --server-side --force-conflicts -f -
+```
+
+Under Argo CD set `ServerSideApply=true` for the same reason. The node subchart
+on its own does install normally. See the repository README for both paths.
+
+{{ template "chart.requirementsSection" . }}
+
+## Values
+
+{{ template "chart.valuesTable" . }}
+
+## Rules
+
+See [`RULES.md`](../../RULES.md#coverage-per-profile) for how much of each profile
+these charts can apply, and [the matrix](../../RULES.md#rules) for every rule with
+its target object, applicability and profiles.
+
+{{ template "helm-docs.versionFooter" . }}
 """
 
 
@@ -138,7 +182,9 @@ README_GOTMPL = """\
 
 ## Rules
 
-See [`RULES.md`](../../RULES.md) for the full rule-to-profile matrix.
+See [`RULES.md`](../../RULES.md#coverage-per-profile) for how much of each profile
+these charts can apply, and [the matrix](../../RULES.md#rules) for every rule with
+its target object, applicability and profiles.
 
 {{ template "helm-docs.versionFooter" . }}
 """
@@ -1277,7 +1323,8 @@ def generate_charts(contents: dict[str, Content], charts_dir: Path, version: str
              "missing_values": resolver.missing_values(content_list)}
 
     _write_layer_chart(charts_dir / PLATFORM_CHART, PLATFORM_CHART,
-                       "OpenShift platform compliance remediations (no reboot).",
+                       "OpenShift platform compliance remediations: cluster config "
+                       "objects, no node reboots.",
                        content_list, groups, "platform", version, stats, appl,
                        chart_version)
     _write_layer_chart(charts_dir / NODE_CHART, NODE_CHART,
@@ -1318,13 +1365,19 @@ def _write_umbrella_chart(chart_dir: Path, version: str,
     (chart_dir / "templates").mkdir(parents=True, exist_ok=True)
     # .helmignore keeps subchart tests out of the packaged umbrella.
     (chart_dir / ".helmignore").write_text("tests/\n", encoding="utf-8")
+    # Its own template rather than the subcharts': this is the chart someone
+    # reaches for to get "everything", and it is the one that cannot be
+    # helm installed. Without a gotmpl helm-docs falls back to its default and
+    # says nothing about that.
+    (chart_dir / "README.md.gotmpl").write_text(
+        UMBRELLA_README_GOTMPL, encoding="utf-8")
 
     chart = f"""\
 apiVersion: v2
 name: {UMBRELLA_CHART}
 description: >-
   Umbrella chart bundling OpenShift compliance remediations: platform config
-  (no reboot) and node MachineConfig/KubeletConfig (reboots, opt-in).
+  (no node reboots) and node MachineConfig/KubeletConfig (reboots, opt-in).
 type: application
 version: {chart_version}
 appVersion: "{version}"
@@ -1342,7 +1395,8 @@ dependencies:
 # Umbrella values. Configure each subchart under its own prefix (no global).
 # Subcharts are also installable standalone.
 
-# -- Platform remediations (safe cluster config, no reboot).
+# -- Platform remediations (cluster config objects; no node reboots, but the
+# audit-profile and encryption rules redeploy the kube-apiserver).
 {PLATFORM_CHART}:
 {_indent_block(_cluster_block(), 2)}
   # -- Whitelist whole compliance profiles; see the subchart's own values for

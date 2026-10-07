@@ -1,0 +1,32 @@
+{{ template "chart.header" . }}
+{{ template "chart.description" . }}
+
+{{ template "chart.versionBadge" . }}
+{{ template "chart.appVersionBadge" . }}
+
+## Install
+
+This chart contains the platform objects, which are pre-existing cluster
+singletons owned by cluster operators. Helm refuses to adopt them, so
+`helm install` **fails** here - render and apply instead:
+
+```sh
+helm template compliance . | oc apply --server-side --force-conflicts -f -
+```
+
+Under Argo CD set `ServerSideApply=true` for the same reason. The node subchart
+on its own does install normally. See the repository README for both paths.
+
+{{ template "chart.requirementsSection" . }}
+
+## Values
+
+{{ template "chart.valuesTable" . }}
+
+## Rules
+
+See [`RULES.md`](../../RULES.md#coverage-per-profile) for how much of each profile
+these charts can apply, and [the matrix](../../RULES.md#rules) for every rule with
+its target object, applicability and profiles.
+
+{{ template "helm-docs.versionFooter" . }}

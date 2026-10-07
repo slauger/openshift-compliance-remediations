@@ -93,9 +93,9 @@ The collision detector works inside one object. Across objects the MCO decides: 
 `cross_object_file_conflicts()` finds paths two different objects write differently and emits a `fail` guard per path into the generated `preflight.yaml`. Two things it gets right and a naive version would not:
 
 - **Conflicts are between content groups, not rules.** 31 rules write the same `/etc/ssh/sshd_config` and are fine together; only the one that differs makes it a conflict.
-- **Each guard carries its version window.** The drop-ins exist from 4.13, the whole-file variants only below it. Without `semverCompare` a guard would fire where the fragments do not even render - and break every profile.
+- **Each guard carries its version window.** Without `semverCompare` a guard would fire where the fragments do not even render - and break every profile. The one remaining cross-object conflict is whole-file-only, so its guard is gated below 4.13.
 
-`RULES.md` marks only the genuinely pairwise cases ⚠️ alt; marking all 32 sshd rules would be noise, so the legend covers that case in prose.
+Since the sshd consolidation there is exactly **one** cross-object conflict left, `/etc/ssh/sshd_config` between `rhcos4-disable_host_auth` and the other 31. The six drop-in pairs that used to be the point of this detector now share an object and are refused by `group.conflicts()` instead; `cross_object_file_conflicts` skips same-object paths so they are not reported twice. `RULES.md` marks those twelve rules ⚠️ alt via `_alternatives_of`, and deliberately does not mark the 31 identical whole-file writers - that would be noise, and the legend covers it in prose.
 
 ## Rule dependencies
 

@@ -2,7 +2,7 @@ apiVersion: v2
 name: compliance-hardening
 description: >-
   Umbrella chart bundling OpenShift compliance remediations: platform config
-  (no reboot) and node MachineConfig/KubeletConfig (reboots, opt-in).
+  (no node reboots) and node MachineConfig/KubeletConfig (reboots, opt-in).
 type: application
 version: 0.4.0
 appVersion: "0.1.82"

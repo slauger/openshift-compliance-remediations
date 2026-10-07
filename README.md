@@ -240,14 +240,24 @@ The bar for this list is deliberately high - only rules whose failure mode is lo
 
 Upstream solves per-setting sshd configuration with drop-ins from OpenShift 4.13 - one small file per setting in `/etc/ssh/sshd_config.d/`, instead of rewriting the whole `sshd_config` as the pre-4.13 variants do. The 31 rules that do this now share **one** `MachineConfig` per pool (`75-ocp4-sshd-<role>`) instead of one each: `storage.files` is merged by path at render time, so each rule contributes its drop-in and nothing is lost. That also moves the `enable`/`disable` conflict into the object, where the ordinary conflict guard refuses it.
 
-`rhcos4-disable_host_auth` stays a separate object on purpose. Its pre-4.13 payload differs from the other 31, so folding it in would make every render below 4.13 fail - and separate, it remains the one genuine cross-object sshd conflict:
+Six drop-ins are written by two rules each - the `enable` and `disable` variant of one setting. Those are now an ordinary in-object conflict, named down to the file:
 
 ```
-75-ocp4-sshd-disable-x11-forwarding   X11Forwarding no
-75-ocp4-sshd-enable-x11-forwarding    X11Forwarding yes
+$ helm template ... --set rules.rhcos4-sshd_disable_x11_forwarding=true \
+                    --set rules.rhcos4-sshd_enable_x11_forwarding=true
+Error: Conflicting compliance rules active for MachineConfig/75-ocp4-sshd at
+spec.config.storage.files[/etc/ssh/sshd_config.d/00-complianceascode-X11Forwarding.conf]
 ```
 
-Two MachineConfigs, one file. Nothing on the cluster rejects this - the MachineConfig Operator merges alphanumerically and the later one silently wins, which for three of the six affected settings is the *less* hardened value. So the chart refuses instead. Both are marked ⚠️ alt in [`RULES.md`](RULES.md).
+Nothing on the cluster would reject two MachineConfigs writing one file - the MachineConfig Operator merges alphanumerically and the later one silently wins, which for three of the six affected settings is the *less* hardened value. So the chart refuses instead. All twelve rules are marked ⚠️ alt in [`RULES.md`](RULES.md).
+
+`rhcos4-disable_host_auth` stays a **separate** object on purpose. Its pre-4.13 payload differs from the other 31, so folding it in would make every render below 4.13 fail. Separate, it is the one genuine *cross-object* conflict left, and only below 4.13 where the whole-file variants render:
+
+```
+$ helm template ... --set cluster.ocpVersion=4.12 \
+                    --set rules.rhcos4-disable_host_auth=true --set rules.rhcos4-sshd_set_keepalive=true
+Error: Conflicting compliance rules active: rhcos4-disable_host_auth / rhcos4-sshd_... (31 rules)
+```
 
 **Upgrading from 0.3.x leaves orphans.** The 31 per-rule objects (`75-ocp4-sshd-<rule>-<role>`) become two (`75-ocp4-sshd-<role>`). `helm upgrade` prunes the old ones for you; `helm template | oc apply` does not, so delete them yourself once the new object is in place:
 
