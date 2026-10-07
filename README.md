@@ -8,7 +8,7 @@
 
 Generate Helm charts of OpenShift compliance **remediations** from the upstream [ComplianceAsCode/content](https://github.com/ComplianceAsCode/content) SCAP datastreams. This is the exact same content the OpenShift Compliance Operator materializes at runtime as `ComplianceRemediation` objects, extracted statically instead.
 
-**New to this?** These charts harden your OpenShift cluster against established security benchmarks: CIS, BSI (German Federal Office for Information Security), DISA STIG, PCI-DSS, NIST 800-53 (moderate/high), NERC CIP, ANSSI BP-028 and ACSC Essential Eight. You pick a profile, set it to `true` in `values.yaml`, and `helm install` applies the corresponding hardening: TLS policies, audit logging, encryption at rest, kubelet settings, OS-level controls and more, 281 individually togglable rules. How much of a profile that actually covers varies a lot - see [What a profile still leaves open](#what-a-profile-still-leaves-open). Every change is a plain Kubernetes manifest you can read, diff and version in Git *before* it touches the cluster; nothing is applied behind your back.
+**New to this?** These charts harden your OpenShift cluster against established security benchmarks: CIS, BSI (German Federal Office for Information Security), DISA STIG, PCI-DSS, NIST 800-53 (moderate/high), NERC CIP, ANSSI BP-028 and ACSC Essential Eight. You pick a profile, set it to `true` in `values.yaml`, and the chart renders the corresponding hardening: TLS policies, audit logging, encryption at rest, kubelet settings, OS-level controls and more, 281 individually togglable rules. The node chart you `helm install`; the platform chart you render and apply, because its objects already exist and belong to cluster operators - see [Quick start](#quick-start). How much of a profile that actually covers varies a lot - see [What a profile still leaves open](#what-a-profile-still-leaves-open). Every change is a plain Kubernetes manifest you can read, diff and version in Git *before* it touches the cluster; nothing is applied behind your back.
 
 ## Quick start
 
@@ -252,11 +252,13 @@ cluster:
 For a non-default architecture the generator ships a ready-made overlay listing exactly the rules that architecture cannot use:
 
 ```sh
-# standalone subchart
+# node subchart - installs
 helm install compliance ./charts/compliance-node -f charts/compliance-node/values-aarch64.yaml
 
-# umbrella - its own overlay, with the values nested per subchart
-helm install compliance ./charts/compliance-hardening -f charts/compliance-hardening/values-aarch64.yaml
+# umbrella - its own overlay, with the values nested per subchart. Rendered and
+# applied, not installed: it contains the platform singletons.
+helm template compliance ./charts/compliance-hardening \
+  -f charts/compliance-hardening/values-aarch64.yaml | oc apply --server-side --force-conflicts -f -
 ```
 
 On aarch64 that is 21 rules (audit rules for syscalls ARM64 does not have), on s390x 5. Without the overlay the render aborts and tells you which rules and why.
