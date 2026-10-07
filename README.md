@@ -222,7 +222,7 @@ So `ocp4-cis` is mostly a to-do list for a human, while `rhcos4-moderate` is mos
 Three residuals are worth naming here, because no generator can derive them. All three were measured on a live OCP 4.22.15 / RHCOS 9.8 cluster after applying `rhcos4-moderate`:
 
 - **`rhcos4-enable_fips_mode`** - FIPS is an install-time decision. No MachineConfig can turn it on afterwards.
-- **`rhcos4-sshd_limit_user_access`** - needs an `AllowUsers`/`AllowGroups` list that only you can supply. Upstream's fix writes an empty one.
+- **`rhcos4-sshd_limit_user_access`** - upstream ships **no remediation for it at all**, only an OVAL check and a questionnaire, so neither these charts nor the Compliance Operator can apply it. It is also the one of the three you can close yourself: see [Adding your own objects](#adding-your-own-objects).
 - **`rhcos4-service_usbguard_enabled`** - the remediation is inert as a day-2 change, and not because of this chart. Upstream writes a `systemd.units` entry with `enabled: true` and **no `contents`**, which Ignition applies at provisioning time; the MachineConfig Operator does not act on it during an update. On the cluster the package arrived (`extensions: [usbguard]` worked, `rpm -q usbguard` -> `usbguard-1.1.4-2.el9`) and the three sibling rules pass, but the unit stayed `disabled / inactive` and the MCO journal never mentions it:
 
 ```
@@ -257,6 +257,54 @@ oc get compliancecheckresult -n openshift-compliance
 Keep `autoApplyRemediations` off. The operator's remediations target the same object names as the charts on purpose - one `KubeletConfig` per pool, named `compliance-operator-kubelet-<pool>` - and letting both manage one object means an un-apply can delete what the chart owns.
 
 For reference, measured on OCP 4.22.15 / RHCOS 9.8 with Compliance Operator v1.10.0, applying `ocp4-cis` + `ocp4-cis-node` + `rhcos4-moderate` to both pools: the evaluable checks went from **49.0% to 97.0%** (194 to 385 passing), 190 checks flipped `FAIL` to `PASS`, and **nothing regressed**. On OKD/SCOS the rhcos4 profiles are a different story: the whole profile reports `NOT-APPLICABLE`, because its CPE tests for `enterprise_linux_coreos` and CentOS Stream CoreOS does not match. The hardening still applies and works there - verified on the node - but a scan will not confirm it for you.
+
+### Adding your own objects
+
+Some controls have no upstream remediation but are still one manifest away. `extraManifests` renders objects you supply, with the chart's labels, so your own additions get the same review-before-apply treatment as everything else:
+
+```yaml
+extraManifests:
+  sshd-allow-users:
+    apiVersion: machineconfiguration.openshift.io/v1
+    kind: MachineConfig
+    metadata:
+      name: 75-local-sshd-allow-users
+      labels:
+        machineconfiguration.openshift.io/role: worker
+    spec:
+      config:
+        ignition:
+          version: 3.1.0
+        storage:
+          files:
+            - path: /etc/ssh/sshd_config.d/50-allow-users.conf
+              mode: 384
+              overwrite: true
+              contents:
+                source: "data:,AllowUsers%20core%0A"
+```
+
+That example closes `rhcos4-sshd_limit_user_access`. Its OVAL check is an `OR` over `AllowUsers`, `AllowGroups`, `DenyUsers` and `DenyGroups`, so **one** of them is enough - no need for `AllowGroups` as well - and the file pattern it matches accepts drop-ins:
+
+```
+filepath: ^(/etc/ssh/sshd_config|/etc/ssh/sshd_config\.d/.*\.conf)$
+pattern:  (?i)^[ ]*AllowUsers[ ]+((?:[^ \n]+[ ]*)+)$
+```
+
+`AllowUsers core` is also close to a no-op on who can actually log in, which is what makes it safe: on a stock RHCOS node `core` is the only account with an authorized key, and `PermitRootLogin no` already comes from `40-rhcos-defaults.conf`. It states the effective answer rather than changing it, and stops a later user added through `passwd.users` from silently gaining SSH. Keep `core` in the list - it is the recovery path into a node.
+
+**Toggling works like `rules`.** Each entry takes an optional `enabled` (default true), and because `extraManifests` is a map rather than a list, an overlay can switch one entry off without restating the others - Helm merges maps and *replaces* lists:
+
+```yaml
+# values-staging.yaml
+extraManifests:
+  sshd-allow-users:
+    enabled: false
+```
+
+Or `--set extraManifests.sshd-allow-users.enabled=false`.
+
+These objects are **not** upstream content and are not in [`RULES.md`](RULES.md): everything in `templates/` other than this comes from the pinned ComplianceAsCode release, and the generator deliberately does not author hardening of its own. They carry `app.kubernetes.io/component: local` so a cluster query tells the two apart, and unlike the chart's own node objects they are rendered verbatim - set the pool role label yourself, and emit one entry per pool if you need both.
 
 ## Install
 

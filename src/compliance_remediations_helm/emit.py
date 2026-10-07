@@ -1350,6 +1350,46 @@ dependencies:
             overlay.unlink()
 
 
+EXTRA_MANIFESTS_TPL = """\
+{{- /* Objects you add yourself, rendered verbatim with the chart's labels.
+     Deliberately not upstream content: everything else in templates/ comes
+     from the pinned ComplianceAsCode release, and this is the one place for a
+     control upstream ships no remediation for.
+
+     A map, not a list, so a second values file can switch one entry off
+     without restating the rest - Helm replaces lists and merges maps, the
+     same reason mustMergeOverwrite forces whole-list comparisons elsewhere.
+     Each entry takes an optional `enabled` (default true), which is what
+     makes these togglable the way `rules` is for upstream rules. */ -}}
+{{- $root := . -}}
+{{- range $key := (keys (.Values.extraManifests | default dict) | sortAlpha) -}}
+{{- $obj := index $root.Values.extraManifests $key -}}
+{{- if ne (dig "enabled" true $obj) false -}}
+{{- if not $obj.kind }}
+{{- fail (printf "extraManifests.%s has no kind" $key) }}
+{{- end }}
+{{- if not $obj.apiVersion }}
+{{- fail (printf "extraManifests.%s (%s) has no apiVersion" $key $obj.kind) }}
+{{- end }}
+{{- if not (dig "metadata" "name" "" $obj) }}
+{{- fail (printf "extraManifests.%s (%s) has no metadata.name" $key $obj.kind) }}
+{{- end }}
+{{- $labels := mergeOverwrite (dict
+      "app.kubernetes.io/name" $root.Chart.Name
+      "app.kubernetes.io/instance" ($root.Release.Name | trunc 63 | trimSuffix "-")
+      "app.kubernetes.io/component" "local"
+      "app.kubernetes.io/part-of" "compliance-hardening"
+      "app.kubernetes.io/managed-by" $root.Release.Service)
+      (dig "metadata" "labels" dict $obj) -}}
+{{- $out := omit (deepCopy $obj) "enabled" -}}
+{{- $out = set $out "metadata" (set (deepCopy $obj.metadata) "labels" $labels) -}}
+---
+{{ $out | toYaml }}
+{{- end -}}
+{{- end -}}
+"""
+
+
 def _write_layer_chart(chart_dir: Path, name: str, description: str,
                        contents: list[Content], groups, layer: str,
                        version: str, stats: dict, appl: dict,
@@ -1371,6 +1411,7 @@ def _write_layer_chart(chart_dir: Path, name: str, description: str,
     (tpl / "preflight.yaml").write_text(
         preflight_template(cross_object_file_conflicts(groups, layer)),
         encoding="utf-8")
+    (tpl / "extra-manifests.yaml").write_text(EXTRA_MANIFESTS_TPL, encoding="utf-8")
 
     # One ready-made overlay per architecture that has exclusions. Stale
     # overlays are removed so a content bump cannot leave one behind.
@@ -1524,6 +1565,16 @@ def values_schema(contents: list[Content], layer: str) -> str:
             "ruleApplicability": {"type": "object"},
             "ruleDependencies": {"type": "object"},
             "brokenRules": {"type": "object"},
+            # Objects the user adds. Not required and not closed: the point
+            # is arbitrary manifests, so only the list shape is constrained -
+            # the template checks apiVersion/kind/metadata.name and fails
+            # loudly, which a schema cannot do per entry.
+            # Objects the user adds, keyed by a name they choose. A map so an
+            # overlay can flip one entry's `enabled` without restating the
+            # others, and not closed: the point is arbitrary manifests. The
+            # template checks apiVersion/kind/metadata.name per entry and fails
+            # loudly, which a schema cannot express for free-form objects.
+            "extraManifests": {"type": "object"},
             # Helm injects `global` into a subchart's values.
             "global": {"type": "object"},
         },

@@ -1,0 +1,36 @@
+{{- /* Objects you add yourself, rendered verbatim with the chart's labels.
+     Deliberately not upstream content: everything else in templates/ comes
+     from the pinned ComplianceAsCode release, and this is the one place for a
+     control upstream ships no remediation for.
+
+     A map, not a list, so a second values file can switch one entry off
+     without restating the rest - Helm replaces lists and merges maps, the
+     same reason mustMergeOverwrite forces whole-list comparisons elsewhere.
+     Each entry takes an optional `enabled` (default true), which is what
+     makes these togglable the way `rules` is for upstream rules. */ -}}
+{{- $root := . -}}
+{{- range $key := (keys (.Values.extraManifests | default dict) | sortAlpha) -}}
+{{- $obj := index $root.Values.extraManifests $key -}}
+{{- if ne (dig "enabled" true $obj) false -}}
+{{- if not $obj.kind }}
+{{- fail (printf "extraManifests.%s has no kind" $key) }}
+{{- end }}
+{{- if not $obj.apiVersion }}
+{{- fail (printf "extraManifests.%s (%s) has no apiVersion" $key $obj.kind) }}
+{{- end }}
+{{- if not (dig "metadata" "name" "" $obj) }}
+{{- fail (printf "extraManifests.%s (%s) has no metadata.name" $key $obj.kind) }}
+{{- end }}
+{{- $labels := mergeOverwrite (dict
+      "app.kubernetes.io/name" $root.Chart.Name
+      "app.kubernetes.io/instance" ($root.Release.Name | trunc 63 | trimSuffix "-")
+      "app.kubernetes.io/component" "local"
+      "app.kubernetes.io/part-of" "compliance-hardening"
+      "app.kubernetes.io/managed-by" $root.Release.Service)
+      (dig "metadata" "labels" dict $obj) -}}
+{{- $out := omit (deepCopy $obj) "enabled" -}}
+{{- $out = set $out "metadata" (set (deepCopy $obj.metadata) "labels" $labels) -}}
+---
+{{ $out | toYaml }}
+{{- end -}}
+{{- end -}}
