@@ -8,18 +8,33 @@
 
 Generate Helm charts of OpenShift compliance **remediations** from the upstream [ComplianceAsCode/content](https://github.com/ComplianceAsCode/content) SCAP datastreams. This is the exact same content the OpenShift Compliance Operator materializes at runtime as `ComplianceRemediation` objects, extracted statically instead.
 
-**New to this?** These charts harden your OpenShift cluster against established security benchmarks: CIS, BSI (German Federal Office for Information Security), DISA STIG, PCI-DSS, NIST 800-53 (moderate/high), NERC CIP and ACSC Essential Eight. You pick a profile, set it to `true` in `values.yaml`, and `helm install` applies the corresponding hardening: TLS policies, audit logging, encryption at rest, kubelet settings, OS-level controls and more, over 300 individually togglable rules. Every change is a plain Kubernetes manifest you can read, diff and version in Git *before* it touches the cluster; nothing is applied behind your back.
+**New to this?** These charts harden your OpenShift cluster against established security benchmarks: CIS, BSI (German Federal Office for Information Security), DISA STIG, PCI-DSS, NIST 800-53 (moderate/high), NERC CIP, ANSSI BP-028 and ACSC Essential Eight. You pick a profile, set it to `true` in `values.yaml`, and `helm install` applies the corresponding hardening: TLS policies, audit logging, encryption at rest, kubelet settings, OS-level controls and more, 281 individually togglable rules. How much of a profile that actually covers varies a lot - see [What a profile still leaves open](#what-a-profile-still-leaves-open). Every change is a plain Kubernetes manifest you can read, diff and version in Git *before* it touches the cluster; nothing is applied behind your back.
 
 ## Quick start
+
+Most of the hardening is in the **node** chart, so start there. It installs normally, and it reboots nodes pool by pool:
+
+```bash
+helm install compliance-node oci://ghcr.io/slauger/charts/compliance-node \
+  --namespace openshift-compliance --create-namespace \
+  --set node.enabled=true --set 'node.roles={worker}' \
+  --set profiles.rhcos4-moderate=true
+```
+
+That applies 205 of the 242 rules the profile selects - audit rules, sysctls, sshd, auditd, chrony and the rest. Run `helm template` first (same flags, no `install`) to see every manifest, or diff it in ArgoCD. Add `master` to `node.roles` when you are ready to roll the control plane.
+
+The **platform** chart is the smaller half and is applied, not installed:
 
 ```bash
 helm template compliance-platform oci://ghcr.io/slauger/charts/compliance-platform \
   --set profiles.ocp4-cis=true | oc apply --server-side --force-conflicts -f -
 ```
 
-Applies all CIS platform remediations (safe, no reboots). Drop the pipe to preview, or diff it in ArgoCD.
+It changes **no** node configuration and reboots nothing - but it is not free either. With `ocp4-cis` it sets `spec.audit.profile` and `spec.encryption.type` on `APIServer/cluster`, and each of those redeploys the kube-apiserver one static-pod revision at a time; `encryption.type` additionally starts an etcd secret migration. On a single-control-plane cluster that means the API is briefly unavailable - measured twice on OCP 4.22.15: **208s and 185s**. Plan it like any other control-plane change.
 
-Note it is `helm template | oc apply`, not `helm install`: these objects are **pre-existing cluster singletons** owned by cluster operators, which Helm refuses to adopt and must never delete. The node chart is the opposite - its objects are its own, so there `helm install` is the right command. [Install](#install) explains both, and why.
+`helm template | oc apply` rather than `helm install` is deliberate for this chart: its objects are **pre-existing cluster singletons** owned by cluster operators, which Helm refuses to adopt and must never delete. [Install](#install) explains both paths and why they differ.
+
+For how much of a given profile these charts can actually apply - `ocp4-cis` alone is 4 rules of 96, because upstream ships no remediation for the other 92 - see [What a profile still leaves open](#what-a-profile-still-leaves-open).
 
 ## Why
 
@@ -95,7 +110,7 @@ descriptive but functional: it is how the MCO associates the object with a pool.
 
 Two standalone charts plus a thin umbrella wrapper:
 
-- `charts/compliance-platform/`: ocp4 platform config objects (APIServer, OAuth, IngressController, Project, Template, PrometheusRule). Safe, non-disruptive; no reboot.
+- `charts/compliance-platform/`: ocp4 platform config objects (APIServer, OAuth, IngressController, Project, Template, PrometheusRule). No node reboots - but the audit-profile and encryption rules redeploy the kube-apiserver, so the API is briefly unavailable on a single-control-plane cluster.
 - `charts/compliance-node/`: `MachineConfig` / `KubeletConfig` remediations (ocp4 node + all rhcos4). Gated behind `node.enabled=false` because applying them triggers **MachineConfigPool rollouts (node reboots)**. Emitted per node role.
 - `charts/compliance-hardening/`: umbrella depending on both subcharts; values are prefixed per subchart (no `global`). Subcharts remain installable standalone.
 
