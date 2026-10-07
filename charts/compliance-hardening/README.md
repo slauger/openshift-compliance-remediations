@@ -2,7 +2,7 @@
 
 Umbrella chart bundling OpenShift compliance remediations: platform config (no node reboots) and node MachineConfig/KubeletConfig (reboots, opt-in).
 
-![Version: 0.4.0](https://img.shields.io/badge/Version-0.4.0-informational?style=flat-square)
+![Version: 0.4.1](https://img.shields.io/badge/Version-0.4.1-informational?style=flat-square)
 ![AppVersion: 0.1.82](https://img.shields.io/badge/AppVersion-0.1.82-informational?style=flat-square)
 
 ## Install
@@ -22,8 +22,8 @@ on its own does install normally. See the repository README for both paths.
 
 | Repository | Name | Version |
 |------------|------|---------|
-| file://../compliance-node | compliance-node | 0.4.0 |
-| file://../compliance-platform | compliance-platform | 0.4.0 |
+| file://../compliance-node | compliance-node | 0.4.1 |
+| file://../compliance-platform | compliance-platform | 0.4.1 |
 
 ## Values
 
