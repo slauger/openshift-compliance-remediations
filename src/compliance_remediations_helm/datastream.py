@@ -135,13 +135,22 @@ def refresh_sha512(pin: dict, config_path: Path) -> str:
         raise ValueError(f"unexpected sha512 payload from {url}: {first[:80]!r}")
 
     text = config_path.read_text(encoding="utf-8")
-    new_text = re.sub(
+    # Substitute and count, rather than comparing before and after: those are
+    # the same text when the checksum is already correct, and reporting that
+    # as "could not find a sha512: line" made a successful no-op look like a
+    # broken config. Re-running after Renovate, or on an unchanged version,
+    # hits exactly that.
+    new_text, replaced = re.subn(
         r'(?m)^(sha512:\s*)"[^"]*"\s*$',
         lambda m: f'{m.group(1)}"{first}"',
         text,
     )
+    if not replaced:
+        raise ValueError(
+            f'no `sha512: "..."` line found in {config_path} to update')
     if new_text == text:
-        raise ValueError("could not find a sha512: line to update in config")
+        print(f"  sha512 already current for v{version} ({first[:16]}...)")
+        return first
     config_path.write_text(new_text, encoding="utf-8")
     print(f"  sha512 updated for v{version} ({first[:16]}...)")
     return first

@@ -524,7 +524,18 @@ XCCDF variables (e.g. TLS versions, token lifetimes, kubelet eviction thresholds
 
 ## Updating content
 
-Bump `config/content.yaml` (`version` + `sha512`), run `make generate`, review the Git diff. It shows exactly which rules/fixes changed between content releases.
+Usually you do not: Renovate tracks the pinned [ComplianceAsCode/content](https://github.com/ComplianceAsCode/content) release and opens the bump as a PR, deliberately without automerge, because the diff of `charts/` and `RULES.md` *is* the review - it shows exactly which rules and fixes changed.
+
+By hand:
+
+```sh
+# edit config/content.yaml: version
+make update-sha   # refresh the sha512 for the new version
+make generate     # regenerate charts + RULES.md
+make verify
+```
+
+Do not compute the checksum yourself - `make update-sha` fetches the release and writes it, and the pinned sha512 is verified on every generate, so a tampered or unexpected upstream artifact fails the build rather than reaching a chart.
 
 ## License
 
