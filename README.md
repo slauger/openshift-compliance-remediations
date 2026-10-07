@@ -28,6 +28,8 @@ The Compliance Operator gives you two ways to apply remediations, and both have 
 - **Manual approval** (default): run a scan, wait for findings, then approve each `ComplianceRemediation` by hand. Reactive and slow; nothing is fixed until you've scanned and clicked through the results.
 - **`autoApplyRemediations: true`**: the operator applies fixes automatically. Faster, but a **black box**. The actual manifests are materialized inside the cluster, so you can't review *what* changes before it happens, you have no Git history of your hardening posture, and a content update can silently alter applied objects.
 
+Neither mode is the whole story, and neither is this project: for most rules upstream ships no Kubernetes remediation at all, so nothing can apply them - see [What a profile still leaves open](#what-a-profile-still-leaves-open). What follows is about the rules that *can* be applied.
+
 Either way you don't own your hardening declaratively. This project extracts the very same remediations **statically** from the SCAP datastream into Helm charts, so instead you get:
 
 - **Reviewable**: every fix is a plain manifest in Git; a `helm diff` / ArgoCD preview shows exactly what will change, per rule, before it hits the cluster.
@@ -205,6 +207,56 @@ On aarch64 that is 21 rules (audit rules for syscalls ARM64 does not have), on s
 **Mixed-architecture clusters**: `cluster.architecture` describes the pools named in `node.roles`, and MachineConfigs target pools. Install the node chart once per architecture with the matching `node.roles` and `cluster.architecture` - object names are role-suffixed, so the releases do not collide. Leaving the default on a mixed cluster keeps today's behaviour (the operator reports the ARM nodes' rules as `notapplicable`); setting `aarch64` would remove those rules from your x86 pools too.
 
 Every other constraint is an assumption about RHCOS/OKD, documented per fact in [`applicability.py`](src/compliance_remediations_helm/applicability.py) with the reasoning. Three rules are never applicable at all and ship disabled. The **Applicability** column in [`RULES.md`](RULES.md) carries the constraint for every rule.
+
+## What a profile still leaves open
+
+Applying these charts does not make a profile pass. The largest reason has nothing to do with this project: **for most rules upstream ships no Kubernetes remediation at all.** Nothing can apply those - the Compliance Operator reports them `FAIL` (there is an OVAL check, fix it by hand) or `MANUAL` (only a questionnaire) and generates no remediation either. The scale is worth stating plainly:
+
+| Profile | Selects | These charts apply | No remediation exists |
+| --- | --- | --- | --- |
+| `ocp4-cis` | 96 | 4 | 91 |
+| `rhcos4-moderate` | 242 | 205 | 34 |
+
+So `ocp4-cis` is mostly a to-do list for a human, while `rhcos4-moderate` is mostly automatable. [`RULES.md`](RULES.md#coverage-per-profile) carries the generated table for all profiles, plus the short list of rules that do have a remediation and still leave their control unmet.
+
+Three residuals are worth naming here, because no generator can derive them. All three were measured on a live OCP 4.22.15 / RHCOS 9.8 cluster after applying `rhcos4-moderate`:
+
+- **`rhcos4-enable_fips_mode`** - FIPS is an install-time decision. No MachineConfig can turn it on afterwards.
+- **`rhcos4-sshd_limit_user_access`** - needs an `AllowUsers`/`AllowGroups` list that only you can supply. Upstream's fix writes an empty one.
+- **`rhcos4-service_usbguard_enabled`** - the remediation is inert as a day-2 change, and not because of this chart. Upstream writes a `systemd.units` entry with `enabled: true` and **no `contents`**, which Ignition applies at provisioning time; the MachineConfig Operator does not act on it during an update. On the cluster the package arrived (`extensions: [usbguard]` worked, `rpm -q usbguard` -> `usbguard-1.1.4-2.el9`) and the three sibling rules pass, but the unit stayed `disabled / inactive` and the MCO journal never mentions it:
+
+```
+$ journalctl | grep usbguard
+machine-config-daemon: "Applying extensions : [\"update\" \"--install\" \"usbguard\"]"
+$ systemctl is-enabled usbguard   -> disabled
+```
+
+  Two rules in the charts use that shape; the other, `rhcos4-service_auditd_enabled`, passes only because RHCOS enables `auditd` anyway. The operator's own remediation is byte-identical, so it has the same limitation.
+
+### Checking it on your own cluster
+
+Point the Compliance Operator at the same profile and compare - the operator scans, the chart applies:
+
+```bash
+oc apply -f - <<'YAML'
+apiVersion: compliance.openshift.io/v1alpha1
+kind: ScanSettingBinding
+metadata:
+  name: verify
+  namespace: openshift-compliance
+profiles:
+  - {apiGroup: compliance.openshift.io/v1alpha1, kind: Profile, name: rhcos4-moderate}
+settingsRef:
+  apiGroup: compliance.openshift.io/v1alpha1
+  kind: ScanSetting
+  name: default
+YAML
+oc get compliancecheckresult -n openshift-compliance
+```
+
+Keep `autoApplyRemediations` off. The operator's remediations target the same object names as the charts on purpose - one `KubeletConfig` per pool, named `compliance-operator-kubelet-<pool>` - and letting both manage one object means an un-apply can delete what the chart owns.
+
+For reference, measured on OCP 4.22.15 / RHCOS 9.8 with Compliance Operator v1.10.0, applying `ocp4-cis` + `ocp4-cis-node` + `rhcos4-moderate` to both pools: the evaluable checks went from **49.0% to 97.0%** (194 to 385 passing), 190 checks flipped `FAIL` to `PASS`, and **nothing regressed**. On OKD/SCOS the rhcos4 profiles are a different story: the whole profile reports `NOT-APPLICABLE`, because its CPE tests for `enterprise_linux_coreos` and CentOS Stream CoreOS does not match. The hardening still applies and works there - verified on the node - but a scan will not confirm it for you.
 
 ## Install
 

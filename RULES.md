@@ -6,6 +6,77 @@ One row per rule that carries a Kubernetes remediation. Rules marked **⚠️ al
 
 The **Applicability** column carries the upstream `<platform>` constraint. The Compliance Operator evaluates these at scan time and reports a non-applicable rule as `notapplicable`, generating no remediation; the charts refuse to render one instead of shipping it. Architecture and HyperShift are declared via `cluster.architecture` and `cluster.hypershift`; for a non-default architecture apply the generated `values-<arch>.yaml` overlay. A rule restricted to one MachineConfigPool ("master pool only") is simply not rendered for the other roles in `node.roles`, mirroring the operator: it scans per pool and takes the MachineConfig role from the scan's node selector, so such a remediation never reaches a worker there. Rules marked **⛔ n/a** are never applicable to RHCOS/OKD at all and ship disabled - enable one explicitly only if you know the assumption behind it does not hold for you.
 
+## Coverage per profile
+
+What a profile asks for, and how much of it these charts can apply. **No remediation** counts rules the profile selects for which upstream ships no Kubernetes fix at all: nothing can apply those, and the Compliance Operator reports them FAIL or MANUAL rather than remediating them. **Open** counts rules that do have a fix but ship disabled with nothing else covering the control - those are listed below. A rule that ships disabled because an alternative of it is applied is not open, and is not counted here.
+
+| Profile | Selects | Remediated | No remediation | Open |
+|---------|---------|------------|----------------|------|
+| `rhcos4-anssi_bp28_high` | 294 | 75 | 218 | 1 |
+| `rhcos4-anssi_bp28_enhanced` | 250 | 75 | 174 | 1 |
+| `rhcos4-high` | 243 | 205 | 34 | 4 |
+| `rhcos4-high-rev-4` | 243 | 205 | 34 | 4 |
+| `rhcos4-moderate` | 242 | 205 | 34 | 3 |
+| `rhcos4-moderate-rev-4` | 242 | 205 | 34 | 3 |
+| `rhcos4-nerc-cip` | 242 | 205 | 34 | 3 |
+| `rhcos4-bsi` | 173 | 66 | 105 | 2 |
+| `rhcos4-bsi-2022` | 173 | 66 | 105 | 2 |
+| `rhcos4-anssi_bp28_intermediary` | 162 | 29 | 133 | - |
+| `ocp4-high` | 136 | 6 | 128 | 1 |
+| `ocp4-high-rev-4` | 136 | 6 | 128 | 1 |
+| `ocp4-moderate` | 133 | 6 | 125 | 1 |
+| `ocp4-moderate-rev-4` | 133 | 6 | 125 | 1 |
+| `ocp4-nerc-cip` | 133 | 6 | 125 | 1 |
+| `ocp4-high-node` | 123 | 13 | 109 | 1 |
+| `ocp4-high-node-rev-4` | 123 | 13 | 109 | 1 |
+| `ocp4-moderate-node` | 123 | 13 | 109 | 1 |
+| `ocp4-moderate-node-rev-4` | 123 | 13 | 109 | 1 |
+| `ocp4-nerc-cip-node` | 123 | 13 | 109 | 1 |
+| `ocp4-pci-dss` | 122 | 5 | 115 | 1 |
+| `ocp4-pci-dss-4-0` | 122 | 5 | 115 | 1 |
+| `rhcos4-stig` | 118 | 102 | 14 | 2 |
+| `rhcos4-stig-v2r2` | 118 | 102 | 14 | 2 |
+| `rhcos4-stig-v2r3` | 118 | 102 | 14 | 2 |
+| `ocp4-pci-dss-node` | 117 | 12 | 105 | - |
+| `ocp4-pci-dss-node-4-0` | 117 | 12 | 105 | - |
+| `ocp4-pci-dss-node-3-2` | 116 | 8 | 108 | - |
+| `ocp4-pci-dss-3-2` | 109 | 4 | 104 | - |
+| `ocp4-cis-node` | 103 | 8 | 95 | - |
+| `ocp4-cis-node-1-7` | 103 | 8 | 95 | - |
+| `ocp4-cis-node-1-9` | 103 | 8 | 95 | - |
+| `ocp4-cis-1-7` | 100 | 4 | 95 | - |
+| `ocp4-cis` | 96 | 4 | 91 | - |
+| `ocp4-cis-1-9` | 96 | 4 | 91 | - |
+| `ocp4-bsi` | 86 | 5 | 81 | - |
+| `ocp4-bsi-2022` | 86 | 5 | 81 | - |
+| `rhcos4-e8` | 51 | 45 | 5 | 1 |
+| `ocp4-stig` | 50 | 6 | 43 | 1 |
+| `ocp4-stig-v2r2` | 50 | 6 | 43 | 1 |
+| `ocp4-stig-v2r3` | 50 | 6 | 43 | 1 |
+| `ocp4-bsi-node` | 19 | 2 | 17 | - |
+| `ocp4-bsi-node-2022` | 19 | 2 | 17 | - |
+| `ocp4-e8` | 14 | 1 | 13 | - |
+| `rhcos4-anssi_bp28_minimal` | 9 | 0 | 9 | - |
+| `ocp4-cis-vm-extension-node` | 5 | 1 | 4 | - |
+| `ocp4-stig-node` | 3 | 1 | 2 | - |
+| `ocp4-stig-node-v2r2` | 3 | 1 | 2 | - |
+| `ocp4-stig-node-v2r3` | 3 | 1 | 2 | - |
+
+### What stays open
+
+Rules a profile selects, that carry a remediation, and that still leave their control unmet. Each ships disabled on purpose; the reason is also next to the entry in `values.yaml`.
+
+| Rule | Category | Why |
+|------|----------|-----|
+| `ocp4-audit_error_alert_exists` | opt-in | a stock cluster already ships this alert, and cluster-kube-apiserver-operator owns .spec.groups[apiserver-audit].rules: server-side apply refuses the change and client-side apply starts a fight the operator wins. Upstream's copy also drops the alert's namespace label |
+| `ocp4-kubelet_enable_protect_kernel_defaults` | opt-in | kubelet refuses to start if the kernel parameters it expects are not already set; nodes go NotReady pool by pool |
+| `rhcos4-audit_rules_time_stime` | broken | stime was removed from the 64-bit syscall table; augenrules stops at the rule it cannot load, so the 42 rules after it and the trailing -e 2 (immutable audit config) never apply |
+| `rhcos4-coreos_nousb_kernel_argument` | opt-in | boots with nousb; on bare metal that disables USB keyboards, so the console stops being a way back in |
+| `rhcos4-coreos_page_poison_kernel_argument` | opt-in | page_poison=1 carries a measurable runtime cost - a deliberate trade-off rather than something to inherit from a profile |
+| `rhcos4-service_sshd_disabled` | opt-in | masks sshd.service and sshd.socket, removing the recovery path into a node when the API is not enough |
+
+## Rules
+
 | Rule | Target object | Severity | Layer | Product | Applicability | Profiles |
 |------|---------------|----------|-------|---------|---------------|----------|
 | `ocp4-api_server_encryption_provider_cipher` | `APIServer/cluster` | medium | platform | ocp4 | not hypershift | ocp4-bsi, ocp4-bsi-2022, ocp4-cis, ocp4-cis-1-7, ocp4-cis-1-9, ocp4-e8, ocp4-high, ocp4-high-rev-4, ocp4-moderate, ocp4-moderate-rev-4, ocp4-nerc-cip, ocp4-pci-dss, ocp4-pci-dss-3-2, ocp4-pci-dss-4-0, ocp4-stig, ocp4-stig-v2r2, ocp4-stig-v2r3 |
