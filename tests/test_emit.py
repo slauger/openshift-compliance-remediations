@@ -74,6 +74,38 @@ class TestDroppedBodyWarning(unittest.TestCase):
         self.assertEqual(stats["dropped"], [])
 
 
+class TestReadmeVersionPin(unittest.TestCase):
+    """The Argo CD example pins a chart version, and a stale pin is a broken
+    copy-paste. semantic-release rewrites it on release; this is the tripwire
+    for that sed silently not matching any more."""
+
+    def test_the_pinned_targetrevision_matches_VERSION(self):
+        import re
+        from pathlib import Path
+        version = Path("VERSION").read_text(encoding="utf-8").strip()
+        readme = Path("README.md").read_text(encoding="utf-8")
+        pins = re.findall(r"(?m)^\s*targetRevision:\s*(\S+)\s*$", readme)
+        self.assertEqual(len(pins), 1, f"expected one pin, found {pins}")
+        self.assertEqual(
+            pins[0], version,
+            "README targetRevision is stale; semantic-release should have "
+            "rewritten it - check the prepareCmd sed in .releaserc.json")
+
+    def test_the_release_config_updates_and_commits_the_readme(self):
+        # Both halves are needed: the sed without the asset leaves the change
+        # uncommitted, the asset without the sed commits nothing.
+        import json
+        from pathlib import Path
+        cfg = json.loads(Path(".releaserc.json").read_text(encoding="utf-8"))
+        prepare = [p[1]["prepareCmd"] for p in cfg["plugins"]
+                   if isinstance(p, list) and p[0].endswith("/exec")
+                   and "prepareCmd" in p[1]]
+        self.assertTrue(any("README.md" in c for c in prepare))
+        assets = [p[1]["assets"] for p in cfg["plugins"]
+                  if isinstance(p, list) and p[0].endswith("/git")]
+        self.assertTrue(assets and "README.md" in assets[0])
+
+
 class TestChartYaml(unittest.TestCase):
     def test_a_colon_in_the_description_does_not_break_the_file(self):
         # description was interpolated unquoted, so ": " in it made Chart.yaml
