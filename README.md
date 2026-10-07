@@ -222,7 +222,7 @@ So `ocp4-cis` is mostly a to-do list for a human, while `rhcos4-moderate` is mos
 Three residuals are worth naming here, because no generator can derive them. All three were measured on a live OCP 4.22.15 / RHCOS 9.8 cluster after applying `rhcos4-moderate`:
 
 - **`rhcos4-enable_fips_mode`** - FIPS is an install-time decision. No MachineConfig can turn it on afterwards.
-- **`rhcos4-sshd_limit_user_access`** - needs an `AllowUsers`/`AllowGroups` list that only you can supply. Upstream's fix writes an empty one.
+- **`rhcos4-sshd_limit_user_access`** - upstream ships **no remediation for it at all**, only an OVAL check and a questionnaire, so it is not in these charts and the Compliance Operator cannot apply it either. It wants an `AllowUsers` or `AllowGroups` directive, and the list is a decision about your cluster. On a stock RHCOS node the effective answer is already narrow - `core` is the only account with an authorized key, and `PermitRootLogin no` comes from `40-rhcos-defaults.conf` - so `AllowUsers core` makes that explicit without changing who can log in today. Write it as a drop-in in `/etc/ssh/sshd_config.d/` via your own MachineConfig; a rule with no upstream fix is out of scope for this generator.
 - **`rhcos4-service_usbguard_enabled`** - the remediation is inert as a day-2 change, and not because of this chart. Upstream writes a `systemd.units` entry with `enabled: true` and **no `contents`**, which Ignition applies at provisioning time; the MachineConfig Operator does not act on it during an update. On the cluster the package arrived (`extensions: [usbguard]` worked, `rpm -q usbguard` -> `usbguard-1.1.4-2.el9`) and the three sibling rules pass, but the unit stayed `disabled / inactive` and the MCO journal never mentions it:
 
 ```
