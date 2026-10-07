@@ -153,14 +153,26 @@ The bar for this list is deliberately high - only rules whose failure mode is lo
 
 ### Conflicts across objects
 
-Upstream solves per-setting sshd configuration with drop-ins from OpenShift 4.13 - one small file per setting in `/etc/ssh/sshd_config.d/`, instead of rewriting the whole `sshd_config` as the pre-4.13 variants do. That is the right shape, and it creates a conflict the per-object check cannot see: the `enable` and `disable` variant of a setting are **separate rules writing the same drop-in**.
+Upstream solves per-setting sshd configuration with drop-ins from OpenShift 4.13 - one small file per setting in `/etc/ssh/sshd_config.d/`, instead of rewriting the whole `sshd_config` as the pre-4.13 variants do. The 31 rules that do this now share **one** `MachineConfig` per pool (`75-ocp4-sshd-<role>`) instead of one each: `storage.files` is merged by path at render time, so each rule contributes its drop-in and nothing is lost. That also moves the `enable`/`disable` conflict into the object, where the ordinary conflict guard refuses it.
+
+`rhcos4-disable_host_auth` stays a separate object on purpose. Its pre-4.13 payload differs from the other 31, so folding it in would make every render below 4.13 fail - and separate, it remains the one genuine cross-object sshd conflict:
 
 ```
 75-ocp4-sshd-disable-x11-forwarding   X11Forwarding no
 75-ocp4-sshd-enable-x11-forwarding    X11Forwarding yes
 ```
 
-Two MachineConfigs, one file. Nothing on the cluster rejects this - the MachineConfig Operator merges alphanumerically and the later one silently wins, which for three of the six affected settings is the *less* hardened value. So the chart refuses instead, the same way it does for alternatives inside one object. Both are marked ⚠️ alt in [`RULES.md`](RULES.md).
+Two MachineConfigs, one file. Nothing on the cluster rejects this - the MachineConfig Operator merges alphanumerically and the later one silently wins, which for three of the six affected settings is the *less* hardened value. So the chart refuses instead. Both are marked ⚠️ alt in [`RULES.md`](RULES.md).
+
+**Upgrading from 0.3.x leaves orphans.** The 31 per-rule objects (`75-ocp4-sshd-<rule>-<role>`) become two (`75-ocp4-sshd-<role>`). `helm upgrade` prunes the old ones for you; `helm template | oc apply` does not, so delete them yourself once the new object is in place:
+
+```bash
+oc get mc -l app.kubernetes.io/part-of=compliance-hardening -o name \
+  | grep -E '75-ocp4-sshd-.+-(master|worker)$' | grep -v '^machineconfig.machineconfiguration.openshift.io/75-ocp4-sshd-\(master\|worker\)$'
+# review, then: ... | xargs oc delete
+```
+
+Leaving them is not dangerous - their content is identical to what the consolidated object writes - but the pool carries 30 MachineConfigs it no longer needs.
 
 Below 4.13 the same applies to the whole-file variants, where `rhcos4-disable_host_auth` differs from the other 31 rules writing `sshd_config`. The guards carry the version window they belong to, so nothing fires where the fragments do not even render.
 

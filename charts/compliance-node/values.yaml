@@ -78,6 +78,12 @@ rules:
   rhcos4-kernel_module_vfat_disabled: false  # UEFI boot is assumed, so this rule is refused; a BIOS or legacy-boot fleet needs this assumption revisited in applicability.FACTS
   rhcos4-service_sshd_disabled: false  # opt-in: masks sshd.service and sshd.socket, removing the recovery path into a node when the API is not enough
   rhcos4-sshd_allow_only_protocol2: false  # RHCOS ships OpenSSH 8 or newer
+  rhcos4-sshd_disable_pubkey_auth: false  # alternative of rhcos4-sshd_enable_pubkey_auth on MachineConfig/75-ocp4-sshd
+  rhcos4-sshd_disable_root_password_login: false  # alternative of rhcos4-sshd_disable_root_login on MachineConfig/75-ocp4-sshd
+  rhcos4-sshd_enable_gssapi_auth: false  # alternative of rhcos4-sshd_disable_gssapi_auth on MachineConfig/75-ocp4-sshd
+  rhcos4-sshd_enable_warning_banner_net: false  # alternative of rhcos4-sshd_enable_warning_banner on MachineConfig/75-ocp4-sshd
+  rhcos4-sshd_enable_x11_forwarding: false  # alternative of rhcos4-sshd_disable_x11_forwarding on MachineConfig/75-ocp4-sshd
+  rhcos4-sshd_set_loglevel_verbose: false  # alternative of rhcos4-sshd_set_loglevel_info on MachineConfig/75-ocp4-sshd
   rhcos4-sshd_use_priv_separation: false  # RHCOS ships OpenSSH 8 or newer
 
 # -- Optionally render a matching TailoredProfile per enabled profile so the

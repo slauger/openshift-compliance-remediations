@@ -73,6 +73,19 @@ The earlier line-wise flattener got sequences wrong three ways at once (list att
 
 Keying list entries by identity (`files` by `path`) is deliberately **not** done: it would only be safe once the render-time merge combines `storage.files` by path too, and until then it would turn a loud conflict into a silent drop.
 
+## Merging storage.files by path
+
+`object_template` accumulates `spec.config.storage.files` across fragments in `$fileAcc`, keyed by path, and writes the sorted result back after the merge loop. Without it `mustMergeOverwrite` *replaces* the list, so with two rules writing files the last fragment won outright and the other's files were gone - silently, since the object still rendered.
+
+- **The same-path check is render-time, not generate-time.** Which rules are active is a values decision. From 4.13 the sshd rules each write their own drop-in, so paths are disjoint and merging is clean; below 4.13 they each rewrite the whole `sshd_config`, which is a real conflict and still fails. One mechanism, correct in both version windows, and it also covers content that only differs once a variable is interpolated - which a generate-time check cannot see.
+- **`collisions.IDENTIFIED_LISTS` is the detection half and must stay in step.** It makes `_leaf_paths` emit one leaf per file path instead of one leaf for the list, so disjoint files stop being reported as alternatives. Adding a path there without teaching the render to merge it turns a loud conflict into a silent drop - that asymmetry is the whole reason #28 deferred this.
+- **`cross_object_file_conflicts` skips same-object paths.** After the sshd consolidation the six drop-in pairs live in one object, where the per-object guard and the render-time check already refuse them; a preflight guard too would report the same thing three times and point the user at objects that no longer differ.
+- **Ordering comes from `keys $fileAcc | sortAlpha`.** The accumulator is a dict, so without sorting the GitOps diff churns between runs. `test_determinism` covers it.
+
+A consolidated family no longer has to be byte-identical: `mergeable_shape()` compares the leaves *outside* the merged lists, so sshd members differing only in which drop-in they write are fine while anything else diverging still raises. `test_the_sshd_family_really_does_differ` keeps that relaxation from being vacuous.
+
+`rhcos4-disable_host_auth` is deliberately not a family member - its `<=4.12` whole-file payload differs from the other 31, so folding it in would fail every render below 4.13.
+
 ## Conflicts across objects
 
 The collision detector works inside one object. Across objects the MCO decides: `MergeMachineConfigs` sorts alphanumerically, takes the first Ignition config as the base and merges the rest, so for a duplicate file path the later MachineConfig silently wins.

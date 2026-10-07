@@ -78,15 +78,15 @@ class TestGeneratorSideDetection(unittest.TestCase):
         cls.conflicts = emit.cross_object_file_conflicts(groups, "node")
         cls.emit = emit
 
-    def test_the_sshd_dropin_pairs_are_found(self):
-        # enable/disable variants of one setting, in separate rules writing the
-        # same drop-in. Nothing on the cluster rejects this - the MCO merges
-        # alphanumerically and the later MachineConfig silently wins.
-        pairs = {c["path"].split("/")[-1] for c in self.conflicts
-                 if all(len(g["rules"]) == 1 for g in c["groups"])}
-        self.assertIn("00-complianceascode-X11Forwarding.conf", pairs)
-        self.assertIn("00-complianceascode-GSSAPIAuthentication.conf", pairs)
-        self.assertEqual(len(pairs), 6)
+    def test_the_sshd_dropin_pairs_moved_into_the_object(self):
+        # The six enable/disable drop-in pairs used to be the point of this
+        # detector: separate rules, separate objects, same file. Now the sshd
+        # family is consolidated, so they share an object and the per-object
+        # conflict guard refuses them - reporting them here as well would say
+        # the same thing three times, and this detector's message tells the
+        # user to look at separate objects.
+        dropins = [c for c in self.conflicts if "sshd_config.d" in c["path"]]
+        self.assertEqual(dropins, [])
 
     def test_identical_writers_are_not_a_conflict(self):
         # 31 rules write the same /etc/ssh/sshd_config; only the one that

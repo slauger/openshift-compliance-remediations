@@ -222,19 +222,38 @@ def _canonical(node) -> str:
     return "" if node is None else str(node)
 
 
+# Lists whose entries the render merges by an identity key rather than
+# replacing wholesale. Keyed by the dotted path of the list, valued by the
+# entry field that identifies an entry.
+#
+# Only storage.files, and only because object_template accumulates those by
+# path across fragments. Anything not listed here stays one leaf: Helm's
+# mustMergeOverwrite *replaces* lists, so for an unmerged list two rules
+# writing it differently are alternatives no matter which entries differ, and
+# per-entry leaves would under-report exactly that. Adding a path here without
+# teaching the render to merge it turns a loud conflict into a silent drop.
+IDENTIFIED_LISTS = {
+    "spec.config.storage.files": "path",
+}
+
+
 def _flatten(node, path: str, out: dict[str, str]) -> None:
     if isinstance(node, dict):
         for k, v in node.items():
             _flatten(v, f"{path}.{k}" if path else k, out)
         return
     if isinstance(node, list):
-        # A list is one leaf at its own path, serialized whole. Helm's
-        # mustMergeOverwrite *replaces* lists rather than concatenating them,
-        # so two rules writing the same list path differently are alternatives
-        # no matter which entries differ - per-entry leaves would under-report
-        # exactly that.
-        if node:
-            out[path] = _canonical(node)
+        if not node:
+            return
+        key_field = IDENTIFIED_LISTS.get(path)
+        if key_field and all(isinstance(e, dict) and key_field in e for e in node):
+            # One leaf per entry, identified rather than positional, so two
+            # rules contributing different files to one object are disjoint
+            # while two writing the *same* file differently still collide.
+            for entry in node:
+                out[f"{path}[{entry[key_field]}]"] = _canonical(entry)
+            return
+        out[path] = _canonical(node)
         return
     if node is None or node in ("{}", "[]"):
         return
@@ -270,6 +289,22 @@ def _leaf_paths(doc_yaml: str, where: str = "<doc>") -> dict[str, str]:
         if root in doc:
             _flatten(doc[root], root, out)
     return out
+
+
+def mergeable_shape(doc_yaml: str, where: str = "<doc>") -> tuple:
+    """A fix's leaves, excluding the lists the render merges by identity.
+
+    Two fixes with the same shape can share one object: everything that
+    differs between them is a list `object_template` folds together by key, so
+    nothing is lost. Used to decide whether a consolidated family still holds
+    together - the stricter "byte-identical bodies" test it replaced would
+    refuse the sshd family, whose members differ only in which drop-in they
+    write.
+    """
+    leaves = _leaf_paths(doc_yaml, where)
+    prefixes = tuple(f"{path}[" for path in IDENTIFIED_LISTS)
+    return tuple(sorted((k, v) for k, v in leaves.items()
+                        if not k.startswith(prefixes)))
 
 
 # Subtrees that are discriminated unions: if two rules both write under such a

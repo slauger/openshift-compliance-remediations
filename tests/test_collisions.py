@@ -149,9 +149,13 @@ class TestSequenceAttribution(unittest.TestCase):
         return group.conflicts()
 
     def test_list_is_keyed_by_its_own_path(self):
+        # storage.files is in IDENTIFIED_LISTS, so each entry is its own leaf
+        # keyed by path - the render merges them by path too. Any other list
+        # stays a single leaf; see test_scalar_list_is_one_leaf.
         leaves = collisions._leaf_paths(_machineconfig(
             _files(("/etc/a.conf", "data:,A"), ("/etc/b.conf", "data:,B"))))
-        self.assertIn("spec.config.storage.files", leaves)
+        self.assertIn("spec.config.storage.files[/etc/a.conf]", leaves)
+        self.assertIn("spec.config.storage.files[/etc/b.conf]", leaves)
         # Not the grandparent, and not item keys hoisted onto the list path.
         self.assertNotIn("spec.config.storage", leaves)
         self.assertNotIn("spec.config.storage.files.path", leaves)
@@ -164,18 +168,40 @@ class TestSequenceAttribution(unittest.TestCase):
             _files(("/etc/a.conf", "data:,A"),
                    ("/etc/b.conf", "data:,B"),
                    ("/etc/c.conf", "data:,C"))))
-        value = leaves["spec.config.storage.files"]
         for path, source in (("/etc/a.conf", "data:,A"), ("/etc/b.conf", "data:,B"),
                              ("/etc/c.conf", "data:,C")):
+            value = leaves[f"spec.config.storage.files[{path}]"]
             self.assertIn(path, value)
             self.assertIn(source, value)
 
     def test_same_file_written_differently_conflicts(self):
+        # Still a conflict, and the path now names the offending file instead
+        # of the whole list - the shared /etc/a.conf must not be implicated.
         a = _machineconfig(_files(("/etc/a.conf", "data:,A"), ("/etc/b.conf", "data:,B")))
         b = _machineconfig(_files(("/etc/a.conf", "data:,A"), ("/etc/b.conf", "data:,CHANGED")))
         self.assertEqual(
             [(c.path, c.rules) for c in self._conflicts([("ocp4-a", a), ("ocp4-b", b)])],
-            [("spec.config.storage.files", ["ocp4-a", "ocp4-b"])])
+            [("spec.config.storage.files[/etc/b.conf]", ["ocp4-a", "ocp4-b"])])
+
+    def test_disjoint_files_in_one_object_do_not_conflict(self):
+        # The capability this unlocks: two rules contributing different files
+        # to one object merge instead of being refused as alternatives. Only
+        # safe because object_template accumulates storage.files by path at
+        # render time - before that, mustMergeOverwrite kept only the last
+        # list and reporting a conflict was the honest answer.
+        a = _machineconfig(_files(("/etc/a.conf", "data:,A")))
+        b = _machineconfig(_files(("/etc/b.conf", "data:,B")))
+        self.assertEqual(self._conflicts([("ocp4-a", a), ("ocp4-b", b)]), [])
+
+    def test_an_unidentified_list_stays_one_leaf(self):
+        # systemd.units is deliberately not in IDENTIFIED_LISTS: the render
+        # does not merge it, so per-entry leaves would turn a silent
+        # last-one-wins drop into "no conflict".
+        a = _machineconfig("    systemd:\n      units:\n"
+                           "      - name: a.service\n        enabled: true\n")
+        leaves = collisions._leaf_paths(a)
+        self.assertIn("spec.config.systemd.units", leaves)
+        self.assertNotIn("spec.config.systemd.units[a.service]", leaves)
 
     def test_identical_file_lists_do_not_conflict(self):
         a = _machineconfig(_files(("/etc/a.conf", "data:,A"), ("/etc/b.conf", "data:,B")))

@@ -39,6 +39,49 @@ KUBELET_CONFIG_NAME = "compliance-operator-kubelet"
 # content release that makes them differ fails the build instead of silently
 # picking one.
 CONSOLIDATED_FAMILIES: dict[str, tuple] = {
+    # The sshd family is the first consolidation whose members are *not*
+    # identical: below 4.13 all 31 write the same whole sshd_config, from
+    # 4.13 each writes its own drop-in. The render merges storage.files by
+    # path, so the disjoint drop-ins combine and the six enable/disable
+    # pairs that share a drop-in become ordinary in-object conflicts.
+    #
+    # disable_host_auth is deliberately NOT a member: its <=4.12 whole-file
+    # payload differs from the other 31, so folding it in would make every
+    # render below 4.13 fail. Kept separate, it stays the one legitimate
+    # cross-object sshd guard.
+    "75-ocp4-sshd": (
+        "sshd_allow_only_protocol2",
+        "sshd_disable_compression",
+        "sshd_disable_empty_passwords",
+        "sshd_disable_gssapi_auth",
+        "sshd_disable_kerb_auth",
+        "sshd_disable_pubkey_auth",
+        "sshd_disable_rhosts",
+        "sshd_disable_rhosts_rsa",
+        "sshd_disable_root_login",
+        "sshd_disable_root_password_login",
+        "sshd_disable_tcp_forwarding",
+        "sshd_disable_user_known_hosts",
+        "sshd_disable_x11_forwarding",
+        "sshd_do_not_permit_user_env",
+        "sshd_enable_gssapi_auth",
+        "sshd_enable_pam",
+        "sshd_enable_pubkey_auth",
+        "sshd_enable_strictmodes",
+        "sshd_enable_warning_banner",
+        "sshd_enable_warning_banner_net",
+        "sshd_enable_x11_forwarding",
+        "sshd_print_last_log",
+        "sshd_set_idle_timeout",
+        "sshd_set_keepalive",
+        "sshd_set_login_grace_time",
+        "sshd_set_loglevel_info",
+        "sshd_set_loglevel_verbose",
+        "sshd_set_max_auth_tries",
+        "sshd_set_max_sessions",
+        "sshd_set_maxstartups",
+        "sshd_use_priv_separation",
+    ),
     "75-ocp4-chrony": (
         "chronyd_client_only",
         "chronyd_no_chronyc_network",

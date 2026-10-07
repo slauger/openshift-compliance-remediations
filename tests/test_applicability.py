@@ -451,19 +451,42 @@ class TestConsolidatedObjects(unittest.TestCase):
     """Rule families whose fixes are byte-identical share one object."""
 
     @requires(OCP4, RHCOS4)
-    def test_each_family_really_is_identical(self):
-        # A family is only sound while its fixes agree. If a content release
-        # makes one differ, this fails here and generate_charts raises -
-        # rather than one rule's configuration silently winning on the node.
+    def test_each_family_agrees_outside_the_merged_lists(self):
+        # A family is only sound while its fixes agree on everything the render
+        # does not merge. Members may differ in storage.files - that is the
+        # whole point of the sshd family, where each rule contributes its own
+        # drop-in and the render folds them together by path. Anything else
+        # differing means mustMergeOverwrite would silently keep one rule's
+        # value, so this fails here and generate_charts raises.
         content = xccdf.parse(RHCOS4, product="rhcos4")
         from compliance_remediations_helm import classify
+        from compliance_remediations_helm.collisions import mergeable_shape
         for name, rule_ids in classify.CONSOLIDATED_FAMILIES.items():
-            bodies = set()
+            shapes = set()
             for rule_id in rule_ids:
                 rule = content.rules.get(rule_id)
                 self.assertIsNotNone(rule, f"{rule_id} no longer exists upstream")
-                bodies.add("\n---\n".join(fx.yaml for fx in rule.fixes))
-            self.assertEqual(len(bodies), 1, f"{name}: fixes have diverged")
+                for fx in rule.fixes:
+                    shapes.add(mergeable_shape(fx.yaml, rule_id))
+            self.assertEqual(len(shapes), 1,
+                             f"{name}: fixes differ outside storage.files")
+
+    @requires(RHCOS4)
+    def test_the_sshd_family_really_does_differ(self):
+        # Guards the test above against becoming vacuous: if the sshd members
+        # were identical too, "agrees outside the merged lists" would prove
+        # nothing about the relaxation.
+        content = xccdf.parse(RHCOS4, product="rhcos4")
+        from compliance_remediations_helm import classify
+        members = classify.CONSOLIDATED_FAMILIES["75-ocp4-sshd"]
+        bodies = {"\n---\n".join(fx.yaml for fx in content.rules[r].fixes)
+                  for r in members}
+        self.assertGreater(len(bodies), 1,
+                           "sshd members are identical; the file-merge "
+                           "relaxation is untested")
+        self.assertNotIn("disable_host_auth", members,
+                         "its <=4.12 payload differs from the other 31, so "
+                         "folding it in fails every render below 4.13")
 
     @requires(OCP4, RHCOS4)
     def test_families_do_not_overlap(self):
@@ -503,7 +526,7 @@ class TestConsolidatedObjects(unittest.TestCase):
                                           FixDoc("rhcos4-b", key, b)])
         with self.assertRaises(ValueError) as cm:
             emit.object_template(group)
-        self.assertIn("no longer identical", str(cm.exception))
+        self.assertIn("differ outside the lists", str(cm.exception))
 
 
 class TestUmbrellaOverlays(unittest.TestCase):

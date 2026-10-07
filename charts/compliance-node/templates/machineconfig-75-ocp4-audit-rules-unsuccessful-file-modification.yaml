@@ -169,10 +169,18 @@ spec:
 {{- /* MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification - rule(s): rhcos4-audit_rules_unsuccessful_file_modification_creat, rhcos4-audit_rules_unsuccessful_file_modification_ftruncate, rhcos4-audit_rules_unsuccessful_file_modification_open, rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at, rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at_o_creat, rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at_o_trunc_write, rhcos4-audit_rules_unsuccessful_file_modification_open_o_creat, rhcos4-audit_rules_unsuccessful_file_modification_open_o_trunc_write, rhcos4-audit_rules_unsuccessful_file_modification_openat, rhcos4-audit_rules_unsuccessful_file_modification_openat_o_creat, rhcos4-audit_rules_unsuccessful_file_modification_openat_o_trunc_write, rhcos4-audit_rules_unsuccessful_file_modification_truncate */ -}}
 {{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "rhcos4-audit_rules_unsuccessful_file_modification_creat" "rhcos4-audit_rules_unsuccessful_file_modification_ftruncate" "rhcos4-audit_rules_unsuccessful_file_modification_open" "rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at" "rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at_o_creat" "rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at_o_trunc_write" "rhcos4-audit_rules_unsuccessful_file_modification_open_o_creat" "rhcos4-audit_rules_unsuccessful_file_modification_open_o_trunc_write" "rhcos4-audit_rules_unsuccessful_file_modification_openat" "rhcos4-audit_rules_unsuccessful_file_modification_openat_o_creat" "rhcos4-audit_rules_unsuccessful_file_modification_openat_o_trunc_write" "rhcos4-audit_rules_unsuccessful_file_modification_truncate"))) "true") -}}
 {{- $merged := dict -}}
+{{- $fileAcc := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_creat")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-creat.0" . | fromYaml -}}
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_creat for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification: rhcos4-audit_rules_unsuccessful_file_modification_creat writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
 {{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
@@ -181,12 +189,26 @@ spec:
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_ftruncate for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
 {{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification: rhcos4-audit_rules_unsuccessful_file_modification_ftruncate writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_open")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-open.2" . | fromYaml -}}
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_open for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification: rhcos4-audit_rules_unsuccessful_file_modification_open writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
 {{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
@@ -195,12 +217,26 @@ spec:
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
 {{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification: rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at_o_creat")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-open-by-handle-at-o-creat.4" . | fromYaml -}}
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at_o_creat for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification: rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at_o_creat writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
 {{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
@@ -209,12 +245,26 @@ spec:
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at_o_trunc_write for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
 {{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification: rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at_o_trunc_write writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_open_o_creat")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-open-o-creat.6" . | fromYaml -}}
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_open_o_creat for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification: rhcos4-audit_rules_unsuccessful_file_modification_open_o_creat writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
 {{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
@@ -223,12 +273,26 @@ spec:
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_open_o_trunc_write for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
 {{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification: rhcos4-audit_rules_unsuccessful_file_modification_open_o_trunc_write writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_openat")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-openat.8" . | fromYaml -}}
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_openat for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification: rhcos4-audit_rules_unsuccessful_file_modification_openat writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
 {{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
@@ -237,12 +301,26 @@ spec:
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_openat_o_creat for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
 {{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification: rhcos4-audit_rules_unsuccessful_file_modification_openat_o_creat writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-audit_rules_unsuccessful_file_modification_openat_o_trunc_write")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-audit-rules-unsuccessful-file-modification.rhcos4-audit-rules-unsuccessful-file-modification-openat-o-trunc-write.10" . | fromYaml -}}
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_openat_o_trunc_write for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification: rhcos4-audit_rules_unsuccessful_file_modification_openat_o_trunc_write writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
 {{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
@@ -251,7 +329,21 @@ spec:
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-audit_rules_unsuccessful_file_modification_truncate for MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
 {{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification: rhcos4-audit_rules_unsuccessful_file_modification_truncate writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if $fileAcc -}}
+{{- $files := list -}}
+{{- range $p := (keys $fileAcc | sortAlpha) -}}
+{{- $files = append $files (index $fileAcc $p) -}}
+{{- end -}}
+{{- $merged = mustMergeOverwrite $merged (dict "spec" (dict "config" (dict "storage" (dict "files" $files)))) -}}
 {{- end -}}
 {{- if not $merged -}}
 {{- fail (printf "No remediation applies to MachineConfig/75-ocp4-audit-rules-unsuccessful-file-modification at cluster.ocpVersion %s. Every fix variant of the active rule(s) (rhcos4-audit_rules_unsuccessful_file_modification_creat, rhcos4-audit_rules_unsuccessful_file_modification_ftruncate, rhcos4-audit_rules_unsuccessful_file_modification_open, rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at, rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at_o_creat, rhcos4-audit_rules_unsuccessful_file_modification_open_by_handle_at_o_trunc_write, rhcos4-audit_rules_unsuccessful_file_modification_open_o_creat, rhcos4-audit_rules_unsuccessful_file_modification_open_o_trunc_write, rhcos4-audit_rules_unsuccessful_file_modification_openat, rhcos4-audit_rules_unsuccessful_file_modification_openat_o_creat, rhcos4-audit_rules_unsuccessful_file_modification_openat_o_trunc_write, rhcos4-audit_rules_unsuccessful_file_modification_truncate) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}

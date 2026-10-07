@@ -239,10 +239,18 @@ spec:
 {{- /* MachineConfig/75-ocp4-auditd - rule(s): rhcos4-auditd_data_disk_error_action, rhcos4-auditd_data_disk_error_action_stig, rhcos4-auditd_data_disk_full_action, rhcos4-auditd_data_disk_full_action_stig, rhcos4-auditd_data_retention_admin_space_left_action, rhcos4-auditd_data_retention_flush, rhcos4-auditd_data_retention_max_log_file, rhcos4-auditd_data_retention_max_log_file_action, rhcos4-auditd_data_retention_max_log_file_action_stig, rhcos4-auditd_data_retention_num_logs, rhcos4-auditd_data_retention_space_left, rhcos4-auditd_data_retention_space_left_action, rhcos4-auditd_freq, rhcos4-auditd_local_events, rhcos4-auditd_log_format, rhcos4-auditd_name_format, rhcos4-auditd_write_logs */ -}}
 {{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "rhcos4-auditd_data_disk_error_action" "rhcos4-auditd_data_disk_error_action_stig" "rhcos4-auditd_data_disk_full_action" "rhcos4-auditd_data_disk_full_action_stig" "rhcos4-auditd_data_retention_admin_space_left_action" "rhcos4-auditd_data_retention_flush" "rhcos4-auditd_data_retention_max_log_file" "rhcos4-auditd_data_retention_max_log_file_action" "rhcos4-auditd_data_retention_max_log_file_action_stig" "rhcos4-auditd_data_retention_num_logs" "rhcos4-auditd_data_retention_space_left" "rhcos4-auditd_data_retention_space_left_action" "rhcos4-auditd_freq" "rhcos4-auditd_local_events" "rhcos4-auditd_log_format" "rhcos4-auditd_name_format" "rhcos4-auditd_write_logs"))) "true") -}}
 {{- $merged := dict -}}
+{{- $fileAcc := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_disk_error_action")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-disk-error-action.0" . | fromYaml -}}
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-auditd_data_disk_error_action for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-auditd: rhcos4-auditd_data_disk_error_action writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
 {{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
@@ -251,12 +259,26 @@ spec:
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-auditd_data_disk_error_action_stig for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
 {{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-auditd: rhcos4-auditd_data_disk_error_action_stig writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_disk_full_action")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-disk-full-action.2" . | fromYaml -}}
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-auditd_data_disk_full_action for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-auditd: rhcos4-auditd_data_disk_full_action writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
 {{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
@@ -265,12 +287,26 @@ spec:
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-auditd_data_disk_full_action_stig for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
 {{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-auditd: rhcos4-auditd_data_disk_full_action_stig writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_retention_admin_space_left_action")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-retention-admin-space-left-action.4" . | fromYaml -}}
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-auditd_data_retention_admin_space_left_action for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-auditd: rhcos4-auditd_data_retention_admin_space_left_action writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
 {{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
@@ -279,12 +315,26 @@ spec:
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-auditd_data_retention_flush for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
 {{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-auditd: rhcos4-auditd_data_retention_flush writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_retention_max_log_file")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-retention-max-log-file.6" . | fromYaml -}}
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-auditd_data_retention_max_log_file for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-auditd: rhcos4-auditd_data_retention_max_log_file writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
 {{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
@@ -293,12 +343,26 @@ spec:
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-auditd_data_retention_max_log_file_action for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
 {{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-auditd: rhcos4-auditd_data_retention_max_log_file_action writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_retention_max_log_file_action_stig")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-retention-max-log-file-action-stig.8" . | fromYaml -}}
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-auditd_data_retention_max_log_file_action_stig for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-auditd: rhcos4-auditd_data_retention_max_log_file_action_stig writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
 {{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
@@ -307,12 +371,26 @@ spec:
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-auditd_data_retention_num_logs for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
 {{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-auditd: rhcos4-auditd_data_retention_num_logs writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_data_retention_space_left")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-data-retention-space-left.10" . | fromYaml -}}
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-auditd_data_retention_space_left for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-auditd: rhcos4-auditd_data_retention_space_left writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
 {{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
@@ -321,12 +399,26 @@ spec:
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-auditd_data_retention_space_left_action for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
 {{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-auditd: rhcos4-auditd_data_retention_space_left_action writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_freq")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-freq.12" . | fromYaml -}}
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-auditd_freq for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-auditd: rhcos4-auditd_freq writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
 {{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
@@ -335,12 +427,26 @@ spec:
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-auditd_local_events for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
 {{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-auditd: rhcos4-auditd_local_events writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_log_format")) "true" -}}
 {{- $frag := include "cr.frag.machineconfig-75-ocp4-auditd.rhcos4-auditd-log-format.14" . | fromYaml -}}
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-auditd_log_format for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-auditd: rhcos4-auditd_log_format writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
 {{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
@@ -349,6 +455,13 @@ spec:
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-auditd_name_format for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
 {{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-auditd: rhcos4-auditd_name_format writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "rhcos4-auditd_write_logs")) "true" -}}
@@ -356,7 +469,21 @@ spec:
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering rhcos4-auditd_write_logs for MachineConfig/75-ocp4-auditd produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
 {{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in MachineConfig/75-ocp4-auditd: rhcos4-auditd_write_logs writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if $fileAcc -}}
+{{- $files := list -}}
+{{- range $p := (keys $fileAcc | sortAlpha) -}}
+{{- $files = append $files (index $fileAcc $p) -}}
+{{- end -}}
+{{- $merged = mustMergeOverwrite $merged (dict "spec" (dict "config" (dict "storage" (dict "files" $files)))) -}}
 {{- end -}}
 {{- if not $merged -}}
 {{- fail (printf "No remediation applies to MachineConfig/75-ocp4-auditd at cluster.ocpVersion %s. Every fix variant of the active rule(s) (rhcos4-auditd_data_disk_error_action, rhcos4-auditd_data_disk_error_action_stig, rhcos4-auditd_data_disk_full_action, rhcos4-auditd_data_disk_full_action_stig, rhcos4-auditd_data_retention_admin_space_left_action, rhcos4-auditd_data_retention_flush, rhcos4-auditd_data_retention_max_log_file, rhcos4-auditd_data_retention_max_log_file_action, rhcos4-auditd_data_retention_max_log_file_action_stig, rhcos4-auditd_data_retention_num_logs, rhcos4-auditd_data_retention_space_left, rhcos4-auditd_data_retention_space_left_action, rhcos4-auditd_freq, rhcos4-auditd_local_events, rhcos4-auditd_log_format, rhcos4-auditd_name_format, rhcos4-auditd_write_logs) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
