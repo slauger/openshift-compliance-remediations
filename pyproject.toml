@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openshift-compliance-remediations"
-version = "0.3.0"
+version = "0.4.0"
 description = "Generate Helm charts of OpenShift compliance remediations from ComplianceAsCode SCAP datastreams"
 readme = "README.md"
 requires-python = ">=3.9"
