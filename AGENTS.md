@@ -133,6 +133,17 @@ That asymmetry drives three decisions, none of which `helm template` could have 
 
 Prose in `README.md` carries only what cannot be derived: that FIPS is install-time, that `sshd_limit_user_access` needs a list only the operator has, and that a `systemd.units` entry with `enabled: true` and no `contents` is applied by Ignition at provisioning and ignored by the MCO on a day-2 update. Counts quoted in README prose are allowed to go stale on a content bump - `make generate` does not touch it - the same accepted trade-off as "Currently five" in the opt-in section.
 
+## extraManifests, and the line it must not cross
+
+`extraManifests` renders objects the user supplies. It exists because some controls have no upstream remediation at all - `rhcos4-sshd_limit_user_access` is the case that prompted it - and the alternative was telling people to hand-roll MachineConfigs, losing the review-before-apply value the project exists for.
+
+**It is a capability, not content.** The generator still authors no hardening: everything in `templates/` besides this one file comes from the pinned ComplianceAsCode release, and that claim is the project's whole provenance story. Do not add a rule with a fix we wrote; if a control needs one, it belongs here, in the user's values.
+
+- **A map, not a list.** Helm replaces lists and merges maps, so with a list an overlay could not switch one entry off without restating every other - the same `mustMergeOverwrite` property that forces whole-list comparison in `_leaf_paths`. Each entry takes an optional `enabled` (default true), which is what makes these togglable the way `rules` is for upstream rules.
+- **`rules` stays closed.** Local names must not go in there: its `additionalProperties: False` is what turns `profiles.ocp4-ciss` into a loud failure instead of a silent no-op, and opening it would cost that for all 300+ real rule names.
+- **Validated in the template, not the schema.** A free-form object cannot be constrained usefully in JSON Schema, so the template fails with the entry's key when `apiVersion`, `kind` or `metadata.name` is missing. The schema only pins the map shape.
+- **Rendered verbatim, labels merged.** They get the recommended set plus `app.kubernetes.io/component: local` so a cluster query separates them from upstream-derived objects, and the user's own labels survive. Unlike the chart's own node objects they are *not* expanded per `node.roles` - the pool role label is the user's to set, because an arbitrary object has no role semantics we could infer.
+
 ## Testing notes
 
 Which layer covers what:

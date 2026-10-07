@@ -37,6 +37,9 @@
     "complianceNamespace": {
       "type": "string"
     },
+    "extraManifests": {
+      "type": "object"
+    },
     "global": {
       "type": "object"
     },

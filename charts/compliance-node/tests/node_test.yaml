@@ -113,3 +113,89 @@ tests:
     asserts:
       - notExists:
           path: metadata.annotations["helm.sh/resource-policy"]
+
+  - it: renders an object the user added, with the chart's labels
+    # extraManifests is the one place for content upstream has no remediation
+    # for - rhcos4-sshd_limit_user_access being the case that prompted it.
+    # component: local marks it as not upstream-derived.
+    template: templates/extra-manifests.yaml
+    release:
+      name: hardening
+    set:
+      node:
+        enabled: true
+      extraManifests:
+        sshd-allow-users:
+          apiVersion: machineconfiguration.openshift.io/v1
+          kind: MachineConfig
+          metadata:
+            name: 75-local-sshd-allow-users
+            labels:
+              machineconfiguration.openshift.io/role: worker
+          spec:
+            config:
+              ignition:
+                version: 3.1.0
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: metadata.name
+          value: 75-local-sshd-allow-users
+      - equal:
+          path: metadata.labels["app.kubernetes.io/part-of"]
+          value: compliance-hardening
+      - equal:
+          path: metadata.labels["app.kubernetes.io/component"]
+          value: local
+      - equal:
+          path: metadata.labels["app.kubernetes.io/instance"]
+          value: hardening
+      # The user's own labels survive next to ours.
+      - equal:
+          path: metadata.labels["machineconfiguration.openshift.io/role"]
+          value: worker
+      # `enabled` is a control field, not part of the object.
+      - notExists:
+          path: enabled
+
+  - it: lets an overlay switch one entry off without restating it
+    # A map, not a list, precisely for this: Helm replaces lists and merges
+    # maps, so with a list an overlay would have to repeat every other entry.
+    template: templates/extra-manifests.yaml
+    set:
+      node:
+        enabled: true
+      extraManifests:
+        sshd-allow-users:
+          enabled: false
+          apiVersion: machineconfiguration.openshift.io/v1
+          kind: MachineConfig
+          metadata:
+            name: 75-local-sshd-allow-users
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders nothing by default
+    template: templates/extra-manifests.yaml
+    set:
+      node:
+        enabled: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: refuses an entry without a kind instead of emitting a headless object
+    template: templates/extra-manifests.yaml
+    set:
+      node:
+        enabled: true
+      extraManifests:
+        broken:
+          apiVersion: v1
+          metadata:
+            name: x
+    asserts:
+      - failedTemplate:
+          errorPattern: "extraManifests.broken has no kind"
