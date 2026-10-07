@@ -1,6 +1,6 @@
 apiVersion: v2
 name: compliance-node
-description: OpenShift node compliance remediations (MachineConfig/KubeletConfig; reboots).
+description: "OpenShift node compliance remediations (MachineConfig/KubeletConfig; reboots)."
 type: application
 version: 0.4.0
 appVersion: "0.1.82"

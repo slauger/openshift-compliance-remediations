@@ -1,7 +1,8 @@
 # Umbrella values. Configure each subchart under its own prefix (no global).
 # Subcharts are also installable standalone.
 
-# -- Platform remediations (safe cluster config, no reboot).
+# -- Platform remediations (cluster config objects; no node reboots, but the
+# audit-profile and encryption rules redeploy the kube-apiserver).
 compliance-platform:
   # -- Facts about the target cluster. Rules that upstream marks as not
   # applicable to this cluster are refused rather than silently shipped.

@@ -8,19 +8,104 @@
 
 Generate Helm charts of OpenShift compliance **remediations** from the upstream [ComplianceAsCode/content](https://github.com/ComplianceAsCode/content) SCAP datastreams. This is the exact same content the OpenShift Compliance Operator materializes at runtime as `ComplianceRemediation` objects, extracted statically instead.
 
-**New to this?** These charts harden your OpenShift cluster against established security benchmarks: CIS, BSI (German Federal Office for Information Security), DISA STIG, PCI-DSS, NIST 800-53 (moderate/high), NERC CIP and ACSC Essential Eight. You pick a profile, set it to `true` in `values.yaml`, and `helm install` applies the corresponding hardening: TLS policies, audit logging, encryption at rest, kubelet settings, OS-level controls and more, over 300 individually togglable rules. Every change is a plain Kubernetes manifest you can read, diff and version in Git *before* it touches the cluster; nothing is applied behind your back.
+**New to this?** These charts harden your OpenShift cluster against established security benchmarks: CIS, BSI (German Federal Office for Information Security), DISA STIG, PCI-DSS, NIST 800-53 (moderate/high), NERC CIP, ANSSI BP-028 and ACSC Essential Eight. You pick a profile, set it to `true` in `values.yaml`, and the chart renders the corresponding hardening: TLS policies, audit logging, encryption at rest, kubelet settings, OS-level controls and more, 281 individually togglable rules. The node chart you `helm install`; the platform chart you render and apply, because its objects already exist and belong to cluster operators - see [Quick start](#quick-start). How much of a profile that actually covers varies a lot - see [What a profile still leaves open](#what-a-profile-still-leaves-open). Every change is a plain Kubernetes manifest you can read, diff and version in Git *before* it touches the cluster; nothing is applied behind your back.
 
 ## Quick start
 
+A benchmark on OpenShift is **two or three profiles**, not one, so apply them together. For CIS that is two - the platform half and the node half:
+
 ```bash
+# node half - installs normally, reboots the pool
+helm install compliance-node oci://ghcr.io/slauger/charts/compliance-node \
+  --namespace openshift-compliance --create-namespace \
+  --set node.enabled=true --set 'node.roles={worker}' \
+  --set profiles.ocp4-cis-node=true
+
+# platform half - applied, not installed (see below)
 helm template compliance-platform oci://ghcr.io/slauger/charts/compliance-platform \
   --set profiles.ocp4-cis=true | oc apply --server-side --force-conflicts -f -
 ```
 
-Applies all CIS platform remediations (safe, no reboots). Drop the pipe to preview, or diff it in ArgoCD.
+That is **12 rules**, and that is all CIS has to offer here: it ships no OS-level profile, and upstream has no Kubernetes remediation for most of what it checks. For actual OS hardening add the `rhcos4` profile of a benchmark that has one - this is where the bulk is:
 
-Note it is `helm template | oc apply`, not `helm install`: these objects are **pre-existing cluster singletons** owned by cluster operators, which Helm refuses to adopt and must never delete. The node chart is the opposite - its objects are its own, so there `helm install` is the right command. [Install](#install) explains both, and why.
+```bash
+helm upgrade compliance-node oci://ghcr.io/slauger/charts/compliance-node \
+  --reuse-values --set profiles.rhcos4-moderate=true     # +205 rules
+```
 
+Swap `rhcos4-moderate` for `rhcos4-stig`, `rhcos4-high`, `rhcos4-bsi` or `rhcos4-e8` as needed, and add `master` to `node.roles` when you are ready to roll the control plane. Run `helm template` with the same flags to see every manifest first, or diff it in ArgoCD.
+
+**Two things that are not obvious:**
+
+- The platform chart is `helm template | oc apply`, never `helm install`. Its objects are **pre-existing cluster singletons** owned by cluster operators, which Helm refuses to adopt and must never delete. The same applies to the `compliance-hardening` umbrella, because it contains them - `helm install` fails there too. [Install](#install) explains both paths.
+- The platform chart reboots nothing, but it is not free: with `ocp4-cis` it sets `spec.audit.profile` and `spec.encryption.type` on `APIServer/cluster`, each of which redeploys the kube-apiserver one static-pod revision at a time, and `encryption.type` starts an etcd secret migration. On a single-control-plane cluster the API is briefly unavailable - measured twice on OCP 4.22.15: **208s and 185s**. Plan it like any other control-plane change.
+
+### GitOps is the point
+
+The commands above are the quick way to try this. In practice these charts exist so your hardening posture is **whatever Git says** - that is the whole argument in [Why](#why), and an imperative `helm install` only gets you half of it. An Argo CD `Application` per chart:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: compliance-node
+  namespace: openshift-gitops
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openshift-compliance
+  source:
+    repoURL: ghcr.io/slauger/charts
+    chart: compliance-node
+    targetRevision: 0.4.0
+    helm:
+      valuesObject:
+        node:
+          enabled: true
+          roles: [worker]
+        profiles:
+          ocp4-cis-node: true
+          rhcos4-moderate: true
+  syncPolicy:
+    syncOptions:
+      - ServerSideApply=true
+```
+
+Three things to get right, and the first one is not optional:
+
+- **`ServerSideApply=true`.** Without it Argo CD applies client-side, which has no field-manager conflict detection - it would silently take `.spec.audit.profile` away from the cluster-version-operator and `.spec.groups` from the kube-apiserver-operator. The platform chart needs it; see [Install](#install) for what those conflicts look like and why one of them is safe to force.
+- **Pin `targetRevision`.** A floating chart version means a content bump reaches the cluster without anyone reading the diff, which is the one thing this project is built to prevent. Pin it and let Renovate open the bump as a PR.
+- **Platform objects are protected from pruning**, with `argocd.argoproj.io/sync-options: Prune=false,Delete=false` alongside the Helm `resource-policy` - each tool ignores the other's annotation. Deleting the platform `Application` therefore leaves `IngressController/default` and friends in place, as it must. Node objects carry neither: pruning a `MachineConfig` is how you roll the hardening back.
+
+One wrinkle: Argo CD's default resource tracking uses the `app.kubernetes.io/instance` label, which these charts also set to the Helm release name. Argo CD wins and writes its `Application` name there instead. Nothing breaks - two Applications still distinguish their objects, which is what the [mixed-architecture pattern](#applicability) needs - but if you rely on that label meaning the Helm release, switch Argo CD to annotation-based tracking.
+
+## Profiles
+
+Profile names are upstream's, unchanged, so scan results map 1:1. Each benchmark is split by what it configures:
+
+| | what it sets | chart |
+|---|---|---|
+| `ocp4-<benchmark>` | cluster config objects (APIServer, OAuth, IngressController, ...) | platform |
+| `ocp4-<benchmark>-node` | node-level OpenShift settings, mostly kubelet | node |
+| `rhcos4-<benchmark>` | the operating system - audit rules, sysctls, sshd, auditd, chrony | node |
+
+48 profiles in total. What each applies, with the rules it selects that nothing can remediate, is in [`RULES.md`](RULES.md#coverage-per-profile); the per-rule matrix is in the same file under [Rules](RULES.md#rules).
+
+| Benchmark | platform | node | OS | rules applied |
+|---|---|---|---|---|
+| CIS | `ocp4-cis` | `ocp4-cis-node` | *none* | 12 |
+| NIST 800-53 moderate | `ocp4-moderate` | `ocp4-moderate-node` | `rhcos4-moderate` | 224 |
+| NIST 800-53 high | `ocp4-high` | `ocp4-high-node` | `rhcos4-high` | 224 |
+| DISA STIG | `ocp4-stig` | `ocp4-stig-node` | `rhcos4-stig` | 109 |
+| BSI | `ocp4-bsi` | `ocp4-bsi-node` | `rhcos4-bsi` | 73 |
+| ACSC Essential Eight | `ocp4-e8` | - | `rhcos4-e8` | 46 |
+| NERC CIP | `ocp4-nerc-cip` | `ocp4-nerc-cip-node` | `rhcos4-nerc-cip` | 224 |
+| ANSSI BP-028 | - | - | `rhcos4-anssi_bp28_{minimal,intermediary,enhanced,high}` | up to 75 |
+
+Revisions exist alongside most of these (`ocp4-cis-1-9`, `ocp4-stig-v2r3`, `rhcos4-moderate-rev-4`, ...); `helm show values` lists every key.
+
+## Why
 ## Why
 
 The Compliance Operator gives you two ways to apply remediations, and both have gaps:
@@ -95,7 +180,7 @@ descriptive but functional: it is how the MCO associates the object with a pool.
 
 Two standalone charts plus a thin umbrella wrapper:
 
-- `charts/compliance-platform/`: ocp4 platform config objects (APIServer, OAuth, IngressController, Project, Template, PrometheusRule). Safe, non-disruptive; no reboot.
+- `charts/compliance-platform/`: ocp4 platform config objects (APIServer, OAuth, IngressController, Project, Template, PrometheusRule). No node reboots - but the audit-profile and encryption rules redeploy the kube-apiserver, so the API is briefly unavailable on a single-control-plane cluster.
 - `charts/compliance-node/`: `MachineConfig` / `KubeletConfig` remediations (ocp4 node + all rhcos4). Gated behind `node.enabled=false` because applying them triggers **MachineConfigPool rollouts (node reboots)**. Emitted per node role.
 - `charts/compliance-hardening/`: umbrella depending on both subcharts; values are prefixed per subchart (no `global`). Subcharts remain installable standalone.
 
@@ -155,14 +240,24 @@ The bar for this list is deliberately high - only rules whose failure mode is lo
 
 Upstream solves per-setting sshd configuration with drop-ins from OpenShift 4.13 - one small file per setting in `/etc/ssh/sshd_config.d/`, instead of rewriting the whole `sshd_config` as the pre-4.13 variants do. The 31 rules that do this now share **one** `MachineConfig` per pool (`75-ocp4-sshd-<role>`) instead of one each: `storage.files` is merged by path at render time, so each rule contributes its drop-in and nothing is lost. That also moves the `enable`/`disable` conflict into the object, where the ordinary conflict guard refuses it.
 
-`rhcos4-disable_host_auth` stays a separate object on purpose. Its pre-4.13 payload differs from the other 31, so folding it in would make every render below 4.13 fail - and separate, it remains the one genuine cross-object sshd conflict:
+Six drop-ins are written by two rules each - the `enable` and `disable` variant of one setting. Those are now an ordinary in-object conflict, named down to the file:
 
 ```
-75-ocp4-sshd-disable-x11-forwarding   X11Forwarding no
-75-ocp4-sshd-enable-x11-forwarding    X11Forwarding yes
+$ helm template ... --set rules.rhcos4-sshd_disable_x11_forwarding=true \
+                    --set rules.rhcos4-sshd_enable_x11_forwarding=true
+Error: Conflicting compliance rules active for MachineConfig/75-ocp4-sshd at
+spec.config.storage.files[/etc/ssh/sshd_config.d/00-complianceascode-X11Forwarding.conf]
 ```
 
-Two MachineConfigs, one file. Nothing on the cluster rejects this - the MachineConfig Operator merges alphanumerically and the later one silently wins, which for three of the six affected settings is the *less* hardened value. So the chart refuses instead. Both are marked ⚠️ alt in [`RULES.md`](RULES.md).
+Nothing on the cluster would reject two MachineConfigs writing one file - the MachineConfig Operator merges alphanumerically and the later one silently wins, which for three of the six affected settings is the *less* hardened value. So the chart refuses instead. All twelve rules are marked ⚠️ alt in [`RULES.md`](RULES.md).
+
+`rhcos4-disable_host_auth` stays a **separate** object on purpose. Its pre-4.13 payload differs from the other 31, so folding it in would make every render below 4.13 fail. Separate, it is the one genuine *cross-object* conflict left, and only below 4.13 where the whole-file variants render:
+
+```
+$ helm template ... --set cluster.ocpVersion=4.12 \
+                    --set rules.rhcos4-disable_host_auth=true --set rules.rhcos4-sshd_set_keepalive=true
+Error: Conflicting compliance rules active: rhcos4-disable_host_auth / rhcos4-sshd_... (31 rules)
+```
 
 **Upgrading from 0.3.x leaves orphans.** The 31 per-rule objects (`75-ocp4-sshd-<rule>-<role>`) become two (`75-ocp4-sshd-<role>`). `helm upgrade` prunes the old ones for you; `helm template | oc apply` does not, so delete them yourself once the new object is in place:
 
@@ -207,11 +302,13 @@ cluster:
 For a non-default architecture the generator ships a ready-made overlay listing exactly the rules that architecture cannot use:
 
 ```sh
-# standalone subchart
+# node subchart - installs
 helm install compliance ./charts/compliance-node -f charts/compliance-node/values-aarch64.yaml
 
-# umbrella - its own overlay, with the values nested per subchart
-helm install compliance ./charts/compliance-hardening -f charts/compliance-hardening/values-aarch64.yaml
+# umbrella - its own overlay, with the values nested per subchart. Rendered and
+# applied, not installed: it contains the platform singletons.
+helm template compliance ./charts/compliance-hardening \
+  -f charts/compliance-hardening/values-aarch64.yaml | oc apply --server-side --force-conflicts -f -
 ```
 
 On aarch64 that is 21 rules (audit rules for syscalls ARM64 does not have), on s390x 5. Without the overlay the render aborts and tells you which rules and why.
@@ -427,7 +524,18 @@ XCCDF variables (e.g. TLS versions, token lifetimes, kubelet eviction thresholds
 
 ## Updating content
 
-Bump `config/content.yaml` (`version` + `sha512`), run `make generate`, review the Git diff. It shows exactly which rules/fixes changed between content releases.
+Usually you do not: Renovate tracks the pinned [ComplianceAsCode/content](https://github.com/ComplianceAsCode/content) release and opens the bump as a PR, deliberately without automerge, because the diff of `charts/` and `RULES.md` *is* the review - it shows exactly which rules and fixes changed.
+
+By hand:
+
+```sh
+# edit config/content.yaml: version
+make update-sha   # refresh the sha512 for the new version
+make generate     # regenerate charts + RULES.md
+make verify
+```
+
+Do not compute the checksum yourself - `make update-sha` fetches the release and writes it, and the pinned sha512 is verified on every generate, so a tampered or unexpected upstream artifact fails the build rather than reaching a chart.
 
 ## License
 

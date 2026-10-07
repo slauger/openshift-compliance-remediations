@@ -93,9 +93,9 @@ The collision detector works inside one object. Across objects the MCO decides: 
 `cross_object_file_conflicts()` finds paths two different objects write differently and emits a `fail` guard per path into the generated `preflight.yaml`. Two things it gets right and a naive version would not:
 
 - **Conflicts are between content groups, not rules.** 31 rules write the same `/etc/ssh/sshd_config` and are fine together; only the one that differs makes it a conflict.
-- **Each guard carries its version window.** The drop-ins exist from 4.13, the whole-file variants only below it. Without `semverCompare` a guard would fire where the fragments do not even render - and break every profile.
+- **Each guard carries its version window.** Without `semverCompare` a guard would fire where the fragments do not even render - and break every profile. The one remaining cross-object conflict is whole-file-only, so its guard is gated below 4.13.
 
-`RULES.md` marks only the genuinely pairwise cases ⚠️ alt; marking all 32 sshd rules would be noise, so the legend covers that case in prose.
+Since the sshd consolidation there is exactly **one** cross-object conflict left, `/etc/ssh/sshd_config` between `rhcos4-disable_host_auth` and the other 31. The six drop-in pairs that used to be the point of this detector now share an object and are refused by `group.conflicts()` instead; `cross_object_file_conflicts` skips same-object paths so they are not reported twice. `RULES.md` marks those twelve rules ⚠️ alt via `_alternatives_of`, and deliberately does not mark the 31 identical whole-file writers - that would be noise, and the legend covers it in prose.
 
 ## Rule dependencies
 
@@ -133,7 +133,8 @@ Checked against a live OKD 4.22 cluster. Five of the six platform objects alread
 That asymmetry drives three decisions, none of which `helm template` could have surfaced - every offline test in this repo renders manifests and never talks to an API server:
 
 - **The platform chart is applied, not installed.** `helm install` refuses pre-existing objects (correctly), and `--take-ownership` lifts only Helm's own check: Helm 4 applies server-side and exposes no `--force-conflicts`, so the API server still refuses fields another manager owns. The documented path is `helm template | oc apply --server-side --force-conflicts`. Plain client-side `oc apply -f` must not be recommended: it has no conflict detection and silently takes fields from their owner.
-- **Platform objects carry `helm.sh/resource-policy: keep`**, emitted in the non-node branch of `object_template()`. Without it a `helm uninstall` deletes cluster configuration - `IngressController/default` would take the router with it, and dropping `Project/cluster` while its `Template/co-project-request` survives breaks project creation.
+- **Platform objects carry both keep annotations** - `helm.sh/resource-policy: keep` and `argocd.argoproj.io/sync-options: Prune=false,Delete=false`. Each tool ignores the other's, and the README recommends GitOps as the primary path, so the Helm one alone left the protection off exactly where it is most needed: deleting an Argo CD Application with pruning on would delete `IngressController/default`. `check_resource_policy` asserts both, per chart, across every rendered document.
+- **The Helm annotation on its own was the original form**, emitted in the non-node branch of `object_template()`. Without it a `helm uninstall` deletes cluster configuration - `IngressController/default` would take the router with it, and dropping `Project/cluster` while its `Template/co-project-request` survives breaks project creation.
 - **Node objects deliberately do not carry it.** A `MachineConfig` is ours, and uninstalling has to roll the hardening back.
 
 ## Coverage, and what counts as open
