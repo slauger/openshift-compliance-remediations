@@ -12,30 +12,60 @@ Generate Helm charts of OpenShift compliance **remediations** from the upstream 
 
 ## Quick start
 
-Most of the hardening is in the **node** chart, so start there. It installs normally, and it reboots nodes pool by pool:
+A benchmark on OpenShift is **two or three profiles**, not one, so apply them together. CIS, complete:
 
 ```bash
+# node half - installs normally, reboots the pool
 helm install compliance-node oci://ghcr.io/slauger/charts/compliance-node \
   --namespace openshift-compliance --create-namespace \
   --set node.enabled=true --set 'node.roles={worker}' \
-  --set profiles.rhcos4-moderate=true
-```
+  --set profiles.ocp4-cis-node=true
 
-That applies 205 of the 242 rules the profile selects - audit rules, sysctls, sshd, auditd, chrony and the rest. Run `helm template` first (same flags, no `install`) to see every manifest, or diff it in ArgoCD. Add `master` to `node.roles` when you are ready to roll the control plane.
-
-The **platform** chart is the smaller half and is applied, not installed:
-
-```bash
+# platform half - applied, not installed (see below)
 helm template compliance-platform oci://ghcr.io/slauger/charts/compliance-platform \
   --set profiles.ocp4-cis=true | oc apply --server-side --force-conflicts -f -
 ```
 
-It changes **no** node configuration and reboots nothing - but it is not free either. With `ocp4-cis` it sets `spec.audit.profile` and `spec.encryption.type` on `APIServer/cluster`, and each of those redeploys the kube-apiserver one static-pod revision at a time; `encryption.type` additionally starts an etcd secret migration. On a single-control-plane cluster that means the API is briefly unavailable - measured twice on OCP 4.22.15: **208s and 185s**. Plan it like any other control-plane change.
+That is **12 rules**, and that is all CIS has to offer here: it ships no OS-level profile, and upstream has no Kubernetes remediation for most of what it checks. For actual OS hardening add the `rhcos4` profile of a benchmark that has one - this is where the bulk is:
 
-`helm template | oc apply` rather than `helm install` is deliberate for this chart: its objects are **pre-existing cluster singletons** owned by cluster operators, which Helm refuses to adopt and must never delete. [Install](#install) explains both paths and why they differ.
+```bash
+helm upgrade compliance-node oci://ghcr.io/slauger/charts/compliance-node \
+  --reuse-values --set profiles.rhcos4-moderate=true     # +205 rules
+```
 
-For how much of a given profile these charts can actually apply - `ocp4-cis` alone is 4 rules of 96, because upstream ships no remediation for the other 92 - see [What a profile still leaves open](#what-a-profile-still-leaves-open).
+Swap `rhcos4-moderate` for `rhcos4-stig`, `rhcos4-high`, `rhcos4-bsi` or `rhcos4-e8` as needed, and add `master` to `node.roles` when you are ready to roll the control plane. Run `helm template` with the same flags to see every manifest first, or diff it in ArgoCD.
 
+**Two things that are not obvious:**
+
+- The platform chart is `helm template | oc apply`, never `helm install`. Its objects are **pre-existing cluster singletons** owned by cluster operators, which Helm refuses to adopt and must never delete. The same applies to the `compliance-hardening` umbrella, because it contains them - `helm install` fails there too. [Install](#install) explains both paths.
+- The platform chart reboots nothing, but it is not free: with `ocp4-cis` it sets `spec.audit.profile` and `spec.encryption.type` on `APIServer/cluster`, each of which redeploys the kube-apiserver one static-pod revision at a time, and `encryption.type` starts an etcd secret migration. On a single-control-plane cluster the API is briefly unavailable - measured twice on OCP 4.22.15: **208s and 185s**. Plan it like any other control-plane change.
+
+## Profiles
+
+Profile names are upstream's, unchanged, so scan results map 1:1. Each benchmark is split by what it configures:
+
+| | what it sets | chart |
+|---|---|---|
+| `ocp4-<benchmark>` | cluster config objects (APIServer, OAuth, IngressController, ...) | platform |
+| `ocp4-<benchmark>-node` | node-level OpenShift settings, mostly kubelet | node |
+| `rhcos4-<benchmark>` | the operating system - audit rules, sysctls, sshd, auditd, chrony | node |
+
+48 profiles in total. What each applies, with the rules it selects that nothing can remediate, is in [`RULES.md`](RULES.md#coverage-per-profile); the per-rule matrix is in the same file under [Rules](RULES.md#rules).
+
+| Benchmark | platform | node | OS | rules applied |
+|---|---|---|---|---|
+| CIS | `ocp4-cis` | `ocp4-cis-node` | *none* | 12 |
+| NIST 800-53 moderate | `ocp4-moderate` | `ocp4-moderate-node` | `rhcos4-moderate` | 224 |
+| NIST 800-53 high | `ocp4-high` | `ocp4-high-node` | `rhcos4-high` | 224 |
+| DISA STIG | `ocp4-stig` | `ocp4-stig-node` | `rhcos4-stig` | 109 |
+| BSI | `ocp4-bsi` | `ocp4-bsi-node` | `rhcos4-bsi` | 73 |
+| ACSC Essential Eight | `ocp4-e8` | - | `rhcos4-e8` | 46 |
+| NERC CIP | `ocp4-nerc-cip` | `ocp4-nerc-cip-node` | `rhcos4-nerc-cip` | 224 |
+| ANSSI BP-028 | - | - | `rhcos4-anssi_bp28_{minimal,intermediary,enhanced,high}` | up to 75 |
+
+Revisions exist alongside most of these (`ocp4-cis-1-9`, `ocp4-stig-v2r3`, `rhcos4-moderate-rev-4`, ...); `helm show values` lists every key.
+
+## Why
 ## Why
 
 The Compliance Operator gives you two ways to apply remediations, and both have gaps:
