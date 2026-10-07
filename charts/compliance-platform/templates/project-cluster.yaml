@@ -19,10 +19,18 @@ spec:
 {{- /* Project/cluster - rule(s): ocp4-project_config_and_template_resource_quota, ocp4-project_config_has_template, ocp4-project_config_and_template_network_policy */ -}}
 {{- if eq (include "cr.anyActive" (dict "root" . "rules" (list "ocp4-project_config_and_template_resource_quota" "ocp4-project_config_has_template" "ocp4-project_config_and_template_network_policy"))) "true" -}}
 {{- $merged := dict -}}
+{{- $fileAcc := dict -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-project_config_and_template_resource_quota")) "true" -}}
 {{- $frag := include "cr.frag.project-cluster.ocp4-project-config-and-template-resource-quota.0" . | fromYaml -}}
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering ocp4-project_config_and_template_resource_quota for Project/cluster produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
+{{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in Project/cluster: ocp4-project_config_and_template_resource_quota writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
 {{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
@@ -31,6 +39,13 @@ spec:
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering ocp4-project_config_has_template for Project/cluster produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
 {{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in Project/cluster: ocp4-project_config_has_template writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
 {{- end -}}
 {{- if eq (include "cr.ruleActive" (dict "root" . "rule" "ocp4-project_config_and_template_network_policy")) "true" -}}
@@ -38,7 +53,21 @@ spec:
 {{- if hasKey $frag "Error" -}}
 {{- fail (printf "Rendering ocp4-project_config_and_template_network_policy for Project/cluster produced invalid YAML: %s. Check the variables it interpolates." $frag.Error) -}}
 {{- end -}}
+{{- range $f := (dig "spec" "config" "storage" "files" (list) $frag) -}}
+{{- $prev := index $fileAcc ($f.path | toString) -}}
+{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}
+{{- fail (printf "Conflicting content for %s in Project/cluster: ocp4-project_config_and_template_network_policy writes it differently than another active rule does. Both cannot apply - enable only one, or pick the variant that matches your cluster.ocpVersion." $f.path) -}}
+{{- end -}}
+{{- $_ := set $fileAcc ($f.path | toString) $f -}}
+{{- end -}}
 {{- $merged = mustMergeOverwrite $merged $frag -}}
+{{- end -}}
+{{- if $fileAcc -}}
+{{- $files := list -}}
+{{- range $p := (keys $fileAcc | sortAlpha) -}}
+{{- $files = append $files (index $fileAcc $p) -}}
+{{- end -}}
+{{- $merged = mustMergeOverwrite $merged (dict "spec" (dict "config" (dict "storage" (dict "files" $files)))) -}}
 {{- end -}}
 {{- if not $merged -}}
 {{- fail (printf "No remediation applies to Project/cluster at cluster.ocpVersion %s. Every fix variant of the active rule(s) (ocp4-project_config_and_template_resource_quota, ocp4-project_config_has_template, ocp4-project_config_and_template_network_policy) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}

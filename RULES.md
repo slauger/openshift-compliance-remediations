@@ -349,37 +349,37 @@ Rules a profile selects, that carry a remediation, and that still leave their co
 | `rhcos4-service_systemd-coredump_disabled` | `MachineConfig/75-ocp4-service-systemd-coredump-disabled-<role>` | medium | node | rhcos4 | - | rhcos4-high, rhcos4-high-rev-4, rhcos4-moderate, rhcos4-moderate-rev-4, rhcos4-nerc-cip |
 | `rhcos4-service_usbguard_enabled` | `MachineConfig/75-ocp4-service-usbguard-enabled-<role>` | medium | node | rhcos4 | not s390x; requires `rhcos4-package_usbguard_installed` | rhcos4-high, rhcos4-high-rev-4, rhcos4-moderate, rhcos4-moderate-rev-4, rhcos4-nerc-cip, rhcos4-stig, rhcos4-stig-v2r2, rhcos4-stig-v2r3 |
 | `rhcos4-service_vsftpd_disabled` | `MachineConfig/75-ocp4-service-vsftpd-disabled-<role>` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_allow_only_protocol2` ⛔ n/a | `MachineConfig/75-ocp4-sshd-allow-only-protocol2-<role>` | high | node | rhcos4 | never applicable (RHCOS ships OpenSSH 8 or newer) |  |
-| `rhcos4-sshd_disable_compression` | `MachineConfig/75-ocp4-sshd-disable-compression-<role>` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_disable_empty_passwords` | `MachineConfig/75-ocp4-sshd-disable-empty-passwords-<role>` | high | node | rhcos4 | - | rhcos4-bsi, rhcos4-bsi-2022, rhcos4-e8 |
-| `rhcos4-sshd_disable_gssapi_auth` ⚠️ alt | `MachineConfig/75-ocp4-sshd-disable-gssapi-auth-<role>` | medium | node | rhcos4 | - | rhcos4-e8 |
-| `rhcos4-sshd_disable_kerb_auth` | `MachineConfig/75-ocp4-sshd-disable-kerb-auth-<role>` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_disable_pubkey_auth` ⚠️ alt | `MachineConfig/75-ocp4-sshd-disable-pubkey-auth-<role>` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_disable_rhosts` | `MachineConfig/75-ocp4-sshd-disable-rhosts-<role>` | medium | node | rhcos4 | - | rhcos4-e8, rhcos4-high, rhcos4-high-rev-4, rhcos4-moderate, rhcos4-moderate-rev-4, rhcos4-nerc-cip |
-| `rhcos4-sshd_disable_rhosts_rsa` | `MachineConfig/75-ocp4-sshd-disable-rhosts-rsa-<role>` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_disable_root_login` ⚠️ alt | `MachineConfig/75-ocp4-sshd-disable-root-login-<role>` | medium | node | rhcos4 | - | rhcos4-anssi_bp28_enhanced, rhcos4-anssi_bp28_high, rhcos4-anssi_bp28_intermediary, rhcos4-bsi, rhcos4-bsi-2022, rhcos4-e8, rhcos4-stig, rhcos4-stig-v2r2, rhcos4-stig-v2r3 |
-| `rhcos4-sshd_disable_root_password_login` ⚠️ alt | `MachineConfig/75-ocp4-sshd-disable-root-password-login-<role>` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_disable_tcp_forwarding` | `MachineConfig/75-ocp4-sshd-disable-tcp-forwarding-<role>` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_disable_user_known_hosts` | `MachineConfig/75-ocp4-sshd-disable-user-known-hosts-<role>` | medium | node | rhcos4 | - | rhcos4-e8 |
-| `rhcos4-sshd_disable_x11_forwarding` ⚠️ alt | `MachineConfig/75-ocp4-sshd-disable-x11-forwarding-<role>` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_do_not_permit_user_env` | `MachineConfig/75-ocp4-sshd-do-not-permit-user-env-<role>` | medium | node | rhcos4 | - | rhcos4-e8 |
-| `rhcos4-sshd_enable_gssapi_auth` ⚠️ alt | `MachineConfig/75-ocp4-sshd-enable-gssapi-auth-<role>` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_enable_pam` | `MachineConfig/75-ocp4-sshd-enable-pam-<role>` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_enable_pubkey_auth` ⚠️ alt | `MachineConfig/75-ocp4-sshd-enable-pubkey-auth-<role>` | medium | node | rhcos4 | - | rhcos4-bsi, rhcos4-bsi-2022 |
-| `rhcos4-sshd_enable_strictmodes` | `MachineConfig/75-ocp4-sshd-enable-strictmodes-<role>` | medium | node | rhcos4 | - | rhcos4-e8 |
-| `rhcos4-sshd_enable_warning_banner` ⚠️ alt | `MachineConfig/75-ocp4-sshd-enable-warning-banner-<role>` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_enable_warning_banner_net` ⚠️ alt | `MachineConfig/75-ocp4-sshd-enable-warning-banner-net-<role>` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_enable_x11_forwarding` ⚠️ alt | `MachineConfig/75-ocp4-sshd-enable-x11-forwarding-<role>` | high | node | rhcos4 | - |  |
-| `rhcos4-sshd_print_last_log` | `MachineConfig/75-ocp4-sshd-print-last-log-<role>` | medium | node | rhcos4 | - | rhcos4-e8 |
-| `rhcos4-sshd_set_idle_timeout` | `MachineConfig/75-ocp4-sshd-set-idle-timeout-<role>` | medium | node | rhcos4 | - | rhcos4-high, rhcos4-high-rev-4, rhcos4-moderate, rhcos4-moderate-rev-4, rhcos4-nerc-cip |
-| `rhcos4-sshd_set_keepalive` | `MachineConfig/75-ocp4-sshd-set-keepalive-<role>` | medium | node | rhcos4 | - | rhcos4-high, rhcos4-high-rev-4, rhcos4-moderate, rhcos4-moderate-rev-4, rhcos4-nerc-cip |
-| `rhcos4-sshd_set_login_grace_time` | `MachineConfig/75-ocp4-sshd-set-login-grace-time-<role>` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_set_loglevel_info` ⚠️ alt | `MachineConfig/75-ocp4-sshd-set-loglevel-info-<role>` | low | node | rhcos4 | - | rhcos4-e8 |
-| `rhcos4-sshd_set_loglevel_verbose` ⚠️ alt | `MachineConfig/75-ocp4-sshd-set-loglevel-verbose-<role>` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_set_max_auth_tries` | `MachineConfig/75-ocp4-sshd-set-max-auth-tries-<role>` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_set_max_sessions` | `MachineConfig/75-ocp4-sshd-set-max-sessions-<role>` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_set_maxstartups` | `MachineConfig/75-ocp4-sshd-set-maxstartups-<role>` | medium | node | rhcos4 | - |  |
-| `rhcos4-sshd_use_priv_separation` ⛔ n/a | `MachineConfig/75-ocp4-sshd-use-priv-separation-<role>` | medium | node | rhcos4 | never applicable (RHCOS ships OpenSSH 8 or newer) |  |
+| `rhcos4-sshd_allow_only_protocol2` ⛔ n/a | `MachineConfig/75-ocp4-sshd-<role>` | high | node | rhcos4 | never applicable (RHCOS ships OpenSSH 8 or newer) |  |
+| `rhcos4-sshd_disable_compression` | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_disable_empty_passwords` | `MachineConfig/75-ocp4-sshd-<role>` | high | node | rhcos4 | - | rhcos4-bsi, rhcos4-bsi-2022, rhcos4-e8 |
+| `rhcos4-sshd_disable_gssapi_auth` ⚠️ alt | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - | rhcos4-e8 |
+| `rhcos4-sshd_disable_kerb_auth` | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_disable_pubkey_auth` ⚠️ alt | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_disable_rhosts` | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - | rhcos4-e8, rhcos4-high, rhcos4-high-rev-4, rhcos4-moderate, rhcos4-moderate-rev-4, rhcos4-nerc-cip |
+| `rhcos4-sshd_disable_rhosts_rsa` | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_disable_root_login` ⚠️ alt | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - | rhcos4-anssi_bp28_enhanced, rhcos4-anssi_bp28_high, rhcos4-anssi_bp28_intermediary, rhcos4-bsi, rhcos4-bsi-2022, rhcos4-e8, rhcos4-stig, rhcos4-stig-v2r2, rhcos4-stig-v2r3 |
+| `rhcos4-sshd_disable_root_password_login` ⚠️ alt | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_disable_tcp_forwarding` | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_disable_user_known_hosts` | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - | rhcos4-e8 |
+| `rhcos4-sshd_disable_x11_forwarding` ⚠️ alt | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_do_not_permit_user_env` | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - | rhcos4-e8 |
+| `rhcos4-sshd_enable_gssapi_auth` ⚠️ alt | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_enable_pam` | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_enable_pubkey_auth` ⚠️ alt | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - | rhcos4-bsi, rhcos4-bsi-2022 |
+| `rhcos4-sshd_enable_strictmodes` | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - | rhcos4-e8 |
+| `rhcos4-sshd_enable_warning_banner` ⚠️ alt | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_enable_warning_banner_net` ⚠️ alt | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_enable_x11_forwarding` ⚠️ alt | `MachineConfig/75-ocp4-sshd-<role>` | high | node | rhcos4 | - |  |
+| `rhcos4-sshd_print_last_log` | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - | rhcos4-e8 |
+| `rhcos4-sshd_set_idle_timeout` | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - | rhcos4-high, rhcos4-high-rev-4, rhcos4-moderate, rhcos4-moderate-rev-4, rhcos4-nerc-cip |
+| `rhcos4-sshd_set_keepalive` | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - | rhcos4-high, rhcos4-high-rev-4, rhcos4-moderate, rhcos4-moderate-rev-4, rhcos4-nerc-cip |
+| `rhcos4-sshd_set_login_grace_time` | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_set_loglevel_info` ⚠️ alt | `MachineConfig/75-ocp4-sshd-<role>` | low | node | rhcos4 | - | rhcos4-e8 |
+| `rhcos4-sshd_set_loglevel_verbose` ⚠️ alt | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_set_max_auth_tries` | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_set_max_sessions` | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_set_maxstartups` | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | - |  |
+| `rhcos4-sshd_use_priv_separation` ⛔ n/a | `MachineConfig/75-ocp4-sshd-<role>` | medium | node | rhcos4 | never applicable (RHCOS ships OpenSSH 8 or newer) |  |
 | `rhcos4-sysctl_fs_protected_hardlinks` | `MachineConfig/75-ocp4-sysctl-fs-protected-hardlinks-<role>` | medium | node | rhcos4 | - | rhcos4-anssi_bp28_enhanced, rhcos4-anssi_bp28_high, rhcos4-anssi_bp28_intermediary, rhcos4-high, rhcos4-high-rev-4, rhcos4-moderate, rhcos4-moderate-rev-4, rhcos4-nerc-cip |
 | `rhcos4-sysctl_fs_protected_symlinks` | `MachineConfig/75-ocp4-sysctl-fs-protected-symlinks-<role>` | medium | node | rhcos4 | - | rhcos4-anssi_bp28_enhanced, rhcos4-anssi_bp28_high, rhcos4-anssi_bp28_intermediary, rhcos4-high, rhcos4-high-rev-4, rhcos4-moderate, rhcos4-moderate-rev-4, rhcos4-nerc-cip |
 | `rhcos4-sysctl_kernel_core_pattern` | `MachineConfig/75-ocp4-sysctl-kernel-core-pattern-<role>` | medium | node | rhcos4 | - | rhcos4-high, rhcos4-high-rev-4, rhcos4-moderate, rhcos4-moderate-rev-4, rhcos4-nerc-cip |

@@ -25,7 +25,7 @@ import re
 from pathlib import Path
 
 from . import applicability, classify, resolver
-from .collisions import BODY_ROOTS, MergeGroup, build_groups
+from .collisions import BODY_ROOTS, MergeGroup, build_groups, mergeable_shape
 from .parser import Content, rules_with_fixes
 from .resolver import resolve_defaults, rewrite_placeholders
 
@@ -740,6 +740,7 @@ def cross_object_file_conflicts(groups, layer: str) -> list[dict]:
     in it, so a guard only fires in the window where they actually render.
     """
     by_path: dict[str, dict[str, dict[str, set]]] = {}
+    objects_per_path: dict[str, set] = {}
     for g in groups:
         if g.key.layer != layer:
             continue
@@ -749,6 +750,7 @@ def cross_object_file_conflicts(groups, layer: str) -> list[dict]:
                     source, {"rules": set(), "versions": set()})
                 group["rules"].add(doc.rule_id)
                 group["versions"].add(doc.ocp_version)
+                objects_per_path.setdefault(path, set()).add(g.key)
 
     out: list[dict] = []
     for path, by_source in sorted(by_path.items()):
@@ -762,6 +764,13 @@ def cross_object_file_conflicts(groups, layer: str) -> list[dict]:
         # two version variants of the same file is the version gate doing its
         # job, not an alternative.
         if len({r for grp in groups_here for r in grp["rules"]}) < 2:
+            continue
+        # Only across objects. Since the sshd family was consolidated, the six
+        # enable/disable drop-in pairs live in one object, where the per-object
+        # conflict guard and the render-time file check already refuse them -
+        # a preflight guard too would report the same thing three times, and
+        # the preflight message tells the user to look at separate objects.
+        if len(objects_per_path[path]) < 2:
             continue
         out.append({"path": path, "groups": sorted(
             groups_here, key=lambda g: g["rules"])})
@@ -993,6 +1002,7 @@ def object_template(group: MergeGroup, appl: dict | None = None) -> str:
         lines.append("{{- end -}}")
 
     lines.append("{{- $merged := dict -}}")
+    lines.append("{{- $fileAcc := dict -}}")
     for idx, doc in enumerate(group.docs):
         if not _fragment_body(doc.yaml):
             continue
@@ -1009,8 +1019,43 @@ def object_template(group: MergeGroup, appl: dict | None = None) -> str:
         lines.append('{{- if hasKey $frag "Error" -}}')
         lines.append(f'{{{{- fail (printf {_go_str("Rendering " + doc.rule_id + " for " + key.kind + "/" + key.name + " produced invalid YAML: %s. Check the variables it interpolates.")} $frag.Error) -}}}}')
         lines.append("{{- end -}}")
+        # storage.files accumulates by path instead of being replaced.
+        # mustMergeOverwrite *replaces* lists, so with two fragments writing
+        # files the last one won outright and the other's files were gone -
+        # silently, since the object still rendered. Collect them here, keyed
+        # by path, and write the result back after the merge loop.
+        #
+        # The same-path check is render-time on purpose: which rules are active
+        # is a values decision. From 4.13 upstream's sshd rules each write
+        # their own drop-in, so the paths are disjoint and merging is clean;
+        # below 4.13 they each rewrite the whole sshd_config, which is a real
+        # conflict and still fails here. One mechanism, correct in both
+        # version windows.
+        lines.append('{{- range $f := (dig "spec" "config" "storage" "files" '
+                     "(list) $frag) -}}")
+        lines.append('{{- $prev := index $fileAcc ($f.path | toString) -}}')
+        lines.append("{{- if and $prev (ne (toJson $prev) (toJson $f)) -}}")
+        fmsg = (f"Conflicting content for %s in {key.kind}/{key.name}: "
+                f"{doc.rule_id} writes it differently than another active "
+                f"rule does. Both cannot apply - enable only one, or pick the "
+                f"variant that matches your cluster.ocpVersion.")
+        lines.append(f'{{{{- fail (printf {_go_str(fmsg)} $f.path) -}}}}')
+        lines.append("{{- end -}}")
+        lines.append('{{- $_ := set $fileAcc ($f.path | toString) $f -}}')
+        lines.append("{{- end -}}")
         lines.append("{{- $merged = mustMergeOverwrite $merged $frag -}}")
         lines.append("{{- end -}}")
+
+    # Replace whatever mustMergeOverwrite left with the accumulated set,
+    # ordered by path so the render stays byte-stable.
+    lines.append("{{- if $fileAcc -}}")
+    lines.append("{{- $files := list -}}")
+    lines.append("{{- range $p := (keys $fileAcc | sortAlpha) -}}")
+    lines.append("{{- $files = append $files (index $fileAcc $p) -}}")
+    lines.append("{{- end -}}")
+    lines.append('{{- $merged = mustMergeOverwrite $merged (dict "spec" '
+                 '(dict "config" (dict "storage" (dict "files" $files)))) -}}')
+    lines.append("{{- end -}}")
 
     # Every fragment gated off leaves $merged empty, and `$merged | toYaml`
     # then writes a bare `{}` at document level - invalid YAML, which Helm
@@ -1030,13 +1075,18 @@ def object_template(group: MergeGroup, appl: dict | None = None) -> str:
     # identical. Check it here rather than letting the conflict detector report
     # it as "mutually-exclusive alternatives", which it is not.
     if key.name in set(classify.CONSOLIDATED_NAMES.values()):
-        bodies = {_fragment_body(d.yaml) for d in group.docs if _fragment_body(d.yaml)}
-        if len(bodies) > 1:
+        # Members may differ in the lists the render merges by identity -
+        # that is the whole point for the sshd family, where each rule
+        # contributes its own drop-in. Everything else must still match, or
+        # mustMergeOverwrite would silently keep one rule's value.
+        shapes = {mergeable_shape(d.yaml, d.rule_id)
+                  for d in group.docs if _fragment_body(d.yaml)}
+        if len(shapes) > 1:
             raise ValueError(
-                f"{key.kind}/{key.name} consolidates rules whose fixes are no "
-                f"longer identical ({', '.join(sorted(group.rule_ids))}). Drop "
-                f"them from classify.CONSOLIDATED_NAMES so each gets its own "
-                f"object again."
+                f"{key.kind}/{key.name} consolidates rules whose fixes differ "
+                f"outside the lists the render merges by identity "
+                f"({', '.join(sorted(group.rule_ids))}). Drop them from "
+                f"classify.CONSOLIDATED_NAMES so each gets its own object again."
             )
 
     # Node roles this object applies to, if upstream restricts it. Mirrors the

@@ -331,9 +331,12 @@ tests:
 
   # --- cross-object file conflicts ---------------------------------------
   - it: refuses two rules that write the same sshd drop-in differently
-    # Separate objects, so no per-object check sees this. The MCO would merge
+    # These two now live in ONE object, since the sshd family is consolidated,
+    # so the per-object conflict guard catches them and the cross-object
+    # preflight no longer has anything to say. The refusal is the same; only
+    # which guard speaks changed. Without it the MCO would merge
     # alphanumerically and silently take X11Forwarding yes.
-    template: templates/preflight.yaml
+    template: templates/machineconfig-75-ocp4-sshd.yaml
     set:
       node:
         enabled: true
@@ -342,7 +345,50 @@ tests:
         rhcos4-sshd_enable_x11_forwarding: true
     asserts:
       - failedTemplate:
-          errorPattern: "00-complianceascode-X11Forwarding.conf with different content"
+          errorPattern: "mutually-exclusive alternatives"
+
+  - it: still refuses the whole-file variants across objects below 4.13
+    # disable_host_auth stays a separate object on purpose: its <=4.12 payload
+    # differs from the 31 others, so folding it into the family would fail
+    # every render below 4.13. Separate, it remains the one real cross-object
+    # sshd conflict, and the preflight is still the only place that sees it.
+    template: templates/preflight.yaml
+    set:
+      node:
+        enabled: true
+      cluster:
+        ocpVersion: "4.12"
+      rules:
+        rhcos4-disable_host_auth: true
+        rhcos4-sshd_set_keepalive: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "/etc/ssh/sshd_config with different content"
+
+  - it: merges disjoint drop-ins from different rules into one object
+    # The capability the consolidation exists for. Three rules, three drop-ins,
+    # one MachineConfig. Before storage.files merged by path, mustMergeOverwrite
+    # replaced the list and two of the three files vanished silently.
+    template: templates/machineconfig-75-ocp4-sshd.yaml
+    documentIndex: 0
+    set:
+      node:
+        enabled: true
+        roles: [worker]
+      cluster:
+        ocpVersion: "4.22"
+      rules:
+        rhcos4-sshd_disable_rhosts: true
+        rhcos4-sshd_set_idle_timeout: true
+        rhcos4-sshd_set_keepalive: true
+    asserts:
+      - lengthEqual:
+          path: spec.config.storage.files
+          count: 3
+      # Ordered by path, or the GitOps diff churns between runs.
+      - equal:
+          path: spec.config.storage.files[0].path
+          value: /etc/ssh/sshd_config.d/00-complianceascode-IgnoreRhosts.conf
 
   - it: allows one side of the pair
     template: templates/preflight.yaml
