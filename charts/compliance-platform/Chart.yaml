@@ -2,7 +2,7 @@ apiVersion: v2
 name: compliance-platform
 description: OpenShift platform compliance remediations (no reboot).
 type: application
-version: 0.2.1
+version: 0.3.0
 appVersion: "0.1.82"
 keywords:
   - compliance
