@@ -1360,7 +1360,13 @@ EXTRA_MANIFESTS_TPL = """\
      without restating the rest - Helm replaces lists and merges maps, the
      same reason mustMergeOverwrite forces whole-list comparisons elsewhere.
      Each entry takes an optional `enabled` (default true), which is what
-     makes these togglable the way `rules` is for upstream rules. */ -}}
+     makes these togglable the way `rules` is for upstream rules.
+
+     Note the `{{ end -}}` without a left trim after the object: a `{{- end`
+     there eats the newline before the next `---`, so every entry after the
+     first was glued onto its predecessor and four objects parsed as one
+     document. helm template still printed four `kind:` lines, so only a YAML
+     parse catches it - there is a test. */ -}}
 {{- $root := . -}}
 {{- range $key := (keys (.Values.extraManifests | default dict) | sortAlpha) -}}
 {{- $obj := index $root.Values.extraManifests $key -}}
@@ -1385,7 +1391,7 @@ EXTRA_MANIFESTS_TPL = """\
 {{- $out = set $out "metadata" (set (deepCopy $obj.metadata) "labels" $labels) -}}
 ---
 {{ $out | toYaml }}
-{{- end -}}
+{{ end -}}
 {{- end -}}
 """
 

@@ -199,3 +199,34 @@ tests:
     asserts:
       - failedTemplate:
           errorPattern: "extraManifests.broken has no kind"
+
+  - it: separates multiple entries into their own documents
+    # Two entries used to render as ONE document: `{{- end` after the object
+    # ate the newline before the next `---`. helm template still printed two
+    # `kind:` lines, so only counting documents catches it.
+    template: templates/extra-manifests.yaml
+    set:
+      node:
+        enabled: true
+      extraManifests:
+        first:
+          apiVersion: machineconfiguration.openshift.io/v1
+          kind: MachineConfig
+          metadata:
+            name: 75-local-first
+        second:
+          apiVersion: machineconfiguration.openshift.io/v1
+          kind: MachineConfig
+          metadata:
+            name: 75-local-second
+    asserts:
+      - hasDocuments:
+          count: 2
+      - equal:
+          path: metadata.name
+          value: 75-local-first
+        documentIndex: 0
+      - equal:
+          path: metadata.name
+          value: 75-local-second
+        documentIndex: 1
