@@ -87,8 +87,9 @@ class TestChartYaml(unittest.TestCase):
                          "Remediations: config objects, no reboots.")
 
     def test_every_generated_chart_yaml_parses(self):
-        import yaml
         from pathlib import Path
+
+        import yaml
         charts = sorted(Path("charts").glob("*/Chart.yaml"))
         self.assertTrue(charts, "no charts generated")
         for path in charts:
