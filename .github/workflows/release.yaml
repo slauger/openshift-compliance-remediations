@@ -107,7 +107,7 @@ jobs:
       # prose. Do not bump this to 10 before the notes generator ships writer@9.
       - name: Semantic release
         id: semrel
-        uses: cycjimmy/semantic-release-action@v7.1.0
+        uses: cycjimmy/semantic-release-action@v7.1.2
         with:
           extra_plugins: |
             @semantic-release/exec
