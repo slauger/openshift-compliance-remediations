@@ -84,7 +84,7 @@ jobs:
       - name: Install ignition-validate
         env:
           # renovate: datasource=github-releases depName=coreos/ignition
-          IGNITION_VERSION: v2.27.0
+          IGNITION_VERSION: v2.28.0
         run: |
           curl -fsSL -o "$RUNNER_TEMP/ignition-validate" \
             "https://github.com/coreos/ignition/releases/download/$IGNITION_VERSION/ignition-validate-x86_64-linux"
