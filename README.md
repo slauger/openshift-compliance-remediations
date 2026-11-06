@@ -58,7 +58,7 @@ spec:
   source:
     repoURL: ghcr.io/slauger/charts
     chart: compliance-node
-    targetRevision: 0.4.2
+    targetRevision: 0.5.0
     helm:
       valuesObject:
         node:
@@ -548,7 +548,7 @@ spec:
   source:
     repoURL: ghcr.io/slauger/charts
     chart: compliance-hardening
-    targetRevision: "<pinned version>"
+    targetRevision: 0.5.0
     helm:
       valuesObject:
         compliance-platform:
