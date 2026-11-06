@@ -43,6 +43,68 @@
     "global": {
       "type": "object"
     },
+    "platform": {
+      "additionalProperties": false,
+      "if": {
+        "properties": {
+          "output": {
+            "const": "hostedcluster"
+          }
+        },
+        "required": [
+          "output"
+        ]
+      },
+      "properties": {
+        "hostedCluster": {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "pattern": "^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)?$",
+              "type": "string"
+            },
+            "namespace": {
+              "pattern": "^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)?$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "enum": [
+            "cluster",
+            "hostedcluster",
+            "guest"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "output"
+      ],
+      "then": {
+        "properties": {
+          "hostedCluster": {
+            "properties": {
+              "name": {
+                "minLength": 1
+              },
+              "namespace": {
+                "minLength": 1
+              }
+            },
+            "required": [
+              "name",
+              "namespace"
+            ]
+          }
+        },
+        "required": [
+          "hostedCluster"
+        ]
+      },
+      "type": "object"
+    },
     "profileRules": {
       "type": "object"
     },
@@ -970,14 +1032,15 @@
     }
   },
   "required": [
-    "profiles",
-    "rules",
-    "variables",
+    "brokenRules",
+    "platform",
     "profileRules",
     "profileVariables",
+    "profiles",
     "ruleApplicability",
     "ruleDependencies",
-    "brokenRules"
+    "rules",
+    "variables"
   ],
   "title": "compliance-platform values",
   "type": "object"

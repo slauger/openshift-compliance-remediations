@@ -18,6 +18,7 @@ spec:
             WantedBy=multi-user.target
 {{- end -}}
 
+{{- define "cr.obj.machineconfig-75-ocp4-configure-crypto-policy" -}}
 {{- /* MachineConfig/75-ocp4-configure-crypto-policy - rule(s): rhcos4-configure_crypto_policy */ -}}
 {{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "rhcos4-configure_crypto_policy"))) "true") -}}
 {{- $merged := dict -}}
@@ -46,7 +47,7 @@ spec:
 {{- if not $merged -}}
 {{- fail (printf "No remediation applies to MachineConfig/75-ocp4-configure-crypto-policy at cluster.ocpVersion %s. Every fix variant of the active rule(s) (rhcos4-configure_crypto_policy) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
 {{- end -}}
-{{- range $role := (.Values.node.roles | uniq) }}
+{{- range $role := (ternary (list "worker") (.Values.node.roles | uniq) (eq .Values.node.output "nodepool")) }}
 ---
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
@@ -54,11 +55,18 @@ metadata:
   name: {{ printf "%s-%s" "75-ocp4-configure-crypto-policy" $role }}
   labels:
     app.kubernetes.io/name: {{ $.Chart.Name | quote }}
+{{- if ne $.Values.node.output "nodepool" }}
     app.kubernetes.io/instance: {{ $.Release.Name | trunc 63 | trimSuffix "-" | quote }}
+{{- end }}
     app.kubernetes.io/component: remediation
     app.kubernetes.io/part-of: compliance-hardening
     app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}
     machineconfiguration.openshift.io/role: {{ $role | quote }}
 {{ $merged | toYaml }}
 {{- end }}
+{{- end -}}
+{{- end -}}
+
+{{- if ne .Values.node.output "nodepool" -}}
+{{ include "cr.obj.machineconfig-75-ocp4-configure-crypto-policy" . }}
 {{- end -}}

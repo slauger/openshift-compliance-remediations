@@ -1,0 +1,10 @@
+{{- $node := index .Values "compliance-node" -}}
+{{- $platform := index .Values "compliance-platform" -}}
+{{- if $node.node.enabled -}}
+{{- if ne $node.cluster.hypershift $platform.cluster.hypershift -}}
+{{- fail "compliance-node and compliance-platform disagree on cluster.hypershift. One render goes to one cluster: with node.output=nodepool the platform half would otherwise harden the management cluster itself." -}}
+{{- end -}}
+{{- if and (eq $node.node.output "nodepool") (eq $platform.platform.output "guest") -}}
+{{- fail "node.output=nodepool goes to the management cluster and platform.output=guest to the hosted cluster, but one render goes to one cluster. Render them separately." -}}
+{{- end -}}
+{{- end -}}

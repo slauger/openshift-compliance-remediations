@@ -199,6 +199,7 @@ spec:
     evictionPressureTransitionPeriod: 0s
 {{- end -}}
 
+{{- define "cr.obj.kubeletconfig-compliance-operator-kubelet" -}}
 {{- /* KubeletConfig/compliance-operator-kubelet - rule(s): ocp4-kubelet_configure_event_creation, ocp4-kubelet_configure_tls_cipher_suites, ocp4-kubelet_configure_tls_min_version, ocp4-kubelet_enable_iptables_util_chains, ocp4-kubelet_enable_protect_kernel_defaults, ocp4-kubelet_enable_streaming_connections, ocp4-kubelet_eviction_thresholds_set_hard_imagefs_available, ocp4-kubelet_eviction_thresholds_set_hard_imagefs_inodesfree, ocp4-kubelet_eviction_thresholds_set_hard_memory_available, ocp4-kubelet_eviction_thresholds_set_hard_nodefs_available, ocp4-kubelet_eviction_thresholds_set_hard_nodefs_inodesfree, ocp4-kubelet_eviction_thresholds_set_soft_imagefs_available, ocp4-kubelet_eviction_thresholds_set_soft_imagefs_inodesfree, ocp4-kubelet_eviction_thresholds_set_soft_memory_available, ocp4-kubelet_eviction_thresholds_set_soft_nodefs_available, ocp4-kubelet_eviction_thresholds_set_soft_nodefs_inodesfree */ -}}
 {{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "ocp4-kubelet_configure_event_creation" "ocp4-kubelet_configure_tls_cipher_suites" "ocp4-kubelet_configure_tls_min_version" "ocp4-kubelet_enable_iptables_util_chains" "ocp4-kubelet_enable_protect_kernel_defaults" "ocp4-kubelet_enable_streaming_connections" "ocp4-kubelet_eviction_thresholds_set_hard_imagefs_available" "ocp4-kubelet_eviction_thresholds_set_hard_imagefs_inodesfree" "ocp4-kubelet_eviction_thresholds_set_hard_memory_available" "ocp4-kubelet_eviction_thresholds_set_hard_nodefs_available" "ocp4-kubelet_eviction_thresholds_set_hard_nodefs_inodesfree" "ocp4-kubelet_eviction_thresholds_set_soft_imagefs_available" "ocp4-kubelet_eviction_thresholds_set_soft_imagefs_inodesfree" "ocp4-kubelet_eviction_thresholds_set_soft_memory_available" "ocp4-kubelet_eviction_thresholds_set_soft_nodefs_available" "ocp4-kubelet_eviction_thresholds_set_soft_nodefs_inodesfree"))) "true") -}}
 {{- $merged := dict -}}
@@ -647,9 +648,12 @@ spec:
 {{- if not $merged -}}
 {{- fail (printf "No remediation applies to KubeletConfig/compliance-operator-kubelet at cluster.ocpVersion %s. Every fix variant of the active rule(s) (ocp4-kubelet_configure_event_creation, ocp4-kubelet_configure_tls_cipher_suites, ocp4-kubelet_configure_tls_min_version, ocp4-kubelet_enable_iptables_util_chains, ocp4-kubelet_enable_protect_kernel_defaults, ocp4-kubelet_enable_streaming_connections, ocp4-kubelet_eviction_thresholds_set_hard_imagefs_available, ocp4-kubelet_eviction_thresholds_set_hard_imagefs_inodesfree, ocp4-kubelet_eviction_thresholds_set_hard_memory_available, ocp4-kubelet_eviction_thresholds_set_hard_nodefs_available, ocp4-kubelet_eviction_thresholds_set_hard_nodefs_inodesfree, ocp4-kubelet_eviction_thresholds_set_soft_imagefs_available, ocp4-kubelet_eviction_thresholds_set_soft_imagefs_inodesfree, ocp4-kubelet_eviction_thresholds_set_soft_memory_available, ocp4-kubelet_eviction_thresholds_set_soft_nodefs_available, ocp4-kubelet_eviction_thresholds_set_soft_nodefs_inodesfree) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
 {{- end -}}
-{{- range $role := (.Values.node.roles | uniq) }}
+{{- range $role := (ternary (list "worker") (.Values.node.roles | uniq) (eq .Values.node.output "nodepool")) }}
+{{- $obj := $merged -}}
+{{- if ne $.Values.node.output "nodepool" -}}
 {{- $selector := dict "spec" (dict "machineConfigPoolSelector" (dict "matchLabels" (dict (printf "pools.operator.machineconfiguration.openshift.io/%s" $role) ""))) -}}
-{{- $obj := mustMergeOverwrite (deepCopy $merged) $selector }}
+{{- $obj = mustMergeOverwrite (deepCopy $merged) $selector -}}
+{{- end }}
 ---
 apiVersion: machineconfiguration.openshift.io/v1
 kind: KubeletConfig
@@ -657,11 +661,18 @@ metadata:
   name: {{ printf "%s-%s" "compliance-operator-kubelet" $role }}
   labels:
     app.kubernetes.io/name: {{ $.Chart.Name | quote }}
+{{- if ne $.Values.node.output "nodepool" }}
     app.kubernetes.io/instance: {{ $.Release.Name | trunc 63 | trimSuffix "-" | quote }}
+{{- end }}
     app.kubernetes.io/component: remediation
     app.kubernetes.io/part-of: compliance-hardening
     app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}
     machineconfiguration.openshift.io/role: {{ $role | quote }}
 {{ $obj | toYaml }}
 {{- end }}
+{{- end -}}
+{{- end -}}
+
+{{- if ne .Values.node.output "nodepool" -}}
+{{ include "cr.obj.kubeletconfig-compliance-operator-kubelet" . }}
 {{- end -}}

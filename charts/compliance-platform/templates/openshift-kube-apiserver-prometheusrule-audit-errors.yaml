@@ -17,6 +17,7 @@ spec:
         severity: warning
 {{- end -}}
 
+{{- define "cr.obj.openshift-kube-apiserver-prometheusrule-audit-errors" -}}
 {{- /* PrometheusRule/audit-errors - rule(s): ocp4-audit_error_alert_exists */ -}}
 {{- if eq (include "cr.anyActive" (dict "root" . "rules" (list "ocp4-audit_error_alert_exists"))) "true" -}}
 {{- $merged := dict -}}
@@ -61,4 +62,9 @@ metadata:
     helm.sh/resource-policy: keep
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
 {{ $merged | toYaml }}
+{{- end -}}
+{{- end -}}
+
+{{- if ne .Values.platform.output "hostedcluster" -}}
+{{ include "cr.obj.openshift-kube-apiserver-prometheusrule-audit-errors" . }}
 {{- end -}}

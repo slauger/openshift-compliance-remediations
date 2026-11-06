@@ -866,6 +866,7 @@ spec:
         overwrite: true
 {{- end -}}
 
+{{- define "cr.obj.machineconfig-75-ocp4-sshd" -}}
 {{- /* MachineConfig/75-ocp4-sshd - rule(s): rhcos4-sshd_set_keepalive, rhcos4-sshd_set_idle_timeout, rhcos4-sshd_allow_only_protocol2, rhcos4-sshd_disable_compression, rhcos4-sshd_disable_empty_passwords, rhcos4-sshd_disable_gssapi_auth, rhcos4-sshd_disable_kerb_auth, rhcos4-sshd_disable_pubkey_auth, rhcos4-sshd_disable_rhosts, rhcos4-sshd_disable_rhosts_rsa, rhcos4-sshd_disable_root_login, rhcos4-sshd_disable_root_password_login, rhcos4-sshd_disable_tcp_forwarding, rhcos4-sshd_disable_user_known_hosts, rhcos4-sshd_disable_x11_forwarding, rhcos4-sshd_do_not_permit_user_env, rhcos4-sshd_enable_gssapi_auth, rhcos4-sshd_enable_pam, rhcos4-sshd_enable_pubkey_auth, rhcos4-sshd_enable_strictmodes, rhcos4-sshd_enable_warning_banner, rhcos4-sshd_enable_warning_banner_net, rhcos4-sshd_enable_x11_forwarding, rhcos4-sshd_print_last_log, rhcos4-sshd_set_login_grace_time, rhcos4-sshd_set_loglevel_info, rhcos4-sshd_set_loglevel_verbose, rhcos4-sshd_set_max_auth_tries, rhcos4-sshd_set_max_sessions, rhcos4-sshd_set_maxstartups, rhcos4-sshd_use_priv_separation */ -}}
 {{- if and (.Values.node.enabled) (eq (include "cr.anyActive" (dict "root" . "rules" (list "rhcos4-sshd_set_keepalive" "rhcos4-sshd_set_idle_timeout" "rhcos4-sshd_allow_only_protocol2" "rhcos4-sshd_disable_compression" "rhcos4-sshd_disable_empty_passwords" "rhcos4-sshd_disable_gssapi_auth" "rhcos4-sshd_disable_kerb_auth" "rhcos4-sshd_disable_pubkey_auth" "rhcos4-sshd_disable_rhosts" "rhcos4-sshd_disable_rhosts_rsa" "rhcos4-sshd_disable_root_login" "rhcos4-sshd_disable_root_password_login" "rhcos4-sshd_disable_tcp_forwarding" "rhcos4-sshd_disable_user_known_hosts" "rhcos4-sshd_disable_x11_forwarding" "rhcos4-sshd_do_not_permit_user_env" "rhcos4-sshd_enable_gssapi_auth" "rhcos4-sshd_enable_pam" "rhcos4-sshd_enable_pubkey_auth" "rhcos4-sshd_enable_strictmodes" "rhcos4-sshd_enable_warning_banner" "rhcos4-sshd_enable_warning_banner_net" "rhcos4-sshd_enable_x11_forwarding" "rhcos4-sshd_print_last_log" "rhcos4-sshd_set_login_grace_time" "rhcos4-sshd_set_loglevel_info" "rhcos4-sshd_set_loglevel_verbose" "rhcos4-sshd_set_max_auth_tries" "rhcos4-sshd_set_max_sessions" "rhcos4-sshd_set_maxstartups" "rhcos4-sshd_use_priv_separation"))) "true") -}}
 {{- if gt (int (include "cr.countActive" (dict "root" . "rules" (list "rhcos4-sshd_enable_warning_banner" "rhcos4-sshd_enable_warning_banner_net")))) 1 -}}
@@ -1766,7 +1767,7 @@ spec:
 {{- if not $merged -}}
 {{- fail (printf "No remediation applies to MachineConfig/75-ocp4-sshd at cluster.ocpVersion %s. Every fix variant of the active rule(s) (rhcos4-sshd_set_keepalive, rhcos4-sshd_set_idle_timeout, rhcos4-sshd_allow_only_protocol2, rhcos4-sshd_disable_compression, rhcos4-sshd_disable_empty_passwords, rhcos4-sshd_disable_gssapi_auth, rhcos4-sshd_disable_kerb_auth, rhcos4-sshd_disable_pubkey_auth, rhcos4-sshd_disable_rhosts, rhcos4-sshd_disable_rhosts_rsa, rhcos4-sshd_disable_root_login, rhcos4-sshd_disable_root_password_login, rhcos4-sshd_disable_tcp_forwarding, rhcos4-sshd_disable_user_known_hosts, rhcos4-sshd_disable_x11_forwarding, rhcos4-sshd_do_not_permit_user_env, rhcos4-sshd_enable_gssapi_auth, rhcos4-sshd_enable_pam, rhcos4-sshd_enable_pubkey_auth, rhcos4-sshd_enable_strictmodes, rhcos4-sshd_enable_warning_banner, rhcos4-sshd_enable_warning_banner_net, rhcos4-sshd_enable_x11_forwarding, rhcos4-sshd_print_last_log, rhcos4-sshd_set_login_grace_time, rhcos4-sshd_set_loglevel_info, rhcos4-sshd_set_loglevel_verbose, rhcos4-sshd_set_max_auth_tries, rhcos4-sshd_set_max_sessions, rhcos4-sshd_set_maxstartups, rhcos4-sshd_use_priv_separation) is constrained to a different OpenShift version. Disable the rule(s) or set a supported cluster.ocpVersion." (.Values.cluster.ocpVersion | toString)) -}}
 {{- end -}}
-{{- range $role := (.Values.node.roles | uniq) }}
+{{- range $role := (ternary (list "worker") (.Values.node.roles | uniq) (eq .Values.node.output "nodepool")) }}
 ---
 apiVersion: machineconfiguration.openshift.io/v1
 kind: MachineConfig
@@ -1774,11 +1775,18 @@ metadata:
   name: {{ printf "%s-%s" "75-ocp4-sshd" $role }}
   labels:
     app.kubernetes.io/name: {{ $.Chart.Name | quote }}
+{{- if ne $.Values.node.output "nodepool" }}
     app.kubernetes.io/instance: {{ $.Release.Name | trunc 63 | trimSuffix "-" | quote }}
+{{- end }}
     app.kubernetes.io/component: remediation
     app.kubernetes.io/part-of: compliance-hardening
     app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}
     machineconfiguration.openshift.io/role: {{ $role | quote }}
 {{ $merged | toYaml }}
 {{- end }}
+{{- end -}}
+{{- end -}}
+
+{{- if ne .Values.node.output "nodepool" -}}
+{{ include "cr.obj.machineconfig-75-ocp4-sshd" . }}
 {{- end -}}

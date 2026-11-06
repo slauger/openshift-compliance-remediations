@@ -1,0 +1,253 @@
+suite: platform.output on a hosted cluster
+# The HostedCluster patch includes the named templates of the mapped objects, so
+# this suite has to load all of them rather than one file.
+templates:
+  - templates/*.yaml
+tests:
+  - it: maps the API server rules onto spec.configuration.apiServer
+    template: templates/hostedcluster.yaml
+    set: &hosted
+      cluster:
+        hypershift: true
+      platform:
+        output: hostedcluster
+        hostedCluster:
+          name: c1
+          namespace: clusters
+      rules:
+        ocp4-audit_profile_set: true
+        ocp4-api_server_tls_security_profile_not_old: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: HostedCluster
+      - equal:
+          path: metadata.name
+          value: c1
+      - equal:
+          path: metadata.namespace
+          value: clusters
+      - equal:
+          path: spec.configuration.apiServer.audit.profile
+          value: WriteRequestBodies
+      - equal:
+          path: spec.configuration.apiServer.tlsSecurityProfile.type
+          value: Intermediate
+      - notExists:
+          path: spec.configuration.oauth
+      - equal:
+          path: metadata.labels["app.kubernetes.io/part-of"]
+          value: compliance-hardening
+      # This object is the hosted cluster. Without these an uninstall deletes it.
+      - equal:
+          path: metadata.annotations["helm.sh/resource-policy"]
+          value: keep
+      - equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-options"]
+          value: Prune=false,Delete=false
+
+  - it: sets nothing but spec.configuration, the rest belongs to its creator
+    template: templates/hostedcluster.yaml
+    set: *hosted
+    asserts:
+      - notExists:
+          path: spec.release
+      - notExists:
+          path: spec.secretEncryption
+      - notExists:
+          path: spec.configuration.apiServer.encryption
+
+  - it: maps the OAuth rules onto spec.configuration.oauth
+    template: templates/hostedcluster.yaml
+    set:
+      cluster:
+        hypershift: true
+      platform:
+        output: hostedcluster
+        hostedCluster:
+          name: c1
+          namespace: clusters
+      rules:
+        ocp4-oauth_or_oauthclient_token_maxage: true
+    asserts:
+      - equal:
+          path: spec.configuration.oauth.tokenConfig.accessTokenMaxAgeSeconds
+          value: 28800
+      - notExists:
+          path: spec.configuration.apiServer
+
+  - it: renders nothing when no mapped rule is active
+    template: templates/hostedcluster.yaml
+    set:
+      cluster:
+        hypershift: true
+      platform:
+        output: hostedcluster
+        hostedCluster:
+          name: c1
+          namespace: clusters
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: leaves the guest-side objects out of the management cluster output
+    template: templates/project-cluster.yaml
+    set:
+      cluster:
+        hypershift: true
+      platform:
+        output: hostedcluster
+        hostedCluster:
+          name: c1
+          namespace: clusters
+      rules:
+        ocp4-project_config_has_template: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders the guest-side objects with the guest output
+    template: templates/project-cluster.yaml
+    set: &guest
+      cluster:
+        hypershift: true
+      platform:
+        output: guest
+      rules:
+        ocp4-project_config_has_template: true
+        ocp4-audit_profile_set: true
+    asserts:
+      - hasDocuments:
+          count: 1
+
+  - it: leaves what the control plane owns out of the guest output
+    template: templates/apiserver-cluster.yaml
+    set: *guest
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders no HostedCluster with the guest output
+    template: templates/hostedcluster.yaml
+    set: *guest
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders no HostedCluster by default
+    template: templates/hostedcluster.yaml
+    set:
+      rules:
+        ocp4-audit_profile_set: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: still renders other rules on the shared object for a hosted cluster
+    # APIServer/cluster is the one object mixing a constrained rule with
+    # unconstrained ones. With the constrained rule switched off, the rest must
+    # render normally rather than the whole object disappearing.
+    template: templates/hostedcluster.yaml
+    set:
+      cluster:
+        hypershift: true
+      platform:
+        output: hostedcluster
+        hostedCluster:
+          name: c1
+          namespace: clusters
+      rules:
+        ocp4-api_server_encryption_provider_cipher: false
+        ocp4-audit_profile_set: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - exists:
+          path: spec.configuration.apiServer.audit
+      - notExists:
+          path: spec.configuration.apiServer.encryption
+
+  - it: refuses a hosted cluster with the standalone output
+    template: templates/preflight.yaml
+    set:
+      cluster:
+        hypershift: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "cluster.hypershift=true needs platform.output=hostedcluster or guest"
+
+  - it: refuses the hosted outputs on a standalone cluster
+    template: templates/preflight.yaml
+    set:
+      platform:
+        output: guest
+    asserts:
+      - failedTemplate:
+          errorPattern: "platform.output=guest needs cluster.hypershift=true"
+
+  - it: refuses a TailoredProfile in the management cluster output
+    template: templates/preflight.yaml
+    set:
+      cluster:
+        hypershift: true
+      platform:
+        output: hostedcluster
+        hostedCluster:
+          name: c1
+          namespace: clusters
+      tailoredProfile:
+        enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "tailoredProfile.enabled cannot be combined with platform.output=hostedcluster"
+
+  - it: refuses an extra manifest in the management cluster output
+    template: templates/preflight.yaml
+    set:
+      cluster:
+        hypershift: true
+      platform:
+        output: hostedcluster
+        hostedCluster:
+          name: c1
+          namespace: clusters
+      extraManifests:
+        mine:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: x
+    asserts:
+      - failedTemplate:
+          errorPattern: "extraManifests.mine cannot be combined with platform.output=hostedcluster"
+
+  - it: points at the overlay when upstream excludes a rule from hosted clusters
+    template: templates/preflight.yaml
+    set:
+      cluster:
+        hypershift: true
+      platform:
+        output: guest
+      profiles:
+        ocp4-cis: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "values-hypershift.yaml"
+
+  - it: refuses an extra MachineConfig on the guest, nothing reads it there
+    template: templates/preflight.yaml
+    set:
+      cluster:
+        hypershift: true
+      platform:
+        output: guest
+      extraManifests:
+        mine:
+          apiVersion: machineconfiguration.openshift.io/v1
+          kind: MachineConfig
+          metadata:
+            name: x
+    asserts:
+      - failedTemplate:
+          errorPattern: "extraManifests.mine \\(MachineConfig\\) would never be read on the guest"

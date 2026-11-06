@@ -10,6 +10,7 @@ spec:
     accessTokenMaxAgeSeconds: {{ .Values.variables.var_oauth_token_maxage }}
 {{- end -}}
 
+{{- define "cr.obj.oauth-cluster" -}}
 {{- /* OAuth/cluster - rule(s): ocp4-oauth_or_oauthclient_inactivity_timeout, ocp4-oauth_or_oauthclient_token_maxage */ -}}
 {{- if eq (include "cr.anyActive" (dict "root" . "rules" (list "ocp4-oauth_or_oauthclient_inactivity_timeout" "ocp4-oauth_or_oauthclient_token_maxage"))) "true" -}}
 {{- $merged := dict -}}
@@ -67,4 +68,9 @@ metadata:
     helm.sh/resource-policy: keep
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
 {{ $merged | toYaml }}
+{{- end -}}
+{{- end -}}
+
+{{- if eq .Values.platform.output "cluster" -}}
+{{ include "cr.obj.oauth-cluster" . }}
 {{- end -}}

@@ -1,0 +1,63 @@
+suite: what the HostedCluster patch does behind the preflight
+# Without preflight.yaml: it would refuse these first, and the point is that the
+# guards behind it hold on their own.
+templates:
+  - templates/hostedcluster.yaml
+  - templates/apiserver-cluster.yaml
+  - templates/oauth-cluster.yaml
+  - templates/extra-manifests.yaml
+tests:
+  - it: still enforces conflicts inside a mapped object
+    template: templates/hostedcluster.yaml
+    set:
+      cluster:
+        hypershift: true
+      platform:
+        output: hostedcluster
+        hostedCluster:
+          name: c1
+          namespace: clusters
+      rules:
+        ocp4-api_server_tls_security_profile_not_old: true
+        ocp4-api_server_tls_security_profile_custom_min_tls_version: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "Conflicting compliance rules active for APIServer/cluster"
+
+  - it: fails on invalid YAML from a variable rather than dropping the rule
+    template: templates/hostedcluster.yaml
+    set:
+      cluster:
+        hypershift: true
+      platform:
+        output: hostedcluster
+        hostedCluster:
+          name: c1
+          namespace: clusters
+      rules:
+        ocp4-audit_profile_set: true
+      variables:
+        var_openshift_audit_profile: "Default: x"
+    asserts:
+      - failedTemplate:
+          errorPattern: "produced invalid YAML"
+
+  - it: does not render an extra into the management cluster output
+    template: templates/extra-manifests.yaml
+    set:
+      cluster:
+        hypershift: true
+      platform:
+        output: hostedcluster
+        hostedCluster:
+          name: c1
+          namespace: clusters
+      extraManifests:
+        mine:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: x
+    asserts:
+      - hasDocuments:
+          count: 0

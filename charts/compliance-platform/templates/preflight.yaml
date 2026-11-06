@@ -7,3 +7,4 @@
 {{- include "cr.applicabilityPreflight" . -}}
 {{- include "cr.dependencyPreflight" . -}}
 {{- include "cr.brokenPreflight" . -}}
+{{- include "cr.platformOutputPreflight" . -}}

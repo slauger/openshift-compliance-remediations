@@ -1,0 +1,50 @@
+{{- /* Platform objects the hosted control plane owns. */ -}}
+{{- if eq .Values.platform.output "guest" -}}
+{{- $mapped := int (include "cr.countActive" (dict "root" . "rules" (list "ocp4-api_server_encryption_provider_cipher" "ocp4-api_server_tls_security_profile_custom_min_tls_version" "ocp4-api_server_tls_security_profile_not_old" "ocp4-audit_profile_set" "ocp4-oauth_or_oauthclient_inactivity_timeout" "ocp4-oauth_or_oauthclient_token_maxage"))) }}
+{{- if $mapped }}
+# {{ $mapped }} active rule(s) belong to HostedCluster.spec.configuration and are not
+# in this output: render again with platform.output=hostedcluster for the
+# management cluster.
+{{- end }}
+{{- end -}}
+{{- if eq .Values.platform.output "hostedcluster" -}}
+{{- $root := . -}}
+{{- $configuration := dict -}}
+{{- range $pair := (list (list "apiServer" "cr.obj.apiserver-cluster") (list "oauth" "cr.obj.oauth-cluster")) -}}
+{{- $doc := include (index $pair 1) $root | fromYaml -}}
+{{- if hasKey $doc "Error" -}}
+{{- fail (printf "Rendering %s produced invalid YAML: %s" (index $pair 1) $doc.Error) -}}
+{{- end -}}
+{{- if hasKey $doc "spec" -}}
+{{- $_ := set $configuration (index $pair 0) $doc.spec -}}
+{{- end -}}
+{{- end -}}
+{{- $guest := int (include "cr.countActive" (dict "root" . "rules" (list "ocp4-audit_error_alert_exists" "ocp4-ingress_controller_tls_cipher_suites" "ocp4-ingress_controller_tls_security_profile_custom_min_tls_version" "ocp4-ingress_controller_tls_security_profile_not_old" "ocp4-project_config_and_template_network_policy" "ocp4-project_config_and_template_resource_quota" "ocp4-project_config_has_template" "ocp4-project_template_network_policy" "ocp4-project_template_resource_quota"))) }}
+{{- if $configuration }}
+---
+{{- if $guest }}
+# {{ $guest }} active rule(s) stay on the hosted cluster and are not in this output:
+# render again with platform.output=guest and apply that to the guest.
+{{- end }}
+apiVersion: hypershift.openshift.io/v1beta1
+kind: HostedCluster
+metadata:
+  name: {{ .Values.platform.hostedCluster.name | quote }}
+  namespace: {{ .Values.platform.hostedCluster.namespace | quote }}
+  labels:
+    app.kubernetes.io/name: {{ .Chart.Name | quote }}
+    app.kubernetes.io/instance: {{ .Release.Name | trunc 63 | trimSuffix "-" | quote }}
+    app.kubernetes.io/component: remediation
+    app.kubernetes.io/part-of: compliance-hardening
+    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+  annotations:
+    helm.sh/resource-policy: keep
+    argocd.argoproj.io/sync-options: Prune=false,Delete=false
+spec:
+  configuration:
+{{ $configuration | toYaml | indent 4 }}
+{{- else if $guest }}
+# Nothing for the management cluster: {{ $guest }} active rule(s) stay on the hosted
+# cluster. Render with platform.output=guest and apply that to the guest.
+{{- end -}}
+{{- end -}}

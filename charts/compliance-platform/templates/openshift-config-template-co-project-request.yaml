@@ -306,6 +306,7 @@ parameters:
 - name: PROJECT_REQUESTING_USER
 {{- end -}}
 
+{{- define "cr.obj.openshift-config-template-co-project-request" -}}
 {{- /* Template/co-project-request - rule(s): ocp4-project_config_and_template_resource_quota, ocp4-project_template_resource_quota, ocp4-project_config_and_template_network_policy, ocp4-project_template_network_policy */ -}}
 {{- if eq (include "cr.anyActive" (dict "root" . "rules" (list "ocp4-project_config_and_template_resource_quota" "ocp4-project_template_resource_quota" "ocp4-project_config_and_template_network_policy" "ocp4-project_template_network_policy"))) "true" -}}
 {{- $merged := dict -}}
@@ -392,4 +393,9 @@ metadata:
     helm.sh/resource-policy: keep
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
 {{ $merged | toYaml }}
+{{- end -}}
+{{- end -}}
+
+{{- if ne .Values.platform.output "hostedcluster" -}}
+{{ include "cr.obj.openshift-config-template-co-project-request" . }}
 {{- end -}}

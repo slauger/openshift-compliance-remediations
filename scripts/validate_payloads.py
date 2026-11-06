@@ -21,6 +21,9 @@ Two modes:
             decode every file payload, and run it through the parser that owns
             that file on the node.
 
+  hosted    Render every profile through the hosted cluster outputs, unwrap the
+            NodePool ConfigMap and hold what is inside to the same checks.
+
 Checks needing a tool that is not installed are reported as skipped, never
 silently passed.
 """
@@ -47,6 +50,7 @@ except ImportError:  # pragma: no cover - dev extra
 # collisions compares leaves below it. A third hand-kept copy would be a third
 # chance for this check to go looking for a key nothing emits any more.
 from compliance_remediations_helm.collisions import BODY_ROOTS as _BODY_KEYS
+from compliance_remediations_helm.emit import HOSTED_CLUSTER_FIELDS, NODEPOOL_EXTRA_KINDS
 
 ROOT = Path(__file__).resolve().parents[1]
 CHARTS = ROOT / "charts"
@@ -88,6 +92,17 @@ FLOORS: dict[str, dict[str, int]] = {
         # machine without auditd, and audit-rule-shape already walks the
         # same payloads, so a broken loop cannot hide.
         "no-cross-object-file-collisions": len(VERSIONS),
+    },
+    "hosted": {
+        "hosted-render": 40,
+        "nodepool-configmap-shape": 20,
+        "nodepool-render-stable": 20,
+        "nodepool-size-refused": 1,
+        "hostedcluster-shape": 10,
+        "no-template-syntax": 150,
+        "sshd -t": 10,
+        "resource-policy-keep": 10,
+        "resource-policy-absent": 20,
     },
     "arch": {
         "arch-render": len(ARCHITECTURES),
@@ -340,6 +355,19 @@ DISPATCH = (
 )
 
 
+def check_file_payloads(where: str, docs: list, fnd: Findings, scope: str) -> None:
+    """Hold every file the objects write to the parser that owns it on the node."""
+    for mc, path, _mode, body in iter_files(docs):
+        loc = f"{where}/{mc}"
+        if not fnd.first_time(f"{scope}:{path}", body):
+            continue
+        check_no_template_syntax(loc, path, body, fnd)
+        for pattern, check in DISPATCH:
+            if pattern.match(path):
+                check(loc, path, body, fnd)
+                break
+
+
 def validate_payloads(fnd: Findings) -> None:
     ignition_validate = shutil.which("ignition-validate")
     for version in VERSIONS:
@@ -357,15 +385,7 @@ def validate_payloads(fnd: Findings) -> None:
         # chart can produce, and where a cross-object file collision would
         # show up first.
         check_cross_object_files(where, docs, fnd)
-        for mc, path, _mode, body in iter_files(docs):
-            loc = f"{where}/{mc}"
-            if not fnd.first_time(f"payload:{path}", body):
-                continue
-            check_no_template_syntax(loc, path, body, fnd)
-            for pattern, check in DISPATCH:
-                if pattern.match(path):
-                    check(loc, path, body, fnd)
-                    break
+        check_file_payloads(where, docs, fnd, "payload")
         if ignition_validate:
             for doc in docs:
                 if doc.get("kind") != "MachineConfig":
@@ -560,6 +580,202 @@ def validate_renders(fnd: Findings) -> None:
 
 
 # --------------------------------------------------------------------------
+# hosted cluster checks
+
+
+HOSTED_NAMESPACE = "clusters"
+# What HostedCluster.spec.configuration may be set to. Anything else in this
+# patch would take a field from whoever created the HostedCluster.
+HOSTED_FIELDS = set(HOSTED_CLUSTER_FIELDS.values())
+INSTANCE_LABEL = "app.kubernetes.io/instance"
+_DOC_SEPARATOR_RE = re.compile(r"(?m)^---[ \t]*$")
+
+
+def unwrap_nodepool(where: str, docs: list, fnd: Findings) -> list:
+    """The objects inside the NodePool ConfigMaps, as if they had been rendered.
+
+    Everything rendered for a NodePool must sit in a ConfigMap under the one key
+    the controller reads, split the way it splits: on separator lines, where an
+    empty document is an error rather than the nothing a YAML parser makes of it.
+    """
+    wrapped: list = []
+    kubelet_configs = 0
+    for doc in docs:
+        if not doc:
+            continue
+        name = (doc.get("metadata") or {}).get("name", "<unnamed>")
+        if doc.get("kind") != "ConfigMap":
+            fnd.error(where, f"{doc.get('kind')}/{name} rendered next to the "
+                             f"NodePool ConfigMap and would land on the "
+                             f"management cluster")
+            return []
+        data = doc.get("data") or {}
+        if set(data) != {"config"}:
+            fnd.error(where, f"ConfigMap/{name} has keys {sorted(data)}; the "
+                             f"NodePool controller only reads 'config'")
+            return []
+        parts = _DOC_SEPARATOR_RE.split(data["config"])
+        if any(not part.strip() for part in parts[1:]):
+            fnd.error(where, f"ConfigMap/{name} holds an empty document, which "
+                             f"the controller would fail to decode")
+            return []
+        try:
+            inner = [d for d in yaml.safe_load_all(data["config"]) if d]
+        except yaml.YAMLError as exc:
+            fnd.error(where, f"ConfigMap/{name} holds invalid YAML: {exc}")
+            return []
+        if not inner:
+            fnd.error(where, f"ConfigMap/{name} holds no object")
+            return []
+        # The controller mirrors such a ConfigMap whole, so it must hold only that.
+        if any(d.get("kind") == "KubeletConfig" for d in inner):
+            kubelet_configs += sum(1 for d in inner if d.get("kind") == "KubeletConfig")
+            if len(inner) > 1:
+                fnd.error(where, f"ConfigMap/{name} mixes a KubeletConfig with "
+                                 f"other objects and would be mirrored to the guest")
+                return []
+        wrapped.extend(inner)
+    if kubelet_configs > 1:
+        fnd.error(where, f"{kubelet_configs} KubeletConfigs; a NodePool takes one")
+        return []
+    if not wrapped:
+        return []
+    for obj in wrapped:
+        name = (obj.get("metadata") or {}).get("name", "<unnamed>")
+        kind = obj.get("kind")
+        labels = (obj.get("metadata") or {}).get("labels") or {}
+        if kind not in (*NODEPOOL_EXTRA_KINDS, "KubeletConfig"):
+            fnd.error(where, f"{kind}/{name} is not something a NodePool reads")
+        elif labels.get("machineconfiguration.openshift.io/role") != "worker":
+            fnd.error(where, f"{kind}/{name} is not a worker object")
+        elif (obj.get("spec") or {}).get("machineConfigPoolSelector"):
+            fnd.error(where, f"{kind}/{name} selects a pool; a NodePool has none")
+        elif INSTANCE_LABEL in labels:
+            fnd.error(where, f"{kind}/{name} carries {INSTANCE_LABEL}; a new release "
+                             f"name would then roll every worker")
+    fnd.ok("nodepool-configmap-shape")
+    return wrapped
+
+
+def check_hostedcluster(where: str, docs: list, fnd: Findings) -> None:
+    """One HostedCluster, carrying spec.configuration and nothing else."""
+    clusters = [d for d in docs if d and d.get("kind") == "HostedCluster"]
+    if len(clusters) != 1 or len([d for d in docs if d]) != 1:
+        fnd.error(where, f"expected only one HostedCluster, got "
+                         f"{[d.get('kind') for d in docs if d]}")
+        return
+    spec = clusters[0].get("spec") or {}
+    fields = set(spec.get("configuration") or {})
+    if set(spec) != {"configuration"} or not fields or fields - HOSTED_FIELDS:
+        fnd.error(where, f"HostedCluster sets {sorted(spec)} / {sorted(fields)}; "
+                         f"only spec.configuration.{sorted(HOSTED_FIELDS)} is ours")
+        return
+    if "encryption" in (spec["configuration"].get("apiServer") or {}):
+        fnd.error(where, "HostedCluster sets apiServer.encryption, which upstream "
+                         "excludes from hosted clusters")
+        return
+    fnd.ok("hostedcluster-shape")
+
+
+def check_size_refused(nodepool: dict, fnd: Findings) -> None:
+    """A ConfigMap the API server would refuse must already fail to render.
+
+    Needs an extra manifest to get there: everything upstream enabled at once is
+    nowhere near the limit, so no profile render could ever exercise this.
+    """
+    huge = {"extraManifests": {"huge": {
+        "apiVersion": "machineconfiguration.openshift.io/v1",
+        "kind": "MachineConfig",
+        "metadata": {"name": "huge"},
+        "spec": {"filler": "x" * (1024 * 1024 + 1)},
+    }}}
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml") as fh:
+        yaml.safe_dump(huge, fh)
+        fh.flush()
+        try:
+            helm_template(NODE, nodepool, [fh.name])
+            fnd.error("nodepool", "a ConfigMap over 1 MiB rendered")
+        except RuntimeError as exc:
+            if "over the" in str(exc):
+                fnd.ok("nodepool-size-refused")
+            else:
+                fnd.error("nodepool", f"refused for the wrong reason: {exc}")
+
+
+def validate_hosted(fnd: Findings) -> None:
+    nodepool = {"node.enabled": "true", "cluster.hypershift": "true",
+                "node.output": "nodepool", "node.nodePool.namespace": HOSTED_NAMESPACE}
+    for profile in profiles_of(NODE):
+        where = f"nodepool/{profile}"
+        sets = {**nodepool, f"profiles.{profile}": "true"}
+        try:
+            rendered = helm_template(NODE, sets)
+            # The content feeds the hash that decides whether a NodePool rolls.
+            if helm_template(NODE, sets) == rendered:
+                fnd.ok("nodepool-render-stable")
+            else:
+                fnd.error(where, "two renders differ")
+        except RuntimeError as exc:
+            fnd.error(where, f"render failed: {exc}")
+            continue
+        docs = [d for d in yaml.safe_load_all(rendered) if d]
+        check_selector_label(where, docs, fnd)
+        check_resource_policy(where, docs, fnd, keep=False)
+        wrapped = unwrap_nodepool(where, docs, fnd)
+        check_object_has_body(where, wrapped, fnd)
+        check_selector_label(where, wrapped, fnd)
+        check_cross_object_files(where, wrapped, fnd)
+        check_file_payloads(where, wrapped, fnd, "nodepool-payload")
+        fnd.ok("hosted-render")
+
+    # Everything at once across the version matrix: the largest ConfigMap the
+    # chart can produce, and where version-gated payloads differ.
+    for version in VERSIONS:
+        where = f"nodepool@{version}"
+        sets = {**nodepool, "cluster.ocpVersion": version,
+                **{f"profiles.{p}": "true" for p in profiles_of(NODE)}}
+        try:
+            docs = [d for d in yaml.safe_load_all(helm_template(NODE, sets)) if d]
+        except RuntimeError as exc:
+            fnd.error(where, f"render failed: {exc}")
+            continue
+        wrapped = unwrap_nodepool(where, docs, fnd)
+        check_cross_object_files(where, wrapped, fnd)
+        check_file_payloads(where, wrapped, fnd, "nodepool-payload")
+
+    check_size_refused(nodepool, fnd)
+
+    overlay = str(PLATFORM / "values-hypershift.yaml")
+    for profile in profiles_of(PLATFORM):
+        selected = {f"profiles.{profile}": "true"}
+        management = {**selected, "platform.output": "hostedcluster",
+                      "platform.hostedCluster.name": "c1",
+                      "platform.hostedCluster.namespace": HOSTED_NAMESPACE}
+        guest = {**selected, "platform.output": "guest"}
+        try:
+            docs = [d for d in yaml.safe_load_all(
+                helm_template(PLATFORM, management, [overlay])) if d]
+            guest_docs = [d for d in yaml.safe_load_all(
+                helm_template(PLATFORM, guest, [overlay])) if d]
+        except RuntimeError as exc:
+            fnd.error(f"hosted/{profile}", f"render failed: {exc}")
+            continue
+        where = f"hosted/{profile}"
+        if docs:
+            check_hostedcluster(where, docs, fnd)
+            check_selector_label(where, docs, fnd)
+            check_resource_policy(where, docs, fnd, keep=True)
+        for doc in guest_docs:
+            if doc.get("kind") in ("APIServer", "OAuth", "HostedCluster"):
+                fnd.error(where, f"{doc.get('kind')} in the guest output; the "
+                                 f"hosted control plane owns it")
+        if guest_docs:
+            check_selector_label(where, guest_docs, fnd)
+            check_resource_policy(where, guest_docs, fnd, keep=True)
+        fnd.ok("hosted-render")
+
+
+# --------------------------------------------------------------------------
 # applicability checks
 
 
@@ -626,22 +842,28 @@ def validate_schema_rejects_typos(fnd: Findings) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("mode", choices=("render", "payloads", "arch", "all"))
+    ap.add_argument("mode", choices=("render", "payloads", "hosted", "arch", "all"))
     args = ap.parse_args()
 
     fnd = Findings()
-    if args.mode in ("render", "all"):
-        validate_renders(fnd)
-    if args.mode in ("payloads", "all"):
-        validate_payloads(fnd)
-    if args.mode in ("arch", "all"):
-        validate_architectures(fnd)
-        validate_schema_rejects_typos(fnd)
+    # Compared per mode: several share a counter name, and with one total the
+    # work of another mode would satisfy this one's floor.
+    runs = {
+        "render": lambda: validate_renders(fnd),
+        "payloads": lambda: validate_payloads(fnd),
+        "hosted": lambda: validate_hosted(fnd),
+        "arch": lambda: (validate_architectures(fnd), validate_schema_rejects_typos(fnd)),
+    }
+    done: dict[str, dict[str, int]] = {}
+    for mode, run in runs.items():
+        if args.mode in (mode, "all"):
+            before = dict(fnd.checked)
+            run()
+            done[mode] = {c: n - before.get(c, 0) for c, n in fnd.checked.items()}
 
-    modes = ("render", "payloads", "arch") if args.mode == "all" else (args.mode,)
-    for mode in modes:
+    for mode, counted in done.items():
         for check, floor in sorted(FLOORS[mode].items()):
-            actual = fnd.checked.get(check, 0)
+            actual = counted.get(check, 0)
             if actual < floor:
                 fnd.error("floor", f"{check} ran {actual} time(s), expected at "
                                    f"least {floor} - did it examine anything?")
