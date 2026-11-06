@@ -30,6 +30,7 @@ spec:
     profile: {{ .Values.variables.var_openshift_audit_profile }}
 {{- end -}}
 
+{{- define "cr.obj.apiserver-cluster" -}}
 {{- /* APIServer/cluster - rule(s): ocp4-api_server_encryption_provider_cipher, ocp4-api_server_tls_security_profile_custom_min_tls_version, ocp4-api_server_tls_security_profile_not_old, ocp4-audit_profile_set */ -}}
 {{- if eq (include "cr.anyActive" (dict "root" . "rules" (list "ocp4-api_server_encryption_provider_cipher" "ocp4-api_server_tls_security_profile_custom_min_tls_version" "ocp4-api_server_tls_security_profile_not_old" "ocp4-audit_profile_set"))) "true" -}}
 {{- if gt (int (include "cr.countActive" (dict "root" . "rules" (list "ocp4-api_server_tls_security_profile_custom_min_tls_version" "ocp4-api_server_tls_security_profile_not_old")))) 1 -}}
@@ -132,4 +133,9 @@ metadata:
     helm.sh/resource-policy: keep
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
 {{ $merged | toYaml }}
+{{- end -}}
+{{- end -}}
+
+{{- if eq .Values.platform.output "cluster" -}}
+{{ include "cr.obj.apiserver-cluster" . }}
 {{- end -}}

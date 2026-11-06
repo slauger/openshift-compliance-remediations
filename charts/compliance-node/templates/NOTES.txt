@@ -1,0 +1,24 @@
+{{- if and .Values.node.enabled (eq .Values.node.output "nodepool") -}}
+{{- $name := include "cr.nodePoolConfigMap" . -}}
+Node objects go into ConfigMaps in namespace {{ .Values.node.nodePool.namespace }}, if any
+rule is active: {{ $name }}, and {{ $name }}-kubelet when a kubelet rule is.
+
+Nothing reads them until a NodePool references them. Add them to the existing list:
+
+  oc -n {{ .Values.node.nodePool.namespace }} edit nodepool <name>
+
+  spec:
+    config:
+      - name: {{ $name }}
+      - name: {{ $name }}-kubelet
+
+A NodePool takes one KubeletConfig from 4.18 on. If it already has one, from another
+ConfigMap or a PerformanceProfile, the NodePool stops reconciling with
+ValidMachineConfig=False.
+
+Every later change to these ConfigMaps rolls the whole NodePool: upgradeType InPlace
+reboots node by node, Replace provisions new nodes and removes the old ones.
+
+node.roles is ignored in this mode: every object is rendered for workers, the
+only role a NodePool has.
+{{- end -}}

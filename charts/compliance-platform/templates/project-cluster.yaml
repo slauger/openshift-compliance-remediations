@@ -16,6 +16,7 @@ spec:
     name: co-project-request
 {{- end -}}
 
+{{- define "cr.obj.project-cluster" -}}
 {{- /* Project/cluster - rule(s): ocp4-project_config_and_template_resource_quota, ocp4-project_config_has_template, ocp4-project_config_and_template_network_policy */ -}}
 {{- if eq (include "cr.anyActive" (dict "root" . "rules" (list "ocp4-project_config_and_template_resource_quota" "ocp4-project_config_has_template" "ocp4-project_config_and_template_network_policy"))) "true" -}}
 {{- $merged := dict -}}
@@ -87,4 +88,9 @@ metadata:
     helm.sh/resource-policy: keep
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
 {{ $merged | toYaml }}
+{{- end -}}
+{{- end -}}
+
+{{- if ne .Values.platform.output "hostedcluster" -}}
+{{ include "cr.obj.project-cluster" . }}
 {{- end -}}

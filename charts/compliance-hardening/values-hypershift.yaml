@@ -1,0 +1,14 @@
+# Overlay for a hosted cluster (umbrella chart).
+# Generated from ComplianceAsCode/content v0.1.82.
+#
+# Upstream marks these rules as not applicable on a hosted cluster, so the
+# chart refuses to render them. Apply this file to switch them off in one go,
+# next to the output mode (see "Hosted control planes" in the README).
+compliance-node:
+  cluster:
+    hypershift: true
+compliance-platform:
+  cluster:
+    hypershift: true
+  rules:
+    ocp4-api_server_encryption_provider_cipher: false  # not applicable on a hosted cluster

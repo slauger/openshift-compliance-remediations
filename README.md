@@ -30,7 +30,7 @@ That is **12 rules**, and that is all CIS has to offer here: it ships no OS-leve
 
 ```bash
 helm upgrade compliance-node oci://ghcr.io/slauger/charts/compliance-node \
-  --reuse-values --set profiles.rhcos4-moderate=true     # +205 rules
+  --reset-then-reuse-values --set profiles.rhcos4-moderate=true     # +205 rules
 ```
 
 Swap `rhcos4-moderate` for `rhcos4-stig`, `rhcos4-high`, `rhcos4-bsi` or `rhcos4-e8` as needed, and add `master` to `node.roles` when you are ready to roll the control plane. Run `helm template` with the same flags to see every manifest first, or diff it in ArgoCD.
@@ -180,8 +180,8 @@ descriptive but functional: it is how the MCO associates the object with a pool.
 
 Two standalone charts plus a thin umbrella wrapper:
 
-- `charts/compliance-platform/`: ocp4 platform config objects (APIServer, OAuth, IngressController, Project, Template, PrometheusRule). No node reboots - but the audit-profile and encryption rules redeploy the kube-apiserver, so the API is briefly unavailable on a single-control-plane cluster.
-- `charts/compliance-node/`: `MachineConfig` / `KubeletConfig` remediations (ocp4 node + all rhcos4). Gated behind `node.enabled=false` because applying them triggers **MachineConfigPool rollouts (node reboots)**. Emitted per node role.
+- `charts/compliance-platform/`: ocp4 platform config objects (APIServer, OAuth, IngressController, Project, Template, PrometheusRule). No node reboots - but the audit-profile and encryption rules redeploy the kube-apiserver, so the API is briefly unavailable on a single-control-plane cluster. On a hosted cluster from 4.23 its TLS rule rolls the NodePools, see [Hosted control planes](#hosted-control-planes).
+- `charts/compliance-node/`: `MachineConfig` / `KubeletConfig` remediations (ocp4 node + all rhcos4). Gated behind `node.enabled=false` because applying them triggers **MachineConfigPool rollouts (node reboots)**. Emitted per node role. On a hosted cluster see [Hosted control planes](#hosted-control-planes).
 - `charts/compliance-hardening/`: umbrella depending on both subcharts; values are prefixed per subchart (no `global`). Subcharts remain installable standalone.
 
 ### KubeletConfig
@@ -190,7 +190,7 @@ Kubelet remediations are consolidated the way the operator does it: **one `Kubel
 
 That is not cosmetic. A `KubeletConfig` without `spec.machineConfigPoolSelector` matches **no** pool (the MCO treats a nil selector as "nothing, not everything") so it would be created and then do nothing. The selector uses `pools.operator.machineconfiguration.openshift.io/<pool>: ""`, which the MCO puts on the built-in `master` and `worker` pools. **If you point `node.roles` at a custom pool, label that pool yourself** - the operator has the same requirement.
 
-One difference we cannot mirror: if a pool already has its own `KubeletConfig`, the operator patches that object; a chart cannot inspect the cluster, so ours is an additional `KubeletConfig` for the pool. OpenShift supports several per pool, applying them in order.
+One difference we cannot mirror: if a pool already has its own `KubeletConfig`, the operator patches that object; a chart cannot inspect the cluster, so ours is an additional `KubeletConfig` for the pool. OpenShift supports several per pool, applying them in order. A `NodePool` on a hosted cluster does not, see [Hosted control planes](#hosted-control-planes).
 
 ## Conflicts and alternatives
 
@@ -313,7 +313,7 @@ helm template compliance ./charts/compliance-hardening \
 
 On aarch64 that is 21 rules (audit rules for syscalls ARM64 does not have), on s390x 5. Without the overlay the render aborts and tells you which rules and why.
 
-**Mixed-architecture clusters**: `cluster.architecture` describes the pools named in `node.roles`, and MachineConfigs target pools. Install the node chart once per architecture with the matching `node.roles` and `cluster.architecture` - object names are role-suffixed, so the releases do not collide. Leaving the default on a mixed cluster keeps today's behaviour (the operator reports the ARM nodes' rules as `notapplicable`); setting `aarch64` would remove those rules from your x86 pools too.
+**Mixed-architecture clusters**: `cluster.architecture` describes the pools named in `node.roles`, and MachineConfigs target pools. Install the node chart once per architecture with the matching `node.roles` and `cluster.architecture` - object names are role-suffixed, so the releases do not collide (on a hosted cluster the ConfigMap name is per release, see [Hosted control planes](#hosted-control-planes)). Leaving the default on a mixed cluster keeps today's behaviour (the operator reports the ARM nodes' rules as `notapplicable`); setting `aarch64` would remove those rules from your x86 pools too.
 
 Every other constraint is an assumption about RHCOS/OKD, documented per fact in [`applicability.py`](src/compliance_remediations_helm/applicability.py) with the reasoning. Three rules are never applicable at all and ship disabled. The **Applicability** column in [`RULES.md`](RULES.md) carries the constraint for every rule.
 
@@ -459,6 +459,126 @@ Three consequences, in order of how much trouble they save you:
 
 **Removing platform hardening is not `helm uninstall`.** These objects carry `helm.sh/resource-policy: keep`, so a Helm-managed release will never delete them - deleting `IngressController/default` would take the router down, and deleting `Project/cluster` while its `Template/co-project-request` survives would break project creation. To undo, edit the objects back.
 
+## Hosted control planes
+
+A hosted cluster (HyperShift) has RHCOS workers, but no Machine Config Operator and no control plane nodes of its own. Worker configuration comes from the `NodePool` and cluster-wide configuration from the `HostedCluster`, both on the **management cluster**. So one hardening spans two clusters, and every output below goes to exactly one of them:
+
+| Render | Applied to | Contains |
+| --- | --- | --- |
+| `node.output=nodepool` | management cluster | two `ConfigMap`s: `<release>-hardening` with every `MachineConfig`, `<release>-hardening-kubelet` with the `KubeletConfig` |
+| `platform.output=hostedcluster` | management cluster | a patch of `HostedCluster.spec.configuration`: API server audit profile and TLS profile, OAuth token settings |
+| `platform.output=guest` | hosted cluster | `IngressController/default`, `Project/cluster`, `Template/co-project-request`, TailoredProfiles, `extraManifests` |
+
+The wrong pairing is refused rather than applied and ignored: `cluster.hypershift=true` needs a hosted output, a hosted output needs `cluster.hypershift=true`, and the umbrella refuses a render whose objects belong on two clusters. [`RULES.md`](RULES.md#on-a-hosted-cluster) lists per profile how many rules go where, and names every rule outside the NodePool.
+
+**Read this before applying the OAuth rules.** The moment `spec.configuration.oauth` is set, HyperShift treats the OAuth configuration as explicit and **removes the `kubeadmin` password**. `ocp4-moderate`, `ocp4-high`, `ocp4-stig` and `ocp4-nerc-cip` all select those rules, which is what the benchmarks want, but set up an identity provider first or you lock yourself out of the console. The standalone charts have no such side effect.
+
+**Management cluster:**
+
+```bash
+# nodes - nothing happens until a NodePool references the ConfigMaps
+helm install my-cluster oci://ghcr.io/slauger/charts/compliance-node \
+  --namespace clusters \
+  --set cluster.hypershift=true --set node.enabled=true --set node.output=nodepool \
+  --set node.nodePool.namespace=clusters \
+  --set profiles.rhcos4-moderate=true --set profiles.ocp4-moderate-node=true
+
+# platform - applied, not installed: the HostedCluster is not ours
+helm template compliance-platform oci://ghcr.io/slauger/charts/compliance-platform \
+  -f values-hypershift.yaml \
+  --set platform.output=hostedcluster \
+  --set platform.hostedCluster.name=my-cluster --set platform.hostedCluster.namespace=clusters \
+  --set profiles.ocp4-moderate=true \
+  | oc apply --server-side --field-manager=compliance-hardening -f -
+```
+
+**Hosted cluster:**
+
+```bash
+helm template compliance-platform oci://ghcr.io/slauger/charts/compliance-platform \
+  -f values-hypershift.yaml --set platform.output=guest --set profiles.ocp4-moderate=true \
+  | oc apply --server-side --force-conflicts -f -
+```
+
+`values-hypershift.yaml` ships with the chart (`helm pull --untar`). It sets `cluster.hypershift` and switches off the one rule upstream excludes from hosted clusters, which most benchmarks select. The patch deliberately omits `--force-conflicts`: it sets only the fields a rule needs, so a conflict means someone else set one of them on purpose, and that is worth reading.
+
+Each output says in a comment at its top when active rules belong to the other one. A profile whose rules are all on the other side renders nothing else, and `oc apply` then reports that it found no objects.
+
+**Reference the ConfigMaps from the NodePool.** Nothing reads them until then. `spec.config` belongs to whoever created the NodePool and Kubernetes treats it as one list, so the chart does not touch it; add the entries yourself, next to the ones already there:
+
+```yaml
+spec:
+  config:
+    - name: my-cluster-hardening
+    - name: my-cluster-hardening-kubelet   # if a kubelet rule is active
+```
+
+**A NodePool takes one `KubeletConfig`** from 4.18 on. A second one from any source - your own ConfigMap, or a `PerformanceProfile` - sets `ValidMachineConfig=False` and stops the NodePool reconciling, and the condition names what to delete. So if the NodePool already has one, disable the kubelet rules here or merge them by hand. This is unlike a standalone pool, which takes several. For the same reason `extraManifests` only accepts `MachineConfig` in this mode.
+
+**Why two ConfigMaps, and not one per object.** `NodePool.spec.config` takes at most 10 entries from 4.20 on, and `rhcos4-e8` alone is 32 objects, so per-object ConfigMaps cannot be referenced at all. The controller reads every document in a ConfigMap since OCPBUGS-30282, so the HyperShift operator must be 4.17 or newer, or a 4.16 with the backport (hypershift#4398, August 2024). It also copies any ConfigMap holding a `KubeletConfig` to the control plane namespace and into the guest, whole, which is why that one is kept apart from the payload. Everything enabled comes to about 230 KB; the chart refuses to render past the 1 MiB a ConfigMap can hold.
+
+**One release per hosted cluster, and per architecture.** The ConfigMap name comes from the release, so it stays unique in a namespace shared by several clusters, which is what `clusters` usually is. Reusing a release name there would make two clusters share one ConfigMap and roll each other's nodes. A `NodePool` of another architecture needs its own release with that architecture's overlay, as on a standalone cluster. Set `node.nodePool.configMapName` to choose the name yourself. The release name is deliberately not part of the wrapped objects, so moving from `helm install` to an Argo CD Application does not roll anything by itself; only update the references.
+
+**Rollouts.** The content of those ConfigMaps is hashed, so any change rolls the whole NodePool: `upgradeType: InPlace` reboots node by node, `upgradeType: Replace` provisions new nodes and removes the old ones. From 4.23 setting `tlsSecurityProfile` on the `HostedCluster` does too, because workers consume it - even when the value equals the default in effect until then. So the "no reboots" of the platform chart does not hold there. `node.roles` is ignored in this mode: every object is rendered for workers, the only role a NodePool has. Master-only rules therefore render nothing.
+
+**Uninstalling.** Deleting a ConfigMap the NodePool still references does not roll the hardening back: the NodePool goes `ValidMachineConfig=False` and stops reconciling. Remove the references first, which rolls the nodes, and delete afterwards.
+
+**What the control plane owns cannot be edited from the guest.** From 4.18 a `ValidatingAdmissionPolicy` in the hosted cluster rejects spec changes to `APIServer/cluster` and `OAuth/cluster` from anyone but the hosted cluster config operator, which also overwrites the `APIServer` spec from the `HostedControlPlane`. Before 4.18 there is no such policy, and an edit to `OAuth/cluster` is accepted and has no effect.
+
+**A guest scan does not see the OAuth rules.** `spec.configuration.oauth` configures the OAuth server directly and is not copied to `OAuth/cluster` in the guest, which is what upstream's check reads. So expect those rules to keep reporting `FAIL` there while the setting is in effect. The API server rules are copied and should pass.
+
+**Things to check on your cluster:**
+
+- `IngressController/default` is only left alone by the control plane once it exists: the operator creates it with the domain and publishing strategy and never touches it again, so the `tlsSecurityProfile` stays yours. Apply the guest output *after* the cluster is up - if ours creates the object first, none of that gets set. With the `Ingress` capability disabled (from 4.20) nothing acts on it at all, so disable the `ocp4-ingress_controller_*` rules.
+- `spec.configuration.oauth` only does anything with the integrated OAuth server; with external OIDC disable the `ocp4-oauth_*` rules.
+- Master-only rules and encryption at rest cannot be remediated. `HostedCluster.spec.secretEncryption` needs key material the chart does not have, and `spec.fips` is immutable, so both are decided when the cluster is created.
+- Managed offerings such as ROSA HCP or ARO HCP do not give you this access to the management cluster, so neither management-side output applies there.
+- The Compliance Operator on a hosted cluster is Technology Preview, needs `PLATFORM=HyperShift` and a worker `nodeSelector` on its subscription, and its default `ScanSetting` there applies remediations automatically. Use your own with `autoApplyRemediations` off, as everywhere else.
+
+**Argo CD** takes one `Application` per cluster, with its name as the release name. For the management cluster half:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: compliance-my-cluster
+  namespace: openshift-gitops
+spec:
+  project: default
+  source:
+    repoURL: ghcr.io/slauger/charts
+    chart: compliance-hardening
+    targetRevision: "<pinned version>"
+    helm:
+      valuesObject:
+        compliance-platform:
+          cluster: { hypershift: true }
+          platform:
+            output: hostedcluster
+            hostedCluster: { name: my-cluster, namespace: clusters }
+          profiles: { ocp4-moderate: true }
+          rules: { ocp4-api_server_encryption_provider_cipher: false }
+        compliance-node:
+          cluster: { hypershift: true }
+          node:
+            enabled: true
+            output: nodepool
+            nodePool: { namespace: clusters }
+          profiles: { rhcos4-moderate: true }
+  destination:
+    server: https://kubernetes.default.svc   # the management cluster
+    namespace: clusters
+  syncPolicy:
+    syncOptions:
+      - ServerSideApply=true
+```
+
+The guest half is a second `Application` of `compliance-platform` with `platform.output: guest`, targeting the hosted cluster. Two differences from the commands above: Argo CD **always forces conflicts** under server-side apply, so an existing `tlsSecurityProfile` or `tokenConfig` is overwritten without the review the command-line path gives you; read the diff. And the umbrella does not show the chart's install notes. The `HostedCluster` patch carries the same keep annotations as the platform objects, because it is the cluster: deleting this `Application` must not delete it. The ConfigMaps do not, see **Uninstalling**.
+
+**Upgrading from 0.4.x.** Two things change for existing releases. `cluster.hypershift: true` alone no longer renders: it used to change nothing but the applicability gate, which produced objects a hosted cluster cannot use, so pick the outputs above. And `helm upgrade --reuse-values` keeps the old values without the new chart's defaults, so it fails the schema with `missing property 'output'`; use `--reset-then-reuse-values`, which takes the new defaults and keeps your overrides. Nothing else changes on a standalone cluster: the rendered objects stay the same.
+
+**How far this has been tested.** The rendered output was checked by hand against the `HostedCluster` and `NodePool` CRDs once, and `make validate-payloads` covers its shape. The behaviour above is read from the HyperShift source. It has **not yet run against a live hosted cluster**, so the `ValidMachineConfig` condition, a full profile's Ignition payload size, the rollouts, the server-side apply and the scan result for the OAuth rules are all unproven. Start with a single harmless rule.
+
 ## Generating from source
 
 ```bash
@@ -475,7 +595,7 @@ Configure via a values override (standalone platform chart shown):
 cluster:
   ocpVersion: "4.20"          # selects version-dependent remediations
   architecture: x86_64        # x86_64 | aarch64 | ppc64le | s390x
-  hypershift: false           # true on a HyperShift hosted cluster
+  hypershift: false           # true on a hosted cluster, see Hosted control planes
 profiles:
   ocp4-cis: true              # whitelist whole profiles
   ocp4-bsi: true

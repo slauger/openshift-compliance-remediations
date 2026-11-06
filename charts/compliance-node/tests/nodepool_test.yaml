@@ -1,0 +1,420 @@
+suite: node.output=nodepool
+# The aggregate template includes the named templates of every object, so this
+# suite has to load all of them rather than one file.
+templates:
+  - templates/*.yaml
+tests:
+  - it: wraps the active objects into one ConfigMap in the given namespace
+    template: templates/nodepool-configmap.yaml
+    set: &nodepool
+      cluster:
+        hypershift: true
+      node:
+        enabled: true
+        output: nodepool
+        nodePool:
+          namespace: clusters
+      profiles:
+        rhcos4-e8: true
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: ConfigMap
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-hardening
+      - equal:
+          path: metadata.namespace
+          value: clusters
+      - equal:
+          path: metadata.labels["app.kubernetes.io/part-of"]
+          value: compliance-hardening
+      - matchRegex:
+          path: data.config
+          pattern: "kind: MachineConfig"
+      # The wrapped objects keep the ownership label too.
+      - matchRegex:
+          path: data.config
+          pattern: "app.kubernetes.io/part-of: compliance-hardening"
+      # But not the release name: the controller hashes them, labels included,
+      # so a new release name would replace every worker.
+      - equal:
+          path: metadata.labels["app.kubernetes.io/instance"]
+          value: RELEASE-NAME
+      - notMatchRegex:
+          path: data.config
+          pattern: "app.kubernetes.io/instance"
+
+  - it: renders nothing else next to the ConfigMap
+    # Anything rendered directly would land on the management cluster.
+    template: templates/machineconfig-75-banner-etc-issue.yaml
+    set: *nodepool
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders worker objects only, whatever node.roles says
+    template: templates/nodepool-configmap.yaml
+    set:
+      cluster:
+        hypershift: true
+      node:
+        enabled: true
+        output: nodepool
+        roles: [worker, master]
+        nodePool:
+          namespace: clusters
+      rules:
+        rhcos4-banner_etc_issue: true
+    asserts:
+      - matchRegex:
+          path: data.config
+          pattern: "name: 75-banner-etc-issue-worker"
+      - notMatchRegex:
+          path: data.config
+          pattern: "75-banner-etc-issue-master"
+      - matchRegex:
+          path: data.config
+          pattern: 'machineconfiguration.openshift.io/role: "worker"'
+
+  - it: leaves the pool selection of a KubeletConfig to the NodePool
+    template: templates/nodepool-configmap.yaml
+    set:
+      cluster:
+        hypershift: true
+      node:
+        enabled: true
+        output: nodepool
+        nodePool:
+          namespace: clusters
+      rules:
+        ocp4-kubelet_configure_event_creation: true
+    asserts:
+      - matchRegex:
+          path: data.config
+          pattern: "kind: KubeletConfig"
+      - matchRegex:
+          path: data.config
+          pattern: "eventRecordQPS"
+      - notMatchRegex:
+          path: data.config
+          pattern: "machineConfigPoolSelector"
+
+  - it: keeps the KubeletConfig out of the payload ConfigMap
+    # The controller mirrors a ConfigMap holding a KubeletConfig to the control
+    # plane namespace and the guest, whole.
+    template: templates/nodepool-configmap.yaml
+    documentIndex: 0
+    set: &both
+      cluster:
+        hypershift: true
+      node:
+        enabled: true
+        output: nodepool
+        nodePool:
+          namespace: clusters
+      rules:
+        rhcos4-banner_etc_issue: true
+        ocp4-kubelet_configure_event_creation: true
+    asserts:
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-hardening
+      - notMatchRegex:
+          path: data.config
+          pattern: "kind: KubeletConfig"
+
+  - it: renders the KubeletConfig alone in a ConfigMap of its own
+    template: templates/nodepool-configmap.yaml
+    documentIndex: 1
+    set: *both
+    asserts:
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-hardening-kubelet
+      - equal:
+          path: metadata.namespace
+          value: clusters
+      - matchRegex:
+          path: data.config
+          pattern: "kind: KubeletConfig"
+      - notMatchRegex:
+          path: data.config
+          pattern: "kind: MachineConfig"
+      - equal:
+          path: metadata.labels["app.kubernetes.io/part-of"]
+          value: compliance-hardening
+
+  - it: takes a configured ConfigMap name
+    template: templates/nodepool-configmap.yaml
+    set:
+      cluster:
+        hypershift: true
+      node:
+        enabled: true
+        output: nodepool
+        nodePool:
+          namespace: clusters
+          configMapName: hardening
+      rules:
+        rhcos4-banner_etc_issue: true
+    asserts:
+      - equal:
+          path: metadata.name
+          value: hardening
+
+  - it: renders nothing while node.enabled is false
+    template: templates/nodepool-configmap.yaml
+    set:
+      cluster:
+        hypershift: true
+      node:
+        enabled: false
+        output: nodepool
+        nodePool:
+          namespace: clusters
+      profiles:
+        rhcos4-e8: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: bundles an extra MachineConfig with the upstream objects
+    template: templates/nodepool-configmap.yaml
+    set:
+      cluster:
+        hypershift: true
+      node:
+        enabled: true
+        output: nodepool
+        nodePool:
+          namespace: clusters
+      extraManifests:
+        mine:
+          apiVersion: machineconfiguration.openshift.io/v1
+          kind: MachineConfig
+          metadata:
+            name: 80-local-worker
+          spec:
+            config:
+              ignition:
+                version: 3.1.0
+    asserts:
+      - matchRegex:
+          path: data.config
+          pattern: "name: 80-local-worker"
+      - matchRegex:
+          path: data.config
+          pattern: "app.kubernetes.io/component: local"
+
+  - it: renders an extra only inside the ConfigMap, not next to it as well
+    # Next to it, it would land on the management cluster.
+    template: templates/extra-manifests.yaml
+    set:
+      cluster:
+        hypershift: true
+      node:
+        enabled: true
+        output: nodepool
+        nodePool:
+          namespace: clusters
+      extraManifests:
+        mine:
+          apiVersion: machineconfiguration.openshift.io/v1
+          kind: MachineConfig
+          metadata:
+            name: 80-local-worker
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: refuses an extra manifest a NodePool cannot read
+    template: templates/nodepool-configmap.yaml
+    set:
+      cluster:
+        hypershift: true
+      node:
+        enabled: true
+        output: nodepool
+        nodePool:
+          namespace: clusters
+      extraManifests:
+        mine:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: x
+    asserts:
+      - failedTemplate:
+          errorPattern: "extraManifests.mine \\(Namespace\\) cannot go into the NodePool ConfigMap"
+
+  - it: refuses an extra KubeletConfig, a NodePool takes one
+    template: templates/nodepool-configmap.yaml
+    set:
+      cluster:
+        hypershift: true
+      node:
+        enabled: true
+        output: nodepool
+        nodePool:
+          namespace: clusters
+      extraManifests:
+        mine:
+          apiVersion: machineconfiguration.openshift.io/v1
+          kind: KubeletConfig
+          metadata:
+            name: x
+    asserts:
+      - failedTemplate:
+          errorPattern: "extraManifests.mine \\(KubeletConfig\\) cannot go into the NodePool ConfigMap"
+
+  - it: refuses an extra for the master role, the controller would apply it to workers
+    template: templates/nodepool-configmap.yaml
+    set:
+      cluster:
+        hypershift: true
+      node:
+        enabled: true
+        output: nodepool
+        nodePool:
+          namespace: clusters
+      extraManifests:
+        mine:
+          apiVersion: machineconfiguration.openshift.io/v1
+          kind: MachineConfig
+          metadata:
+            name: x
+            labels:
+              machineconfiguration.openshift.io/role: master
+    asserts:
+      - failedTemplate:
+          errorPattern: "extraManifests.mine has role master"
+
+  - it: refuses an extra that would render nowhere
+    template: templates/preflight.yaml
+    set:
+      cluster:
+        hypershift: true
+      node:
+        enabled: false
+        output: nodepool
+        nodePool:
+          namespace: clusters
+      extraManifests:
+        mine:
+          apiVersion: machineconfiguration.openshift.io/v1
+          kind: MachineConfig
+          metadata:
+            name: x
+    asserts:
+      - failedTemplate:
+          errorPattern: "extraManifests.mine renders nowhere"
+
+  - it: refuses an extra MachineConfig on the guest, nothing reads it there
+    template: templates/preflight.yaml
+    set:
+      cluster:
+        hypershift: true
+      extraManifests:
+        mine:
+          apiVersion: machineconfiguration.openshift.io/v1
+          kind: MachineConfig
+          metadata:
+            name: x
+    asserts:
+      - failedTemplate:
+          errorPattern: "extraManifests.mine \\(MachineConfig\\) would never be read on the guest"
+
+  - it: still renders other extras on the guest
+    template: templates/extra-manifests.yaml
+    set:
+      cluster:
+        hypershift: true
+      extraManifests:
+        mine:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: x
+    asserts:
+      - isKind:
+          of: Namespace
+
+  - it: refuses a hosted cluster with the MachineConfig output
+    template: templates/preflight.yaml
+    set:
+      cluster:
+        hypershift: true
+      node:
+        enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "cluster.hypershift=true needs node.output=nodepool"
+
+  - it: allows a hosted cluster with node.enabled=false, for a guest-side TailoredProfile
+    template: templates/tailoredprofile.yaml
+    set:
+      cluster:
+        hypershift: true
+      tailoredProfile:
+        enabled: true
+      profiles:
+        rhcos4-e8: true
+    asserts:
+      - hasDocuments:
+          count: 1
+
+  - it: refuses the NodePool output on a standalone cluster
+    template: templates/preflight.yaml
+    set:
+      node:
+        output: nodepool
+        nodePool:
+          namespace: clusters
+    asserts:
+      - failedTemplate:
+          errorPattern: "node.output=nodepool needs cluster.hypershift=true"
+
+  - it: refuses a TailoredProfile next to the ConfigMap, they go to different clusters
+    template: templates/preflight.yaml
+    set:
+      cluster:
+        hypershift: true
+      node:
+        output: nodepool
+        nodePool:
+          namespace: clusters
+      tailoredProfile:
+        enabled: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "tailoredProfile.enabled cannot be combined with node.output=nodepool"
+
+  - it: keeps the existing output by default
+    template: templates/nodepool-configmap.yaml
+    set:
+      node:
+        enabled: true
+      rules:
+        rhcos4-banner_etc_issue: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: still enforces conflicts inside a wrapped object
+    template: templates/nodepool-configmap.yaml
+    set:
+      cluster:
+        hypershift: true
+      node:
+        enabled: true
+        output: nodepool
+        nodePool:
+          namespace: clusters
+      rules:
+        rhcos4-sshd_disable_x11_forwarding: true
+        rhcos4-sshd_enable_x11_forwarding: true
+    asserts:
+      - failedTemplate:
+          errorPattern: "Conflicting"

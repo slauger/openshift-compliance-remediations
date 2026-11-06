@@ -4,6 +4,9 @@ Produces two standalone charts under ``charts_dir``:
   * compliance-platform  - ocp4 config objects (no node reboots)
   * compliance-node       - MachineConfig/KubeletConfig (reboots, per MCP role)
 
+On a hosted cluster the same fragments render through other outputs instead: a
+ConfigMap for the NodePool, and a patch for HostedCluster.spec.configuration.
+
 And (task 7) an umbrella ``compliance-hardening`` that depends on both.
 
 Merge strategy:
@@ -35,6 +38,38 @@ UMBRELLA_CHART = "compliance-hardening"
 
 DEFAULT_OCP_VERSION = "4.20"
 DEFAULT_ARCHITECTURE = "x86_64"
+
+# Targets the hosted control plane owns: on a hosted cluster these are configured
+# through HostedCluster.spec.configuration on the management cluster, and the
+# guest-side object cannot be edited - a ValidatingAdmissionPolicy rejects any
+# spec change not made by the hosted cluster config operator, which also copies
+# the APIServer spec over from the HostedControlPlane. Keyed by target object,
+# valued by the field of ClusterConfiguration of the same config.openshift.io
+# type, which is why a fragment's spec moves across unchanged.
+#
+# IngressController, Project and Template are absent on purpose: no field of
+# ClusterConfiguration expresses them. spec.configuration.ingress is the
+# config.openshift.io Ingress and has no tlsSecurityProfile, and the operator
+# only sets the fields it owns on IngressController/default, so they stay
+# guest-side.
+HOSTED_CLUSTER_FIELDS = {
+    ("APIServer", "cluster"): "apiServer",
+    ("OAuth", "cluster"): "oauth",
+}
+
+# What the Machine Config Operator would read on a standalone cluster. A hosted
+# cluster has no such operator, so these only work through a NodePool.
+NODEPOOL_KINDS = ("MachineConfig", "KubeletConfig", "ContainerRuntimeConfig")
+
+# What an extra manifest may be inside the ConfigMap. The controller mirrors a
+# ConfigMap holding a KubeletConfig or ContainerRuntimeConfig to the control plane
+# namespace and the guest, whole, so those must not share one with the payload;
+# and from 4.18 a NodePool takes only one KubeletConfig, which is the chart's own.
+NODEPOOL_EXTRA_KINDS = ("MachineConfig",)
+
+# The API server refuses a ConfigMap over 1 MiB. Rendered here so the failure
+# names the cause instead of arriving as a rejected apply.
+CONFIGMAP_MAX_BYTES = 1048576
 
 
 # --------------------------------------------------------------------------- #
@@ -256,6 +291,7 @@ HELPERS_TPL = """\
 {{- $arch := include "cr.arch" $root -}}
 {{- $bad := list -}}
 {{- $archBad := false -}}
+{{- $hypershiftBad := false -}}
 {{- range $rule, $req := ($root.Values.ruleApplicability | default dict) -}}
 {{-   if eq (include "cr.ruleActive" (dict "root" $root "rule" $rule)) "true" -}}
 {{-     $reason := "" -}}
@@ -266,6 +302,7 @@ HELPERS_TPL = """\
 {{-       $archBad = true -}}
 {{-     else if and (hasKey $req "hypershift") (not (has $root.Values.cluster.hypershift $req.hypershift)) -}}
 {{-       $reason = printf "not applicable when cluster.hypershift is %v" $root.Values.cluster.hypershift -}}
+{{-       $hypershiftBad = $root.Values.cluster.hypershift -}}
 {{-     end -}}
 {{-     if $reason -}}
 {{-       $bad = append $bad (printf "  %s - %s" $rule $reason) -}}
@@ -276,6 +313,8 @@ HELPERS_TPL = """\
 {{- $hint := "Disable them in .Values.rules, or change the cluster facts they depend on. See RULES.md for the applicability of every rule." -}}
 {{- if $archBad -}}
 {{- $hint = printf "Disable them in .Values.rules, or apply the generated overlay for this architecture: -f values-%s.yaml from the chart you are installing (the umbrella ships its own, with the values nested per subchart). See RULES.md for the applicability of every rule." $arch -}}
+{{- else if $hypershiftBad -}}
+{{- $hint = "Disable them in .Values.rules, or change the cluster facts they depend on. For a hosted cluster the generated overlay does the former: -f values-hypershift.yaml from the chart you are installing. See RULES.md for the applicability of every rule." -}}
 {{- end -}}
 {{- fail (printf "%d active rule(s) are not applicable to this cluster:\\n%s\\n%s" (len $bad) (join "\\n" (sortAlpha $bad)) $hint) -}}
 {{- end -}}
@@ -319,6 +358,137 @@ HELPERS_TPL = """\
 {{- end -}}
 {{- if $bad -}}
 {{- fail (printf "%d active rule(s) reproduce an upstream fix that cannot work:\\n%s\\nPrefer the non-broken alternative in the same group; see RULES.md." (len $bad) (join "\\n" (sortAlpha $bad))) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+  Refuse an output mode that does not fit the cluster. Each wrong pairing would
+  otherwise be accepted by the API server and then do nothing: a hosted cluster
+  has no Machine Config Operator to read a MachineConfig, and a standalone
+  cluster has no NodePool to read the ConfigMap.
+*/}}
+{{- define "cr.nodeOutputPreflight" -}}
+{{- $nodepool := eq .Values.node.output "nodepool" -}}
+{{- if and $nodepool (not .Values.cluster.hypershift) -}}
+{{- fail "node.output=nodepool needs cluster.hypershift=true: a standalone cluster has no NodePool, so the ConfigMap would never be read." -}}
+{{- end -}}
+{{- if and .Values.node.enabled (not $nodepool) .Values.cluster.hypershift -}}
+{{- fail "cluster.hypershift=true needs node.output=nodepool: a hosted cluster has no Machine Config Operator, so a MachineConfig applied to the guest would never be read." -}}
+{{- end -}}
+{{- if and $nodepool .Values.tailoredProfile.enabled -}}
+{{- fail "tailoredProfile.enabled cannot be combined with node.output=nodepool: the ConfigMap belongs on the management cluster and the TailoredProfile on the hosted cluster. Render it separately for the guest with node.enabled=false and the default node.output." -}}
+{{- end -}}
+{{- if and $nodepool (not .Values.node.enabled) -}}
+{{- range $key, $obj := (.Values.extraManifests | default dict) -}}
+{{- if ne (dig "enabled" true $obj) false -}}
+{{- fail (printf "extraManifests.%s renders nowhere: node.output=nodepool only renders them into the ConfigMap, and node.enabled is false." $key) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if and .Values.cluster.hypershift (not $nodepool) -}}
+{{- include "cr.guestExtrasPreflight" . -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+  On the guest of a hosted cluster nothing reads these, the same reason the
+  output guards refuse the chart's own objects.
+*/}}
+{{- define "cr.guestExtrasPreflight" -}}
+{{- range $key, $obj := (.Values.extraManifests | default dict) -}}
+{{- if and (ne (dig "enabled" true $obj) false) (has $obj.kind (list "MachineConfig" "KubeletConfig" "ContainerRuntimeConfig")) -}}
+{{- fail (printf "extraManifests.%s (%s) would never be read on the guest of a hosted cluster, which has no Machine Config Operator. A MachineConfig goes through node.output=nodepool; anything else through a ConfigMap of your own." $key $obj.kind) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/* The name to reference from NodePool.spec.config: per release, so per cluster. */}}
+{{- define "cr.nodePoolConfigMap" -}}
+{{- .Values.node.nodePool.configMapName | default (printf "%s-hardening" .Release.Name) -}}
+{{- end -}}
+
+{{/* The same refusal for the platform chart, see cr.nodeOutputPreflight. */}}
+{{- define "cr.platformOutputPreflight" -}}
+{{- $output := .Values.platform.output -}}
+{{- if and (ne $output "cluster") (not .Values.cluster.hypershift) -}}
+{{- fail (printf "platform.output=%s needs cluster.hypershift=true: a standalone cluster has no hosted control plane." $output) -}}
+{{- end -}}
+{{- if and (eq $output "cluster") .Values.cluster.hypershift -}}
+{{- fail "cluster.hypershift=true needs platform.output=hostedcluster or guest: the hosted control plane owns APIServer/cluster and OAuth/cluster, and rejects edits to them from the guest." -}}
+{{- end -}}
+{{- if eq $output "hostedcluster" -}}
+{{- if .Values.tailoredProfile.enabled -}}
+{{- fail "tailoredProfile.enabled cannot be combined with platform.output=hostedcluster: this output goes to the management cluster and the TailoredProfile to the hosted cluster. Render it with platform.output=guest." -}}
+{{- end -}}
+{{- range $key, $obj := (.Values.extraManifests | default dict) -}}
+{{- if ne (dig "enabled" true $obj) false -}}
+{{- fail (printf "extraManifests.%s cannot be combined with platform.output=hostedcluster: this output goes to the management cluster. Render it with platform.output=guest." $key) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if eq $output "guest" -}}
+{{- include "cr.guestExtrasPreflight" . -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+  Objects you add yourself, rendered verbatim with the chart's labels.
+  Deliberately not upstream content: everything else in templates/ comes from
+  the pinned ComplianceAsCode release, and this is the one place for a control
+  upstream ships no remediation for.
+
+  A map, not a list, so a second values file can switch one entry off without
+  restating the rest - Helm replaces lists and merges maps, the same reason
+  mustMergeOverwrite forces whole-list comparisons elsewhere. Each entry takes
+  an optional `enabled` (default true), which is what makes these togglable the
+  way `rules` is for upstream rules.
+
+  `kinds`, when not empty, means the entries go into the NodePool ConfigMap: only
+  those kinds are accepted, a role other than worker is refused because the
+  controller would silently overwrite it, and the release name stays out, see
+  _labels_block.
+
+  Note the `{{ end -}}` without a left trim after the object: a `{{- end` there
+  eats the newline before the next `---`, so every entry after the first was
+  glued onto its predecessor and four objects parsed as one document. helm
+  template still printed four `kind:` lines, so only a YAML parse catches it -
+  there is a test.
+*/}}
+{{- define "cr.extraManifests" -}}
+{{- $root := .root -}}
+{{- $kinds := .kinds -}}
+{{- range $key := (keys ($root.Values.extraManifests | default dict) | sortAlpha) -}}
+{{- $obj := index $root.Values.extraManifests $key -}}
+{{- if ne (dig "enabled" true $obj) false -}}
+{{- if not $obj.kind }}
+{{- fail (printf "extraManifests.%s has no kind" $key) }}
+{{- end }}
+{{- if not $obj.apiVersion }}
+{{- fail (printf "extraManifests.%s (%s) has no apiVersion" $key $obj.kind) }}
+{{- end }}
+{{- if not (dig "metadata" "name" "" $obj) }}
+{{- fail (printf "extraManifests.%s (%s) has no metadata.name" $key $obj.kind) }}
+{{- end }}
+{{- if and $kinds (not (has $obj.kind $kinds)) }}
+{{- fail (printf "extraManifests.%s (%s) cannot go into the NodePool ConfigMap, which takes %s. Reference a ConfigMap of your own from the NodePool for it; a KubeletConfig only if the chart renders none, since a NodePool takes one." $key $obj.kind (join ", " $kinds)) }}
+{{- end }}
+{{- $role := dig "metadata" "labels" "machineconfiguration.openshift.io/role" "worker" $obj }}
+{{- if and $kinds (ne $role "worker") }}
+{{- fail (printf "extraManifests.%s has role %s, but a NodePool only has workers and would apply it to them regardless." $key $role) }}
+{{- end }}
+{{- $labels := mergeOverwrite (dict
+      "app.kubernetes.io/name" $root.Chart.Name
+      "app.kubernetes.io/instance" ($root.Release.Name | trunc 63 | trimSuffix "-")
+      "app.kubernetes.io/component" "local"
+      "app.kubernetes.io/part-of" "compliance-hardening"
+      "app.kubernetes.io/managed-by" $root.Release.Service)
+      (dig "metadata" "labels" dict $obj) -}}
+{{- if $kinds -}}{{- $labels = omit $labels "app.kubernetes.io/instance" -}}{{- end -}}
+{{- $out := omit (deepCopy $obj) "enabled" -}}
+{{- $out = set $out "metadata" (set (deepCopy $obj.metadata) "labels" $labels) -}}
+---
+{{ $out | toYaml }}
+{{ end -}}
 {{- end -}}
 {{- end -}}
 
@@ -687,7 +857,8 @@ def broken_rules(contents: list[Content]) -> dict[str, str]:
     return out
 
 
-def _labels_block(ref: str, component: str, role: str | None = None) -> list[str]:
+def _labels_block(ref: str, component: str, role: str | None = None,
+                  nodepool_aware: bool = False) -> list[str]:
     """The metadata.labels block every rendered object carries.
 
     `ref` is the Go template root expression at the call site, without the
@@ -705,12 +876,24 @@ def _labels_block(ref: str, component: str, role: str | None = None) -> list[str
 
     `role` adds the MCO pool selector. That one is functional, not
     descriptive - without it a MachineConfig belongs to no pool.
+
+    `nodepool_aware` leaves `instance` out of an object wrapped for a NodePool.
+    The controller hashes the wrapped objects, labels included, so with it a
+    move from `helm install` to an Argo CD Application - same hardening, other
+    release name - would replace every worker. Nothing could select on it there
+    anyway: the wrapped object never exists as an API object.
     """
+    instance = (f"    app.kubernetes.io/instance: "
+                f'{{{{ {ref}.Release.Name | trunc 63 | trimSuffix "-" | quote }}}}')
+    if nodepool_aware:
+        instance_lines = [f'{{{{- if ne {ref}.Values.node.output "nodepool" }}}}',
+                          instance, "{{- end }}"]
+    else:
+        instance_lines = [instance]
     lines = [
         "  labels:",
         f"    app.kubernetes.io/name: {{{{ {ref}.Chart.Name | quote }}}}",
-        f"    app.kubernetes.io/instance: "
-        f'{{{{ {ref}.Release.Name | trunc 63 | trimSuffix "-" | quote }}}}',
+        *instance_lines,
         f"    app.kubernetes.io/component: {component}",
         f"    app.kubernetes.io/part-of: {UMBRELLA_CHART}",
         f"    app.kubernetes.io/managed-by: {{{{ {ref}.Release.Service | quote }}}}",
@@ -727,9 +910,8 @@ def _cluster_block(indent: str = "") -> list[str]:
     These are the CPE leaves the user can declare at install time. Everything
     else in an upstream `<platform>` expression is an assumption documented in
     applicability.FACTS. Emitted into both charts even though today only the
-    node chart consults `architecture` and only the platform chart consults
-    `hypershift`: the schema forbids unknown keys inside `cluster`, so a shared
-    values file has to validate against either chart.
+    node chart consults `architecture`: the schema forbids unknown keys inside
+    `cluster`, so a shared values file has to validate against either chart.
     """
     lines = [
         "# -- Facts about the target cluster. Rules that upstream marks as not",
@@ -738,14 +920,15 @@ def _cluster_block(indent: str = "") -> list[str]:
         "  # -- Target OpenShift version; selects version-dependent remediations.",
         "  # Find yours: oc get clusterversion version -o jsonpath='{.status.desired.version}'",
         f'  ocpVersion: "{DEFAULT_OCP_VERSION}"',
-        "  # -- Node architecture of the MachineConfigPools listed in node.roles.",
+        "  # -- Node architecture of the MachineConfigPools listed in node.roles,",
+        "  # or of the NodePool on a hosted cluster.",
         "  # Only the node chart has arch-constrained rules; it is declared here",
         "  # too so one values file validates against either chart.",
         "  # x86_64 | aarch64 | ppc64le | s390x (amd64 and arm64 are accepted too).",
         "  # Find yours: make show-node-arch",
         f"  architecture: {DEFAULT_ARCHITECTURE}",
         "  # -- Set true on a HyperShift hosted cluster (hosted control plane).",
-        "  # Only the platform chart has a hypershift-constrained rule.",
+        "  # Requires node.output=nodepool and platform.output=hostedcluster or guest.",
         "  hypershift: false",
     ]
     return [f"{indent}{line}" if line else line for line in lines]
@@ -823,8 +1006,8 @@ def cross_object_file_conflicts(groups, layer: str) -> list[dict]:
     return out
 
 
-def preflight_template(conflicts: list[dict]) -> str:
-    """The preflight: applicability, dependencies, and cross-object files."""
+def preflight_template(conflicts: list[dict], layer: str = "node") -> str:
+    """The preflight: applicability, dependencies, output mode, cross-object files."""
     lines = [
         "{{- /*",
         "  Preflight. Renders nothing; aborts when an active rule is one the",
@@ -835,6 +1018,7 @@ def preflight_template(conflicts: list[dict]) -> str:
         '{{- include "cr.applicabilityPreflight" . -}}',
         '{{- include "cr.dependencyPreflight" . -}}',
         '{{- include "cr.brokenPreflight" . -}}',
+        f'{{{{- include "cr.{layer}OutputPreflight" . -}}}}',
     ]
     for conflict in conflicts:
         path = conflict["path"]
@@ -918,6 +1102,45 @@ def _arch_overlay(arch: str, per_chart: dict, content_version: str,
     return "\n".join(lines) + "\n"
 
 
+def _excluded_on_hypershift(appl: dict, layer_rules: set) -> dict[str, str]:
+    """helm_name -> reason, for rules upstream excludes from a hosted cluster."""
+    out: dict[str, str] = {}
+    for name in sorted(appl):
+        allowed = appl[name].constraints.get(applicability.AXIS_HYPERSHIFT)
+        if (name in layer_rules and not appl[name].never
+                and allowed is not None and True not in allowed):
+            out[name] = "not applicable on a hosted cluster"
+    return out
+
+
+def _hypershift_overlay(per_chart: dict, content_version: str,
+                        nested: bool = False) -> str:
+    """A values file for a hosted cluster, the counterpart of _arch_overlay.
+
+    Every benchmark selects a rule upstream excludes from hosted clusters, so
+    without this no whole profile could render with cluster.hypershift=true.
+    """
+    lines = [
+        "# Overlay for a hosted cluster" + (" (umbrella chart)." if nested else "."),
+        f"# Generated from ComplianceAsCode/content v{content_version}.",
+        "#",
+        "# Upstream marks these rules as not applicable on a hosted cluster, so the",
+        "# chart refuses to render them. Apply this file to switch them off in one go,",
+        "# next to the output mode (see \"Hosted control planes\" in the README).",
+    ]
+    indent = "  " if nested else ""
+    for chart_name, excluded in sorted(per_chart.items()):
+        if nested:
+            lines.append(f"{chart_name}:")
+        lines.append(f"{indent}cluster:")
+        lines.append(f"{indent}  hypershift: true")
+        if excluded:
+            lines.append(f"{indent}rules:")
+            for name, why in excluded.items():
+                lines.append(f"{indent}  {name}: false  # {why}")
+    return "\n".join(lines) + "\n"
+
+
 def values_yaml(contents: list[Content], layer: str, content_version: str,
                 appl: dict | None = None) -> str:
     appl = appl if appl is not None else applicability.build_map(contents)
@@ -947,6 +1170,33 @@ def values_yaml(contents: list[Content], layer: str, content_version: str,
             "  roles:",
             "    - worker",
             "    - master",
+            "  # -- machineconfig writes objects for the Machine Config Operator.",
+            "  # nodepool (hosted clusters) wraps them in one ConfigMap for the management",
+            "  # cluster; node.roles is ignored there, a NodePool only has workers.",
+            "  output: machineconfig",
+            "  nodePool:",
+            "    # -- HostedCluster namespace on the management cluster. Required for",
+            "    # node.output=nodepool.",
+            '    namespace: ""',
+            "    # -- Name of the ConfigMap to reference from NodePool.spec.config, with the",
+            "    # KubeletConfig in <name>-kubelet. Defaults to <release>-hardening, which",
+            "    # is unique per hosted cluster as long as each has its own release.",
+            '    configMapName: ""',
+        ]
+    else:
+        out += [
+            "",
+            "# -- Where platform remediations are written.",
+            "platform:",
+            "  # -- cluster writes the objects for a standalone cluster. A hosted cluster",
+            "  # needs two renders: hostedcluster patches the HostedCluster on the management",
+            "  # cluster, guest writes what stays on the hosted cluster.",
+            "  output: cluster",
+            "  hostedCluster:",
+            "    # -- HostedCluster to patch. Required for platform.output=hostedcluster.",
+            '    name: ""',
+            "    # -- Its namespace. Required for platform.output=hostedcluster.",
+            '    namespace: ""',
         ]
     out += [
         "",
@@ -1025,6 +1275,12 @@ def object_template(group: MergeGroup, appl: dict | None = None) -> str:
         lines.append(body)
         lines.append("{{- end -}}")
         lines.append("")
+
+    # The whole object is a named template so the aggregate outputs of hosted
+    # clusters can reuse it, guards and merge included, instead of a second copy
+    # of that logic. The file itself renders it only for the outputs below.
+    obj_name = _obj_tpl_name(key)
+    lines.append(f'{{{{- define "{obj_name}" -}}}}')
 
     comment = f"{key.kind}/{key.name} - rule(s): {', '.join(all_rules)}"
     lines.append(f"{{{{- /* {comment} */ -}}}}")
@@ -1154,7 +1410,8 @@ def object_template(group: MergeGroup, appl: dict | None = None) -> str:
 
     # Render the object, one per node role for node objects.
     if is_node:
-        lines.append("{{- range $role := (.Values.node.roles | uniq) }}")
+        lines.append('{{- range $role := (ternary (list "worker") (.Values.node.roles | uniq) '
+                     '(eq .Values.node.output "nodepool")) }}')
         if roles:
             role_list = " ".join(_go_str(r) for r in sorted(roles))
             lines.append(f"{{{{- if has $role (list {role_list}) }}}}")
@@ -1167,19 +1424,25 @@ def object_template(group: MergeGroup, appl: dict | None = None) -> str:
             # operator sets and the one the MCO puts on the built-in pools.
             # Merged per role rather than into $merged, because the label name
             # contains the role.
+            #
+            # Not through a NodePool: there is no pool to select, and the
+            # controller overwrites the selector with its own anyway.
+            lines.append("{{- $obj := $merged -}}")
+            lines.append('{{- if ne $.Values.node.output "nodepool" -}}')
             lines.append(
                 "{{- $selector := dict \"spec\" (dict "
                 "\"machineConfigPoolSelector\" (dict \"matchLabels\" (dict "
                 "(printf \"pools.operator.machineconfiguration.openshift.io/%s\" $role) "
                 "\"\"))) -}}")
-            lines.append("{{- $obj := mustMergeOverwrite (deepCopy $merged) $selector }}")
+            lines.append("{{- $obj = mustMergeOverwrite (deepCopy $merged) $selector -}}")
+            lines.append("{{- end }}")
             body = "$obj"
         lines.append("---")
         lines.append(f"apiVersion: {key.api_version}")
         lines.append(f"kind: {key.kind}")
         lines.append("metadata:")
         lines.append(f'  name: {{{{ printf "%s-%s" {_go_str(key.name)} $role }}}}')
-        lines.extend(_labels_block("$", "remediation", role="$role"))
+        lines.extend(_labels_block("$", "remediation", role="$role", nodepool_aware=True))
         lines.append(f"{{{{ {body} | toYaml }}}}")
         if roles:
             lines.append("{{- end }}")
@@ -1219,6 +1482,199 @@ def object_template(group: MergeGroup, appl: dict | None = None) -> str:
         lines.append('    argocd.argoproj.io/sync-options: Prune=false,Delete=false')
         lines.append("{{ $merged | toYaml }}")
     lines.append("{{- end -}}")
+    lines.append("{{- end -}}")
+    lines.append("")
+    if is_node:
+        when = 'ne .Values.node.output "nodepool"'
+    elif (key.kind, key.name) in HOSTED_CLUSTER_FIELDS:
+        when = 'eq .Values.platform.output "cluster"'
+    else:
+        when = 'ne .Values.platform.output "hostedcluster"'
+    lines.append(f'{{{{- if {when} -}}}}')
+    lines.append(f'{{{{ include "{obj_name}" . }}}}')
+    lines.append("{{- end -}}")
+    return "\n".join(lines) + "\n"
+
+
+def _obj_tpl_name(key) -> str:
+    return f"cr.obj.{key.slug()}"
+
+
+def _wrapped_configmap(name_expr: str, docs: str) -> list[str]:
+    return [
+        "---",
+        "apiVersion: v1",
+        "kind: ConfigMap",
+        "metadata:",
+        f"  name: {{{{ {name_expr} | quote }}}}",
+        "  namespace: {{ .Values.node.nodePool.namespace | quote }}",
+        *_labels_block("", "remediation"),
+        "data:",
+        "  config: |-",
+        f"{{{{ {docs} | indent 4 }}}}",
+    ]
+
+
+def nodepool_configmap_template(groups) -> str:
+    """The node objects of this chart as ConfigMaps for NodePool.spec.config.
+
+    Two rather than one per object, because the object count rules that out:
+    NodePool.spec.config is limited to 10 entries from 4.20 on, and rhcos4-e8 alone
+    is 32 objects. The controller reads every document in the `config` key since
+    OCPBUGS-30282 (backported to 4.16 as hypershift#4398).
+
+    Two rather than one, because the controller mirrors any ConfigMap holding a
+    KubeletConfig document, whole, to the control plane namespace and into the
+    guest. In a ConfigMap of its own that is the one small object it was built for
+    instead of the entire hardening payload.
+
+    The objects are sorted by template name so the ConfigMap is byte-stable: its
+    content feeds the hash that decides whether a NodePool rolls.
+    """
+    bodied = [g for g in groups if g.key.layer == "node"
+              and any(_fragment_body(d.yaml) for d in g.docs)]
+    names = sorted({_obj_tpl_name(g.key) for g in bodied if g.key.kind != "KubeletConfig"})
+    kubelet = sorted({_obj_tpl_name(g.key) for g in bodied if g.key.kind == "KubeletConfig"})
+    kinds = " ".join(_go_str(k) for k in NODEPOOL_EXTRA_KINDS)
+    too_big = ("node.output=nodepool renders %d bytes, over the %d a ConfigMap can "
+               "hold. Enable fewer profiles, or render the excess into a second "
+               "release, which gets its own ConfigMap name.")
+
+    def range_over(var: str, tpls: list[str]) -> list[str]:
+        return [
+            "{{- range $name := (list",
+            *[f"      {_go_str(n)}" for n in tpls],
+            "    ) -}}",
+            f'{{{{- {var} = printf "%s\\n%s" {var} (include $name $root) -}}}}',
+            "{{- end -}}",
+            f"{{{{- {var} = {var} | trim -}}}}",
+        ]
+
+    lines = [
+        "{{- /* Node objects for a hosted cluster, see cr.nodeOutputPreflight. */ -}}",
+        '{{- if and .Values.node.enabled (eq .Values.node.output "nodepool") -}}',
+        "{{- $root := . -}}",
+        '{{- $name := include "cr.nodePoolConfigMap" . -}}',
+        f"{{{{- $docs := include \"cr.extraManifests\" (dict \"root\" . \"kinds\" (list {kinds})) -}}}}",
+        *range_over("$docs", names),
+        '{{- $kubelet := "" -}}',
+        *range_over("$kubelet", kubelet),
+        "{{- if $docs -}}",
+        f"{{{{- if gt (len $docs) {CONFIGMAP_MAX_BYTES} -}}}}",
+        f"{{{{- fail (printf {_go_str(too_big)} (len $docs) {CONFIGMAP_MAX_BYTES}) -}}}}",
+        "{{- end }}",
+        *_wrapped_configmap("$name", "$docs"),
+        "{{- end -}}",
+        "{{- if $kubelet }}",
+        *_wrapped_configmap('(printf "%s-kubelet" $name)', "$kubelet"),
+        "{{- end -}}",
+        "{{- end -}}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+NODEPOOL_NOTES = """\
+{{- if and .Values.node.enabled (eq .Values.node.output "nodepool") -}}
+{{- $name := include "cr.nodePoolConfigMap" . -}}
+Node objects go into ConfigMaps in namespace {{ .Values.node.nodePool.namespace }}, if any
+rule is active: {{ $name }}, and {{ $name }}-kubelet when a kubelet rule is.
+
+Nothing reads them until a NodePool references them. Add them to the existing list:
+
+  oc -n {{ .Values.node.nodePool.namespace }} edit nodepool <name>
+
+  spec:
+    config:
+      - name: {{ $name }}
+      - name: {{ $name }}-kubelet
+
+A NodePool takes one KubeletConfig from 4.18 on. If it already has one, from another
+ConfigMap or a PerformanceProfile, the NodePool stops reconciling with
+ValidMachineConfig=False.
+
+Every later change to these ConfigMaps rolls the whole NodePool: upgradeType InPlace
+reboots node by node, Replace provisions new nodes and removes the old ones.
+
+node.roles is ignored in this mode: every object is rendered for workers, the
+only role a NodePool has.
+{{- end -}}
+"""
+
+
+def hostedcluster_template(groups) -> str:
+    """Patch for HostedCluster.spec.configuration, for server-side apply.
+
+    Reuses each mapped object's named template, so its conflict guards still
+    fire and a rule cannot behave differently from the standalone render. Rules
+    on the other objects stay on the guest, which needs its own render - said in
+    a comment in each of the two outputs, because nothing else would notice that
+    half of a profile was never applied.
+
+    Both keep annotations are not optional here: this object is the hosted
+    cluster. Without them `helm uninstall` or a pruning Argo CD Application
+    deletes it.
+    """
+    mapped = sorted(
+        (field, _obj_tpl_name(g.key)) for g in groups
+        for (kind, name), field in HOSTED_CLUSTER_FIELDS.items()
+        if (g.key.kind, g.key.name) == (kind, name)
+        and any(_fragment_body(d.yaml) for d in g.docs))
+    mapped_rules = {r for g in groups for r in g.rule_ids
+                    if (g.key.kind, g.key.name) in HOSTED_CLUSTER_FIELDS}
+    guest_rules = sorted({r for g in groups for r in g.rule_ids
+                          if g.key.layer == "platform" and r not in mapped_rules})
+    pairs = " ".join(f"(list {_go_str(f)} {_go_str(t)})" for f, t in mapped)
+    guest = " ".join(_go_str(r) for r in guest_rules)
+    owned = " ".join(_go_str(r) for r in sorted(mapped_rules))
+    lines = [
+        "{{- /* Platform objects the hosted control plane owns. */ -}}",
+        '{{- if eq .Values.platform.output "guest" -}}',
+        f'{{{{- $mapped := int (include "cr.countActive" (dict "root" . "rules" (list {owned}))) }}}}',
+        "{{- if $mapped }}",
+        "# {{ $mapped }} active rule(s) belong to HostedCluster.spec.configuration and are not",
+        "# in this output: render again with platform.output=hostedcluster for the",
+        "# management cluster.",
+        "{{- end }}",
+        "{{- end -}}",
+        '{{- if eq .Values.platform.output "hostedcluster" -}}',
+        "{{- $root := . -}}",
+        "{{- $configuration := dict -}}",
+        f"{{{{- range $pair := (list {pairs}) -}}}}",
+        "{{- $doc := include (index $pair 1) $root | fromYaml -}}",
+        '{{- if hasKey $doc "Error" -}}',
+        '{{- fail (printf "Rendering %s produced invalid YAML: %s" (index $pair 1) $doc.Error) -}}',
+        "{{- end -}}",
+        '{{- if hasKey $doc "spec" -}}',
+        "{{- $_ := set $configuration (index $pair 0) $doc.spec -}}",
+        "{{- end -}}",
+        "{{- end -}}",
+        f'{{{{- $guest := int (include "cr.countActive" (dict "root" . "rules" (list {guest}))) }}}}',
+        "{{- if $configuration }}",
+        "---",
+        # Inside the document: before the separator it is a document of its own,
+        # holding nothing but a comment.
+        "{{- if $guest }}",
+        "# {{ $guest }} active rule(s) stay on the hosted cluster and are not in this output:",
+        "# render again with platform.output=guest and apply that to the guest.",
+        "{{- end }}",
+        "apiVersion: hypershift.openshift.io/v1beta1",
+        "kind: HostedCluster",
+        "metadata:",
+        "  name: {{ .Values.platform.hostedCluster.name | quote }}",
+        "  namespace: {{ .Values.platform.hostedCluster.namespace | quote }}",
+        *_labels_block("", "remediation"),
+        "  annotations:",
+        "    helm.sh/resource-policy: keep",
+        "    argocd.argoproj.io/sync-options: Prune=false,Delete=false",
+        "spec:",
+        "  configuration:",
+        "{{ $configuration | toYaml | indent 4 }}",
+        "{{- else if $guest }}",
+        "# Nothing for the management cluster: {{ $guest }} active rule(s) stay on the hosted",
+        "# cluster. Render with platform.output=guest and apply that to the guest.",
+        "{{- end -}}",
+        "{{- end -}}",
+    ]
     return "\n".join(lines) + "\n"
 
 
@@ -1347,8 +1803,13 @@ def generate_charts(contents: dict[str, Content], charts_dir: Path, version: str
         arch: per_chart for arch, per_chart in umbrella_overlays.items()
         if any(per_chart.values())
     }
+    hypershift_excluded: dict[str, dict] = {}
+    for layer, chart_name in (("platform", PLATFORM_CHART), ("node", NODE_CHART)):
+        hypershift_excluded[chart_name] = _excluded_on_hypershift(appl, {
+            r.helm_name for c in content_list for r in rules_with_fixes(c).values()
+            if _rule_layer(r) == layer})
     _write_umbrella_chart(charts_dir / UMBRELLA_CHART, version, chart_version,
-                          umbrella_overlays)
+                          umbrella_overlays, hypershift_excluded)
 
     for g in groups:
         for c in g.conflicts():
@@ -1356,9 +1817,26 @@ def generate_charts(contents: dict[str, Content], charts_dir: Path, version: str
     return stats
 
 
+# Each subchart's guards only see its own values, so whether both halves describe
+# the same cluster, and whether they go to the same one, can only be checked here.
+UMBRELLA_PREFLIGHT = """\
+{{- $node := index .Values "compliance-node" -}}
+{{- $platform := index .Values "compliance-platform" -}}
+{{- if $node.node.enabled -}}
+{{- if ne $node.cluster.hypershift $platform.cluster.hypershift -}}
+{{- fail "compliance-node and compliance-platform disagree on cluster.hypershift. One render goes to one cluster: with node.output=nodepool the platform half would otherwise harden the management cluster itself." -}}
+{{- end -}}
+{{- if and (eq $node.node.output "nodepool") (eq $platform.platform.output "guest") -}}
+{{- fail "node.output=nodepool goes to the management cluster and platform.output=guest to the hosted cluster, but one render goes to one cluster. Render them separately." -}}
+{{- end -}}
+{{- end -}}
+"""
+
+
 def _write_umbrella_chart(chart_dir: Path, version: str,
                           chart_version: str = "0.0.0",
-                          overlays: dict | None = None) -> None:
+                          overlays: dict | None = None,
+                          hypershift_excluded: dict | None = None) -> None:
     """Umbrella wrapper depending on both subcharts. No `global`: values are
     prefixed per subchart. Subcharts remain standalone-installable."""
     chart_dir.mkdir(parents=True, exist_ok=True)
@@ -1390,15 +1868,26 @@ dependencies:
     repository: "file://../{NODE_CHART}"
 """
     (chart_dir / "Chart.yaml").write_text(chart, encoding="utf-8")
+    (chart_dir / "templates" / "preflight.yaml").write_text(
+        UMBRELLA_PREFLIGHT, encoding="utf-8")
 
     values = f"""\
 # Umbrella values. Configure each subchart under its own prefix (no global).
 # Subcharts are also installable standalone.
 
 # -- Platform remediations (cluster config objects; no node reboots, but the
-# audit-profile and encryption rules redeploy the kube-apiserver).
+# audit-profile and encryption rules redeploy the kube-apiserver, and on a hosted
+# cluster from 4.23 the TLS rule rolls the NodePools).
 {PLATFORM_CHART}:
 {_indent_block(_cluster_block(), 2)}
+  platform:
+    # -- cluster, or hostedcluster and guest as two renders on a hosted cluster.
+    output: cluster
+    hostedCluster:
+      # -- HostedCluster to patch. Required for platform.output=hostedcluster.
+      name: ""
+      # -- Its namespace. Required for platform.output=hostedcluster.
+      namespace: ""
   # -- Whitelist whole compliance profiles; see the subchart's own values for
   # the full list of keys.
   profiles: {{}}
@@ -1423,6 +1912,14 @@ dependencies:
     roles:
       - worker
       - master
+    # -- machineconfig, or nodepool for a hosted cluster.
+    output: machineconfig
+    nodePool:
+      # -- HostedCluster namespace. Required for node.output=nodepool.
+      namespace: ""
+      # -- Name of the ConfigMap to reference from NodePool.spec.config. Defaults to
+      # <release>-hardening.
+      configMapName: ""
   # -- Whitelist whole compliance profiles; see the subchart's own values for
   # the full list of keys.
   profiles: {{}}
@@ -1463,51 +1960,12 @@ dependencies:
         elif overlay.exists():
             overlay.unlink()
 
-
-EXTRA_MANIFESTS_TPL = """\
-{{- /* Objects you add yourself, rendered verbatim with the chart's labels.
-     Deliberately not upstream content: everything else in templates/ comes
-     from the pinned ComplianceAsCode release, and this is the one place for a
-     control upstream ships no remediation for.
-
-     A map, not a list, so a second values file can switch one entry off
-     without restating the rest - Helm replaces lists and merges maps, the
-     same reason mustMergeOverwrite forces whole-list comparisons elsewhere.
-     Each entry takes an optional `enabled` (default true), which is what
-     makes these togglable the way `rules` is for upstream rules.
-
-     Note the `{{ end -}}` without a left trim after the object: a `{{- end`
-     there eats the newline before the next `---`, so every entry after the
-     first was glued onto its predecessor and four objects parsed as one
-     document. helm template still printed four `kind:` lines, so only a YAML
-     parse catches it - there is a test. */ -}}
-{{- $root := . -}}
-{{- range $key := (keys (.Values.extraManifests | default dict) | sortAlpha) -}}
-{{- $obj := index $root.Values.extraManifests $key -}}
-{{- if ne (dig "enabled" true $obj) false -}}
-{{- if not $obj.kind }}
-{{- fail (printf "extraManifests.%s has no kind" $key) }}
-{{- end }}
-{{- if not $obj.apiVersion }}
-{{- fail (printf "extraManifests.%s (%s) has no apiVersion" $key $obj.kind) }}
-{{- end }}
-{{- if not (dig "metadata" "name" "" $obj) }}
-{{- fail (printf "extraManifests.%s (%s) has no metadata.name" $key $obj.kind) }}
-{{- end }}
-{{- $labels := mergeOverwrite (dict
-      "app.kubernetes.io/name" $root.Chart.Name
-      "app.kubernetes.io/instance" ($root.Release.Name | trunc 63 | trimSuffix "-")
-      "app.kubernetes.io/component" "local"
-      "app.kubernetes.io/part-of" "compliance-hardening"
-      "app.kubernetes.io/managed-by" $root.Release.Service)
-      (dig "metadata" "labels" dict $obj) -}}
-{{- $out := omit (deepCopy $obj) "enabled" -}}
-{{- $out = set $out "metadata" (set (deepCopy $obj.metadata) "labels" $labels) -}}
----
-{{ $out | toYaml }}
-{{ end -}}
-{{- end -}}
-"""
+    overlay = chart_dir / "values-hypershift.yaml"
+    if hypershift_excluded and any(hypershift_excluded.values()):
+        overlay.write_text(_hypershift_overlay(hypershift_excluded, version, nested=True),
+                           encoding="utf-8")
+    elif overlay.exists():
+        overlay.unlink()
 
 
 def _write_layer_chart(chart_dir: Path, name: str, description: str,
@@ -1529,9 +1987,25 @@ def _write_layer_chart(chart_dir: Path, name: str, description: str,
     (chart_dir / "README.md.gotmpl").write_text(README_GOTMPL, encoding="utf-8")
     (tpl / "_helpers.tpl").write_text(HELPERS_TPL, encoding="utf-8")
     (tpl / "preflight.yaml").write_text(
-        preflight_template(cross_object_file_conflicts(groups, layer)),
+        preflight_template(cross_object_file_conflicts(groups, layer), layer),
         encoding="utf-8")
-    (tpl / "extra-manifests.yaml").write_text(EXTRA_MANIFESTS_TPL, encoding="utf-8")
+    # An extra manifest goes wherever this output goes, which on a hosted cluster
+    # is not always somewhere it can work; cr.*OutputPreflight and the NodePool
+    # kinds check refuse what cannot. Inside the ConfigMap for node.output=nodepool.
+    extra_when = ('ne .Values.node.output "nodepool"' if layer == "node"
+                  else 'ne .Values.platform.output "hostedcluster"')
+    (tpl / "extra-manifests.yaml").write_text(
+        f'{{{{- if {extra_when} -}}}}\n'
+        '{{ include "cr.extraManifests" (dict "root" . "kinds" (list)) }}\n'
+        "{{- end -}}\n",
+        encoding="utf-8")
+    if layer == "node":
+        (tpl / "nodepool-configmap.yaml").write_text(
+            nodepool_configmap_template(groups), encoding="utf-8")
+        (tpl / "NOTES.txt").write_text(NODEPOOL_NOTES, encoding="utf-8")
+    else:
+        (tpl / "hostedcluster.yaml").write_text(
+            hostedcluster_template(groups), encoding="utf-8")
 
     # One ready-made overlay per architecture that has exclusions. Stale
     # overlays are removed so a content bump cannot leave one behind.
@@ -1545,6 +2019,12 @@ def _write_layer_chart(chart_dir: Path, name: str, description: str,
                                encoding="utf-8")
         elif overlay.exists():
             overlay.unlink()
+    overlay = chart_dir / "values-hypershift.yaml"
+    excluded = _excluded_on_hypershift(appl, layer_rules)
+    if excluded:
+        overlay.write_text(_hypershift_overlay({name: excluded}, version), encoding="utf-8")
+    elif overlay.exists():
+        overlay.unlink()
 
     for g in groups:
         if g.key.layer != layer:
@@ -1568,6 +2048,23 @@ def _write_layer_chart(chart_dir: Path, name: str, description: str,
 # --------------------------------------------------------------------------- #
 # values.schema.json
 # --------------------------------------------------------------------------- #
+# Both also accept the empty default values.yaml ships; _required_strings is what
+# refuses that where the mode needs a value.
+_DNS_LABEL = r"^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)?$"
+_DNS_SUBDOMAIN = r"^([a-z0-9]([-a-z0-9.]{0,241}[a-z0-9])?)?$"
+
+
+def _required_strings(block: str, names: list[str]) -> dict:
+    """`block.<name>` must be present and not the empty default values.yaml ships."""
+    return {
+        "required": [block],
+        "properties": {block: {
+            "required": names,
+            "properties": {n: {"minLength": 1} for n in names},
+        }},
+    }
+
+
 def values_schema(contents: list[Content], layer: str) -> str:
     """Emit a JSON Schema constraining profiles/rules to known keys.
 
@@ -1715,9 +2212,45 @@ def values_schema(contents: list[Content], layer: str) -> str:
                 # exits 0 - every node remediation silently dropped.
                 "roles": {"type": "array", "items": {"type": "string"},
                           "minItems": 1},
+                "output": {"type": "string", "enum": ["machineconfig", "nodepool"]},
+                "nodePool": {
+                    "type": "object",
+                    "properties": {
+                        "namespace": {"type": "string", "pattern": _DNS_LABEL},
+                        "configMapName": {"type": "string", "pattern": _DNS_SUBDOMAIN},
+                    },
+                    "additionalProperties": False,
+                },
             },
+            # `--set node.output=null` deletes the key, and a missing output
+            # would read as "not nodepool" on a hosted cluster.
+            "required": ["output"],
+            "if": {"properties": {"output": {"const": "nodepool"}}, "required": ["output"]},
+            "then": _required_strings("nodePool", ["namespace"]),
             "additionalProperties": False,
         }
+    else:
+        schema["properties"]["platform"] = {
+            "type": "object",
+            "properties": {
+                "output": {"type": "string",
+                           "enum": ["cluster", "hostedcluster", "guest"]},
+                "hostedCluster": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "pattern": _DNS_LABEL},
+                        "namespace": {"type": "string", "pattern": _DNS_LABEL},
+                    },
+                    "additionalProperties": False,
+                },
+            },
+            "required": ["output"],
+            "if": {"properties": {"output": {"const": "hostedcluster"}},
+                   "required": ["output"]},
+            "then": _required_strings("hostedCluster", ["name", "namespace"]),
+            "additionalProperties": False,
+        }
+        schema["required"] = sorted([*schema["required"], "platform"])
     return json.dumps(schema, indent=2, sort_keys=True) + "\n"
 
 
@@ -1860,6 +2393,114 @@ def _coverage_section(contents: list[Content], appl: dict) -> list[str]:
             out.append(f"| `{rule}` | {category} | {why} |")
     else:
         out.append("| - | - | nothing: every disabled rule is covered by an alternative |")
+    out.append("")
+    out += _hosted_section(contents, appl)
+    return out
+
+
+# Targets where a scan on the guest cannot see the remediation, keyed like
+# HOSTED_CLUSTER_FIELDS. Upstream's check reads the guest's OAuth/cluster, which
+# nothing copies spec.configuration.oauth to, unlike APIServer/cluster.
+HOSTED_SCAN_BLIND = {("OAuth", "cluster")}
+
+_HOSTED_LABELS = {
+    "hostedcluster": "HostedCluster",
+    "guest": "Guest",
+    "nodepool": "NodePool",
+    "not_remediable": "Not remediable",
+}
+
+
+def _hosted_placement(rule, app, mapped: set[str]) -> str:
+    """Where a rule ends up on a hosted cluster; a key of _HOSTED_LABELS.
+
+    Not remediable are the rules upstream excludes from hosted clusters and those
+    restricted to master pools: a hosted cluster has no control plane nodes of its
+    own, and its NodePools only carry workers.
+    """
+    hypershift = app.constraints.get(applicability.AXIS_HYPERSHIFT) if app else None
+    layer = _rule_layer(rule)
+    if ((hypershift is not None and True not in hypershift)
+            or (layer == "node" and app and app.roles and "worker" not in app.roles)):
+        return "not_remediable"
+    if layer == "node":
+        return "nodepool"
+    return "hostedcluster" if rule.helm_name in mapped else "guest"
+
+
+def hosted_coverage(contents: list[Content], appl: dict) -> tuple[list[dict], list[dict]]:
+    """Where each profile's applied rules go on a hosted cluster, and what is lost.
+
+    Returns (rows per profile, rows per rule outside the NodePool). A NodePool rule
+    applies as it would standalone, so only the others need naming.
+    """
+    groups, _ = build_groups(*contents)
+    mapped = {r for g in groups for r in g.rule_ids
+              if (g.key.kind, g.key.name) in HOSTED_CLUSTER_FIELDS}
+    blind = {r for g in groups for r in g.rule_ids
+             if (g.key.kind, g.key.name) in HOSTED_SCAN_BLIND}
+    target_of = {d.rule_id: f"{g.key.kind}/{g.key.name}" for g in groups for d in g.docs}
+    disabled = _disabled_with_category(contents, appl)
+    rows = []
+    placed: dict[str, str] = {}
+    for content in contents:
+        fixset = rules_with_fixes(content)
+        for pid in sorted(content.profiles):
+            row = {"profile": pid, "hostedcluster": 0, "guest": 0, "nodepool": 0,
+                   "not_remediable": 0}
+            for rule_id in set(content.profiles[pid].selected_rules):
+                rule = fixset.get(rule_id)
+                if rule is None or rule.helm_name in disabled:
+                    continue
+                where = _hosted_placement(rule, appl.get(rule.helm_name), mapped)
+                row[where] += 1
+                placed[rule.helm_name] = where
+            if any(v for k, v in row.items() if k != "profile"):
+                rows.append(row)
+    rows.sort(key=lambda r: r["profile"])
+    rules = [{"rule": name, "target": target_of.get(name, "?"), "where": where,
+              "scan_blind": name in blind}
+             for name, where in sorted(placed.items()) if where != "nodepool"]
+    return rows, rules
+
+
+def _hosted_section(contents: list[Content], appl: dict) -> list[str]:
+    fields = ", ".join(f"`{k}/{n}` to `spec.configuration.{f}`"
+                       for (k, n), f in sorted(HOSTED_CLUSTER_FIELDS.items()))
+    rows, rules = hosted_coverage(contents, appl)
+    out = [
+        "### On a hosted cluster",
+        "",
+        "The rules above end up in three places with `cluster.hypershift: true`. "
+        f"**HostedCluster** is applied to the management cluster ({fields}). "
+        "**Guest** stays on the hosted cluster, because `HostedCluster` has no "
+        "field for it. **NodePool** is applied to the management cluster as a "
+        "ConfigMap. **Not remediable** are rules that cannot apply there: upstream "
+        "excludes them from hosted clusters, or they only concern master pools, "
+        "which a hosted cluster does not have.",
+        "",
+        "| Profile | HostedCluster | Guest | NodePool | Not remediable |",
+        "|---------|---------------|-------|----------|----------------|",
+    ]
+    for row in rows:
+        out.append(f"| `{row['profile']}` | {row['hostedcluster'] or '-'} | "
+                   f"{row['guest'] or '-'} | {row['nodepool'] or '-'} | "
+                   f"{row['not_remediable'] or '-'} |")
+    out += [
+        "",
+        "Every rule outside the NodePool, which is where hosted clusters differ. "
+        "**Scan cannot see it** means the remediation takes effect in the control "
+        "plane while the object upstream's check reads on the guest stays as it "
+        "was, so expect that rule to keep reporting `FAIL` in a guest scan.",
+        "",
+        "| Rule | Target object | On a hosted cluster |",
+        "|------|---------------|---------------------|",
+    ]
+    for row in rules:
+        where = _HOSTED_LABELS[row["where"]]
+        if row["scan_blind"]:
+            where += " - scan cannot see it"
+        out.append(f"| `{row['rule']}` | `{row['target']}` | {where} |")
     out.append("")
     return out
 

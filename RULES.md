@@ -75,6 +75,78 @@ Rules a profile selects, that carry a remediation, and that still leave their co
 | `rhcos4-coreos_page_poison_kernel_argument` | opt-in | page_poison=1 carries a measurable runtime cost - a deliberate trade-off rather than something to inherit from a profile |
 | `rhcos4-service_sshd_disabled` | opt-in | masks sshd.service and sshd.socket, removing the recovery path into a node when the API is not enough |
 
+### On a hosted cluster
+
+The rules above end up in three places with `cluster.hypershift: true`. **HostedCluster** is applied to the management cluster (`APIServer/cluster` to `spec.configuration.apiServer`, `OAuth/cluster` to `spec.configuration.oauth`). **Guest** stays on the hosted cluster, because `HostedCluster` has no field for it. **NodePool** is applied to the management cluster as a ConfigMap. **Not remediable** are rules that cannot apply there: upstream excludes them from hosted clusters, or they only concern master pools, which a hosted cluster does not have.
+
+| Profile | HostedCluster | Guest | NodePool | Not remediable |
+|---------|---------------|-------|----------|----------------|
+| `ocp4-bsi` | 1 | 3 | - | 1 |
+| `ocp4-bsi-2022` | 1 | 3 | - | 1 |
+| `ocp4-bsi-node` | - | - | 2 | - |
+| `ocp4-bsi-node-2022` | - | - | 2 | - |
+| `ocp4-cis` | 2 | 1 | - | 1 |
+| `ocp4-cis-1-7` | 2 | 1 | - | 1 |
+| `ocp4-cis-1-9` | 2 | 1 | - | 1 |
+| `ocp4-cis-node` | - | - | 8 | - |
+| `ocp4-cis-node-1-7` | - | - | 8 | - |
+| `ocp4-cis-node-1-9` | - | - | 8 | - |
+| `ocp4-cis-vm-extension-node` | - | - | 1 | - |
+| `ocp4-e8` | - | - | - | 1 |
+| `ocp4-high` | 4 | 1 | - | 1 |
+| `ocp4-high-node` | - | - | 10 | 3 |
+| `ocp4-high-node-rev-4` | - | - | 10 | 3 |
+| `ocp4-high-rev-4` | 4 | 1 | - | 1 |
+| `ocp4-moderate` | 4 | 1 | - | 1 |
+| `ocp4-moderate-node` | - | - | 10 | 3 |
+| `ocp4-moderate-node-rev-4` | - | - | 10 | 3 |
+| `ocp4-moderate-rev-4` | 4 | 1 | - | 1 |
+| `ocp4-nerc-cip` | 4 | 1 | - | 1 |
+| `ocp4-nerc-cip-node` | - | - | 10 | 3 |
+| `ocp4-pci-dss` | 3 | 1 | - | 1 |
+| `ocp4-pci-dss-3-2` | 2 | 1 | - | 1 |
+| `ocp4-pci-dss-4-0` | 3 | 1 | - | 1 |
+| `ocp4-pci-dss-node` | - | - | 9 | 3 |
+| `ocp4-pci-dss-node-3-2` | - | - | 8 | - |
+| `ocp4-pci-dss-node-4-0` | - | - | 9 | 3 |
+| `ocp4-stig` | 3 | 2 | - | 1 |
+| `ocp4-stig-node` | - | - | 1 | - |
+| `ocp4-stig-node-v2r2` | - | - | 1 | - |
+| `ocp4-stig-node-v2r3` | - | - | 1 | - |
+| `ocp4-stig-v2r2` | 3 | 2 | - | 1 |
+| `ocp4-stig-v2r3` | 3 | 2 | - | 1 |
+| `rhcos4-anssi_bp28_enhanced` | - | - | 75 | - |
+| `rhcos4-anssi_bp28_high` | - | - | 75 | - |
+| `rhcos4-anssi_bp28_intermediary` | - | - | 29 | - |
+| `rhcos4-bsi` | - | - | 66 | - |
+| `rhcos4-bsi-2022` | - | - | 66 | - |
+| `rhcos4-e8` | - | - | 45 | - |
+| `rhcos4-high` | - | - | 205 | - |
+| `rhcos4-high-rev-4` | - | - | 205 | - |
+| `rhcos4-moderate` | - | - | 205 | - |
+| `rhcos4-moderate-rev-4` | - | - | 205 | - |
+| `rhcos4-nerc-cip` | - | - | 205 | - |
+| `rhcos4-stig` | - | - | 102 | - |
+| `rhcos4-stig-v2r2` | - | - | 102 | - |
+| `rhcos4-stig-v2r3` | - | - | 102 | - |
+
+Every rule outside the NodePool, which is where hosted clusters differ. **Scan cannot see it** means the remediation takes effect in the control plane while the object upstream's check reads on the guest stays as it was, so expect that rule to keep reporting `FAIL` in a guest scan.
+
+| Rule | Target object | On a hosted cluster |
+|------|---------------|---------------------|
+| `ocp4-api_server_encryption_provider_cipher` | `APIServer/cluster` | Not remediable |
+| `ocp4-api_server_tls_security_profile_not_old` | `APIServer/cluster` | HostedCluster |
+| `ocp4-audit_profile_set` | `APIServer/cluster` | HostedCluster |
+| `ocp4-directory_access_var_log_kube_audit` | `MachineConfig/75-ocp4-directory-access-var-log-kube-audit` | Not remediable |
+| `ocp4-directory_access_var_log_oauth_audit` | `MachineConfig/75-ocp4-directory-access-var-log-oauth-audit` | Not remediable |
+| `ocp4-directory_access_var_log_ocp_audit` | `MachineConfig/75-ocp4-directory-access-var-log-ocp-audit` | Not remediable |
+| `ocp4-ingress_controller_tls_cipher_suites` | `IngressController/default` | Guest |
+| `ocp4-oauth_or_oauthclient_inactivity_timeout` | `OAuth/cluster` | HostedCluster - scan cannot see it |
+| `ocp4-oauth_or_oauthclient_token_maxage` | `OAuth/cluster` | HostedCluster - scan cannot see it |
+| `ocp4-project_config_and_template_network_policy` | `Template/co-project-request` | Guest |
+| `ocp4-project_config_and_template_resource_quota` | `Template/co-project-request` | Guest |
+| `ocp4-project_template_resource_quota` | `Template/co-project-request` | Guest |
+
 ## Rules
 
 | Rule | Target object | Severity | Layer | Product | Applicability | Profiles |

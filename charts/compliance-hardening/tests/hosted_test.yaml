@@ -1,0 +1,100 @@
+suite: umbrella on a hosted cluster
+# The aggregate templates include the named templates of every object, so this
+# suite has to load all of them rather than one file.
+templates:
+  - charts/compliance-node/templates/*.yaml
+  - charts/compliance-platform/templates/*.yaml
+  - templates/preflight.yaml
+tests:
+  - it: renders the management cluster half of a hosted cluster through the prefixes
+    template: charts/compliance-node/templates/nodepool-configmap.yaml
+    set:
+      compliance-platform:
+        cluster:
+          hypershift: true
+        platform:
+          output: hostedcluster
+          hostedCluster:
+            name: c1
+            namespace: clusters
+      compliance-node:
+        cluster:
+          hypershift: true
+        node:
+          enabled: true
+          output: nodepool
+          nodePool:
+            namespace: clusters
+        rules:
+          rhcos4-banner_etc_issue: true
+    asserts:
+      - isKind:
+          of: ConfigMap
+
+  - it: renders the HostedCluster patch through the prefixes
+    template: charts/compliance-platform/templates/hostedcluster.yaml
+    set:
+      compliance-platform:
+        cluster:
+          hypershift: true
+        platform:
+          output: hostedcluster
+          hostedCluster:
+            name: c1
+            namespace: clusters
+        rules:
+          ocp4-audit_profile_set: true
+    asserts:
+      - isKind:
+          of: HostedCluster
+
+  - it: refuses two halves that disagree on what the cluster is
+    # Otherwise the platform half hardens the management cluster itself.
+    template: templates/preflight.yaml
+    set:
+      compliance-platform:
+        rules:
+          ocp4-audit_profile_set: true
+      compliance-node:
+        cluster:
+          hypershift: true
+        node:
+          enabled: true
+          output: nodepool
+          nodePool:
+            namespace: clusters
+    asserts:
+      - failedTemplate:
+          errorPattern: "disagree on cluster.hypershift"
+
+  - it: refuses a render meant for two clusters
+    template: templates/preflight.yaml
+    set:
+      compliance-platform:
+        cluster:
+          hypershift: true
+        platform:
+          output: guest
+      compliance-node:
+        cluster:
+          hypershift: true
+        node:
+          enabled: true
+          output: nodepool
+          nodePool:
+            namespace: clusters
+    asserts:
+      - failedTemplate:
+          errorPattern: "one render goes to one cluster"
+
+  - it: allows the guest half alone
+    template: templates/preflight.yaml
+    set:
+      compliance-platform:
+        cluster:
+          hypershift: true
+        platform:
+          output: guest
+    asserts:
+      - hasDocuments:
+          count: 0

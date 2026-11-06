@@ -7,14 +7,15 @@ cluster:
   # -- Target OpenShift version; selects version-dependent remediations.
   # Find yours: oc get clusterversion version -o jsonpath='{.status.desired.version}'
   ocpVersion: "4.20"
-  # -- Node architecture of the MachineConfigPools listed in node.roles.
+  # -- Node architecture of the MachineConfigPools listed in node.roles,
+  # or of the NodePool on a hosted cluster.
   # Only the node chart has arch-constrained rules; it is declared here
   # too so one values file validates against either chart.
   # x86_64 | aarch64 | ppc64le | s390x (amd64 and arm64 are accepted too).
   # Find yours: make show-node-arch
   architecture: x86_64
   # -- Set true on a HyperShift hosted cluster (hosted control plane).
-  # Only the platform chart has a hypershift-constrained rule.
+  # Requires node.output=nodepool and platform.output=hostedcluster or guest.
   hypershift: false
 
 # -- Whitelist whole compliance profiles (product-namespaced, e.g. ocp4-cis).
@@ -61,6 +62,18 @@ node:
   roles:
     - worker
     - master
+  # -- machineconfig writes objects for the Machine Config Operator.
+  # nodepool (hosted clusters) wraps them in one ConfigMap for the management
+  # cluster; node.roles is ignored there, a NodePool only has workers.
+  output: machineconfig
+  nodePool:
+    # -- HostedCluster namespace on the management cluster. Required for
+    # node.output=nodepool.
+    namespace: ""
+    # -- Name of the ConfigMap to reference from NodePool.spec.config, with the
+    # KubeletConfig in <name>-kubelet. Defaults to <release>-hardening, which
+    # is unique per hosted cluster as long as each has its own release.
+    configMapName: ""
 
 # -- Per-rule override / blacklist. Explicit value wins over profiles.
 # Key is the product-namespaced rule name, e.g. ocp4-audit_profile_set: false

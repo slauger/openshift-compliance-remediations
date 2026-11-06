@@ -45,9 +45,40 @@
     },
     "node": {
       "additionalProperties": false,
+      "if": {
+        "properties": {
+          "output": {
+            "const": "nodepool"
+          }
+        },
+        "required": [
+          "output"
+        ]
+      },
       "properties": {
         "enabled": {
           "type": "boolean"
+        },
+        "nodePool": {
+          "additionalProperties": false,
+          "properties": {
+            "configMapName": {
+              "pattern": "^([a-z0-9]([-a-z0-9.]{0,241}[a-z0-9])?)?$",
+              "type": "string"
+            },
+            "namespace": {
+              "pattern": "^([a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?)?$",
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "output": {
+          "enum": [
+            "machineconfig",
+            "nodepool"
+          ],
+          "type": "string"
         },
         "roles": {
           "items": {
@@ -56,6 +87,26 @@
           "minItems": 1,
           "type": "array"
         }
+      },
+      "required": [
+        "output"
+      ],
+      "then": {
+        "properties": {
+          "nodePool": {
+            "properties": {
+              "namespace": {
+                "minLength": 1
+              }
+            },
+            "required": [
+              "namespace"
+            ]
+          }
+        },
+        "required": [
+          "nodePool"
+        ]
       },
       "type": "object"
     },

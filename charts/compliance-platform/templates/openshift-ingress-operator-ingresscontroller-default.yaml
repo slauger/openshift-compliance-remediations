@@ -30,6 +30,7 @@ spec:
         type: Intermediate
 {{- end -}}
 
+{{- define "cr.obj.openshift-ingress-operator-ingresscontroller-default" -}}
 {{- /* IngressController/default - rule(s): ocp4-ingress_controller_tls_cipher_suites, ocp4-ingress_controller_tls_security_profile_custom_min_tls_version, ocp4-ingress_controller_tls_security_profile_not_old */ -}}
 {{- if eq (include "cr.anyActive" (dict "root" . "rules" (list "ocp4-ingress_controller_tls_cipher_suites" "ocp4-ingress_controller_tls_security_profile_custom_min_tls_version" "ocp4-ingress_controller_tls_security_profile_not_old"))) "true" -}}
 {{- if gt (int (include "cr.countActive" (dict "root" . "rules" (list "ocp4-ingress_controller_tls_cipher_suites" "ocp4-ingress_controller_tls_security_profile_custom_min_tls_version" "ocp4-ingress_controller_tls_security_profile_not_old")))) 1 -}}
@@ -108,4 +109,9 @@ metadata:
     helm.sh/resource-policy: keep
     argocd.argoproj.io/sync-options: Prune=false,Delete=false
 {{ $merged | toYaml }}
+{{- end -}}
+{{- end -}}
+
+{{- if ne .Values.platform.output "hostedcluster" -}}
+{{ include "cr.obj.openshift-ingress-operator-ingresscontroller-default" . }}
 {{- end -}}
