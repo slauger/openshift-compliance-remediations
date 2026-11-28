@@ -5,7 +5,7 @@
 # `make generate`, and review the git diff of charts/ and RULES.md.
 # Renovate keeps `version` in sync with upstream GitHub releases (see the marker).
 # renovate: datasource=github-releases depName=ComplianceAsCode/content extractVersion=^v(?<version>.*)$
-version: "0.1.82"
+version: "0.1.83"
 
 # Asset downloaded from the release (scap-security-guide-<version>.tar.gz).
 # SHA512 of scap-security-guide-0.1.82.tar.gz, verified against the upstream
